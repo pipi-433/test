@@ -404,7 +404,8 @@
   font-weight: 700;
 }
 
-.text-input {
+.text-input,
+.select-input {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--color-border);
@@ -412,6 +413,15 @@
   padding: 0 var(--space-3);
   background: white;
   color: var(--color-ink-900);
+}
+
+.select-input {
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--color-ink-500) 50%) calc(100% - 18px) 19px / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--color-ink-500) 50%, transparent 50%) calc(100% - 12px) 19px / 6px 6px no-repeat,
+    white;
+  padding-right: var(--space-8);
 }
 
 @keyframes breathe {

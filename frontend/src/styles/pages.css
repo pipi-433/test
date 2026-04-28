@@ -66,6 +66,52 @@
   line-height: 1.45;
 }
 
+.mobile-control-panel,
+.source-panel,
+.vision-panel {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.field-label {
+  color: var(--color-ink-700);
+  font-size: var(--font-sm);
+  font-weight: 700;
+}
+
+.quick-question-row,
+.suggested-question-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-bottom: var(--space-1);
+}
+
+.quick-question {
+  flex: 1 1 148px;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-2) var(--space-3);
+  background: white;
+  color: var(--color-ink-700);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-weight: 650;
+  text-align: left;
+}
+
+.quick-question:focus-visible {
+  outline: 3px solid var(--color-accent-500);
+  outline-offset: 3px;
+}
+
+.quick-question:active {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+}
+
 .mobile-chat {
   display: grid;
   gap: var(--space-3);
@@ -87,6 +133,7 @@
 .chat-row p {
   margin: 0;
   color: var(--color-ink-700);
+  white-space: pre-wrap;
 }
 
 .chat-row--guide {
@@ -104,6 +151,74 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2);
   margin-top: var(--space-4);
+}
+
+.inline-alert {
+  margin: 0 0 var(--space-4);
+  border: 1px solid rgb(164 60 50 / 32%);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  background: #fff7f5;
+  color: var(--color-danger);
+  font-weight: 650;
+}
+
+.source-list,
+.vision-result {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.source-item {
+  display: grid;
+  gap: var(--space-1);
+  min-height: 64px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  background: white;
+}
+
+.source-item strong {
+  color: var(--color-ink-900);
+}
+
+.source-item span,
+.vision-result__top,
+.mobile-mode-note {
+  color: var(--color-ink-500);
+  font-size: var(--font-sm);
+}
+
+.vision-result {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  background: white;
+}
+
+.vision-result p {
+  margin: 0;
+  color: var(--color-ink-700);
+}
+
+.vision-result__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.mobile-empty {
+  min-height: 92px;
+}
+
+.mobile-mode-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  margin-top: var(--space-3);
 }
 
 .mobile-actions {

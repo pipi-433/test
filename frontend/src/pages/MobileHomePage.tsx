@@ -1,73 +1,314 @@
-import { Camera, Map, MessageSquareText, Mic, Navigation, Send } from "lucide-react";
+import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Camera,
+  FileImage,
+  Layers,
+  Map,
+  MessageSquareText,
+  Mic,
+  Navigation,
+  Send,
+} from "lucide-react";
 
+import { askQuestion, fetchAttractions, recognizeImage } from "../api/client";
+import type { Attraction, QAResponse, VisionResponse } from "../api/client";
 import { Button } from "../components/Button";
-import { DigitalHumanMock } from "../components/DigitalHumanMock";
+import { DigitalHumanMock, type DigitalHumanState } from "../components/DigitalHumanMock";
 import { IconButton } from "../components/IconButton";
 import { PageShell } from "../components/Shell";
 import { SpotCard } from "../components/SpotCard";
 import { StatusBadge } from "../components/StatusBadge";
 
+const starterQuestions = ["灵山大佛适合怎么游览？", "九龙灌浴有什么看点？", "梵宫背后有什么文化故事？"];
+
+function shortText(value: string | undefined, limit = 88) {
+  if (!value) {
+    return "本地资料暂未提供详细简介，可先向灵境提问获取讲解。";
+  }
+  return value.length > limit ? `${value.slice(0, limit)}...` : value;
+}
+
 export function MobileHomePage() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [attractions, setAttractions] = useState<Attraction[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [question, setQuestion] = useState("灵山大佛适合怎么游览？");
+  const [qaResult, setQaResult] = useState<QAResponse | null>(null);
+  const [visionResult, setVisionResult] = useState<VisionResponse | null>(null);
+  const [loadingAttractions, setLoadingAttractions] = useState(true);
+  const [qaLoading, setQaLoading] = useState(false);
+  const [visionLoading, setVisionLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    fetchAttractions()
+      .then((items) => {
+        if (!mounted) {
+          return;
+        }
+        setAttractions(items);
+        setSelectedId(items.find((item) => item.id === "lingshan-ls-011")?.id || items[0]?.id || "");
+      })
+      .catch((cause: unknown) => {
+        if (mounted) {
+          setError(cause instanceof Error ? cause.message : "景点数据加载失败，请确认后端已启动。");
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoadingAttractions(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const selectedAttraction = useMemo(
+    () => attractions.find((item) => item.id === selectedId) || null,
+    [attractions, selectedId],
+  );
+
+  const humanState: DigitalHumanState = qaLoading || visionLoading ? "thinking" : qaResult ? "speaking" : "welcome";
+
+  async function submitQuestion(nextQuestion = question) {
+    const cleanQuestion = nextQuestion.trim();
+    if (!cleanQuestion) {
+      setError("请先输入一个问题。");
+      return;
+    }
+    setQaLoading(true);
+    setError("");
+    setQuestion(cleanQuestion);
+    try {
+      const result = await askQuestion({ attractionId: selectedId, question: cleanQuestion });
+      setQaResult(result);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "问答请求失败，请稍后重试。");
+    } finally {
+      setQaLoading(false);
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitQuestion();
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    setVisionLoading(true);
+    setError("");
+    try {
+      const result = await recognizeImage({
+        file,
+        hint: selectedAttraction?.name,
+        textHint: question,
+      });
+      setVisionResult(result);
+      if (result.matched_attraction) {
+        setSelectedId(result.matched_attraction.id);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "识景请求失败，请稍后重试。");
+    } finally {
+      setVisionLoading(false);
+    }
+  }
+
   return (
     <PageShell className="mobile-page">
       <header className="mobile-header">
         <div>
-          <span className="eyebrow">灵山胜境</span>
+          <span className="eyebrow">灵山胜境 / 拈花湾</span>
           <h1>灵境导游</h1>
         </div>
-        <StatusBadge tone="ok">mock 在线</StatusBadge>
+        <StatusBadge tone={error ? "warning" : "ok"}>{error ? "需要处理" : "mock 在线"}</StatusBadge>
       </header>
 
-      <DigitalHumanMock state="speaking" className="mobile-avatar" />
+      <DigitalHumanMock state={humanState} className="mobile-avatar" />
 
       <section className="mobile-greeting" aria-labelledby="mobile-greeting-title">
         <span className="eyebrow">当前讲解</span>
-        <h2 id="mobile-greeting-title">你好，我是灵境。现在可以为你讲解景点、识别照片或规划路线。</h2>
+        <h2 id="mobile-greeting-title">
+          你好，我是灵境。选择景点后可以直接提问，也可以上传样例图片完成 mock 识景。
+        </h2>
       </section>
 
-      <section className="mobile-chat" aria-label="模拟讲解对话">
-        <div className="chat-row chat-row--guide">
-          <strong>灵境</strong>
-          <p>九龙灌浴是灵山胜境的动态标志景观，我可以结合演出时间为你安排下一站。</p>
+      <section className="mobile-control-panel" aria-label="景点与提问">
+        <label className="field-label" htmlFor="attraction-select">
+          景点选择
+        </label>
+        <select
+          className="select-input"
+          disabled={loadingAttractions || attractions.length === 0}
+          id="attraction-select"
+          onChange={(event) => setSelectedId(event.target.value)}
+          value={selectedId}
+        >
+          {attractions.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.scenic_area} · {item.name}
+            </option>
+          ))}
+        </select>
+
+        <div className="quick-question-row" aria-label="快捷问题">
+          {starterQuestions.map((item) => (
+            <button className="quick-question" key={item} onClick={() => void submitQuestion(item)} type="button">
+              {item}
+            </button>
+          ))}
         </div>
+      </section>
+
+      {selectedAttraction ? (
+        <SpotCard
+          description={shortText(selectedAttraction.summary || selectedAttraction.description)}
+          meta={`${selectedAttraction.category || "景点"} · ${
+            (selectedAttraction.tags || []).slice(0, 2).join(" / ") || "本地知识库"
+          }`}
+          title={selectedAttraction.name}
+        />
+      ) : (
+        <p className="empty-state mobile-empty">正在等待景点数据，确认后端启动后会自动加载。</p>
+      )}
+
+      {error ? (
+        <p className="inline-alert" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <section className="mobile-chat" aria-label="问答讲解">
         <div className="chat-row chat-row--visitor">
           <strong>游客</strong>
-          <p>我带孩子，想轻松一点。</p>
+          <p>{question || "还没有输入问题"}</p>
+        </div>
+        <div className="chat-row chat-row--guide">
+          <strong>灵境</strong>
+          {qaLoading ? (
+            <p>正在检索本地知识库...</p>
+          ) : qaResult ? (
+            <p>{qaResult.answer}</p>
+          ) : (
+            <p>你可以问景点看点、文化故事或适合怎么游览，回答会带上本地资料来源。</p>
+          )}
         </div>
       </section>
 
-      <SpotCard
-        title="九龙灌浴"
-        description="适合亲子观看的佛陀诞生故事演绎，建议提前 15 分钟到广场侧前方等候。"
-        meta="中轴线核心广场 · 推荐停留 30 分钟"
-      />
+      {qaResult ? (
+        <section className="source-panel" aria-label="回答来源">
+          <div className="section-title-row">
+            <h2>来源依据</h2>
+            <StatusBadge tone="neutral">{qaResult.latency_ms} ms</StatusBadge>
+          </div>
+          {qaResult.sources.length > 0 ? (
+            <div className="source-list">
+              {qaResult.sources.map((source) => (
+                <div className="source-item" key={source.chunk_id}>
+                  <strong>{source.title}</strong>
+                  <span>{source.source_file}</span>
+                  <span>分数 {source.score.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-state mobile-empty">本次没有可靠命中，灵境已避免编造答案。</p>
+          )}
+        </section>
+      ) : null}
 
-      <form className="mobile-input" aria-label="文本提问">
+      <section className="vision-panel" aria-label="图片识景">
+        <div className="section-title-row">
+          <div>
+            <h2>拍照识景</h2>
+            <p>上传样例图，mock 识景会根据文件名和提示词匹配景点。</p>
+          </div>
+          <Button
+            icon={<FileImage size={18} />}
+            loading={visionLoading}
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+            variant="secondary"
+          >
+            上传
+          </Button>
+        </div>
+        <input
+          accept="image/*,.jpg,.jpeg,.png"
+          className="sr-only"
+          onChange={handleFileChange}
+          ref={fileInputRef}
+          type="file"
+        />
+        {visionResult ? (
+          <div className="vision-result">
+            <div className="vision-result__top">
+              <StatusBadge tone={visionResult.matched_attraction ? "ok" : "warning"}>
+                {visionResult.matched_attraction ? `置信度 ${Math.round(visionResult.confidence * 100)}%` : "未命中"}
+              </StatusBadge>
+              <span>
+                {visionResult.latency_ms} ms · {visionResult.mode}
+              </span>
+            </div>
+            <p>{visionResult.explanation}</p>
+            {visionResult.matched_attraction ? (
+              <strong>
+                {visionResult.matched_attraction.scenic_area} · {visionResult.matched_attraction.name}
+              </strong>
+            ) : null}
+            <div className="suggested-question-list" aria-label="识景建议问题">
+              {visionResult.suggested_questions.map((item) => (
+                <button className="quick-question" key={item} onClick={() => void submitQuestion(item)} type="button">
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="empty-state mobile-empty">还没有上传图片。可用 evals/vision_samples 下的样例文件演示。</p>
+        )}
+      </section>
+
+      <form className="mobile-input" aria-label="文本提问" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="mobile-question">
           输入问题
         </label>
         <input
           className="text-input"
           id="mobile-question"
-          placeholder="问问灵境，例如：梵宫怎么走？"
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="问灵境，例如：梵宫怎么游览？"
           type="text"
+          value={question}
         />
-        <Button type="submit" aria-label="发送问题" icon={<Send size={18} />} variant="primary">
+        <Button type="submit" aria-label="发送问题" icon={<Send size={18} />} loading={qaLoading} variant="primary">
           发送
         </Button>
       </form>
 
       <nav className="mobile-actions" aria-label="游客主操作">
-        <IconButton icon={Mic} label="语音" />
-        <IconButton icon={MessageSquareText} label="文本" />
-        <IconButton icon={Camera} label="拍照" />
-        <IconButton icon={Map} label="路线" />
+        <IconButton disabled icon={Mic} label="语音" />
+        <IconButton icon={MessageSquareText} label="文本" onClick={() => document.getElementById("mobile-question")?.focus()} />
+        <IconButton icon={Camera} label="拍照" onClick={() => fileInputRef.current?.click()} />
+        <IconButton disabled icon={Map} label="路线" />
       </nav>
 
       <a className="route-link" href="/kiosk">
         <Navigation aria-hidden="true" size={18} />
         查看景区终端演示
       </a>
+
+      <div className="mobile-mode-note">
+        <Layers aria-hidden="true" size={16} />
+        当前为 mock 模式：前端只调用后端 API，不接触模型厂商 Key。
+      </div>
     </PageShell>
   );
 }
