@@ -13,6 +13,7 @@ from app.services.content_service import (
     get_chunks,
 )
 from app.services.qa_service import answer_question
+from app.services.route_service import get_route_share, recommend_route, route_theme_options
 from app.services.vision_service import recognize_image_mock
 
 router = APIRouter(prefix="/api", tags=["system"])
@@ -36,6 +37,15 @@ class QARequest(BaseModel):
     attraction_id: str | None = None
     visitor_profile: dict[str, Any] | None = None
     top_k: int = 5
+
+
+class RouteRecommendRequest(BaseModel):
+    theme: str | None = None
+    time_budget_minutes: int | None = 240
+    group_type: str | None = None
+    intensity: str | None = None
+    interests: list[str] | None = None
+    start_attraction_id: str | None = None
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -93,6 +103,29 @@ def qa(payload: QARequest) -> dict[str, object]:
         visitor_profile=payload.visitor_profile,
         top_k=top_k,
     )
+
+
+@router.get("/routes/themes")
+def route_themes() -> dict[str, object]:
+    items = route_theme_options()
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/routes/recommend")
+def routes_recommend(payload: RouteRecommendRequest) -> dict[str, object]:
+    return recommend_route(
+        theme=payload.theme,
+        time_budget_minutes=payload.time_budget_minutes,
+        group_type=payload.group_type,
+        intensity=payload.intensity,
+        interests=payload.interests,
+        start_attraction_id=payload.start_attraction_id,
+    )
+
+
+@router.get("/routes/{route_id}/share")
+def route_share(route_id: str) -> dict[str, object]:
+    return get_route_share(route_id)
 
 
 def _parse_content_disposition(value: str) -> dict[str, str]:

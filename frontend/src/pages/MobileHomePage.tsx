@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Clock3,
   Camera,
   FileImage,
   Layers,
@@ -7,11 +8,12 @@ import {
   MessageSquareText,
   Mic,
   Navigation,
+  Route as RouteIcon,
   Send,
 } from "lucide-react";
 
-import { askQuestion, fetchAttractions, recognizeImage } from "../api/client";
-import type { Attraction, QAResponse, VisionResponse } from "../api/client";
+import { askQuestion, fetchAttractions, recognizeImage, recommendRoute } from "../api/client";
+import type { Attraction, QAResponse, RouteRecommendation, VisionResponse } from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock, type DigitalHumanState } from "../components/DigitalHumanMock";
 import { IconButton } from "../components/IconButton";
@@ -20,6 +22,19 @@ import { SpotCard } from "../components/SpotCard";
 import { StatusBadge } from "../components/StatusBadge";
 
 const starterQuestions = ["灵山大佛适合怎么游览？", "九龙灌浴有什么看点？", "梵宫背后有什么文化故事？"];
+const routeThemes = [
+  { id: "family", label: "亲子" },
+  { id: "history", label: "历史" },
+  { id: "nature", label: "自然" },
+  { id: "blessing", label: "祈福" },
+  { id: "photo", label: "拍照" },
+];
+const routeBudgets = [
+  { value: 120, label: "2 小时" },
+  { value: 240, label: "4 小时" },
+  { value: 360, label: "6 小时" },
+  { value: 480, label: "全天" },
+];
 
 function shortText(value: string | undefined, limit = 88) {
   if (!value) {
@@ -30,14 +45,19 @@ function shortText(value: string | undefined, limit = 88) {
 
 export function MobileHomePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const routePanelRef = useRef<HTMLElement | null>(null);
   const [attractions, setAttractions] = useState<Attraction[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [question, setQuestion] = useState("灵山大佛适合怎么游览？");
   const [qaResult, setQaResult] = useState<QAResponse | null>(null);
   const [visionResult, setVisionResult] = useState<VisionResponse | null>(null);
+  const [routeTheme, setRouteTheme] = useState("family");
+  const [routeBudget, setRouteBudget] = useState(240);
+  const [routeResult, setRouteResult] = useState<RouteRecommendation | null>(null);
   const [loadingAttractions, setLoadingAttractions] = useState(true);
   const [qaLoading, setQaLoading] = useState(false);
   const [visionLoading, setVisionLoading] = useState(false);
+  const [routeLoading, setRouteLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -70,7 +90,7 @@ export function MobileHomePage() {
     [attractions, selectedId],
   );
 
-  const humanState: DigitalHumanState = qaLoading || visionLoading ? "thinking" : qaResult ? "speaking" : "welcome";
+  const humanState: DigitalHumanState = qaLoading || visionLoading || routeLoading ? "thinking" : qaResult ? "speaking" : "welcome";
 
   async function submitQuestion(nextQuestion = question) {
     const cleanQuestion = nextQuestion.trim();
@@ -118,6 +138,34 @@ export function MobileHomePage() {
       setError(cause instanceof Error ? cause.message : "识景请求失败，请稍后重试。");
     } finally {
       setVisionLoading(false);
+    }
+  }
+
+  async function generateRoute(nextTheme = routeTheme) {
+    setRouteLoading(true);
+    setError("");
+    setRouteTheme(nextTheme);
+    try {
+      const result = await recommendRoute({
+        theme: nextTheme,
+        timeBudgetMinutes: routeBudget,
+        groupType: nextTheme === "family" ? "family" : "friends",
+        intensity: routeBudget <= 120 ? "easy" : "balanced",
+        interests: selectedAttraction?.tags?.slice(0, 3) || [nextTheme],
+        startAttractionId: selectedId,
+      });
+      setRouteResult(result);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "路线推荐失败，请稍后重试。");
+    } finally {
+      setRouteLoading(false);
+    }
+  }
+
+  function focusRoutePanel() {
+    routePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!routeResult) {
+      void generateRoute();
     }
   }
 
@@ -276,6 +324,86 @@ export function MobileHomePage() {
         )}
       </section>
 
+      <section className="route-panel" aria-label="路线推荐" ref={routePanelRef}>
+        <div className="section-title-row">
+          <div>
+            <h2>路线推荐</h2>
+            <p>根据兴趣、时长和当前景点生成 mock 逐站路线。</p>
+          </div>
+          <Button
+            icon={<RouteIcon size={18} />}
+            loading={routeLoading}
+            onClick={() => void generateRoute()}
+            type="button"
+            variant="secondary"
+          >
+            生成
+          </Button>
+        </div>
+        <div className="route-preferences" aria-label="路线偏好">
+          <div className="route-theme-grid" role="group" aria-label="路线主题">
+            {routeThemes.map((theme) => (
+              <button
+                className={`route-theme ${routeTheme === theme.id ? "route-theme--active" : ""}`}
+                key={theme.id}
+                onClick={() => void generateRoute(theme.id)}
+                type="button"
+              >
+                {theme.label}
+              </button>
+            ))}
+          </div>
+          <label className="field-label" htmlFor="route-budget">
+            游玩时长
+          </label>
+          <select
+            className="select-input"
+            id="route-budget"
+            onChange={(event) => setRouteBudget(Number(event.target.value))}
+            value={routeBudget}
+          >
+            {routeBudgets.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {routeResult ? (
+          <div className="route-result">
+            <div className="route-summary">
+              <StatusBadge tone="ok">{routeResult.theme_label}</StatusBadge>
+              <h3>{routeResult.title}</h3>
+              <p>{routeResult.summary}</p>
+              <span>
+                <Clock3 aria-hidden="true" size={16} />
+                约 {routeResult.estimated_duration_minutes} 分钟 · 分享码 {routeResult.share.share_code}
+              </span>
+            </div>
+            <div className="route-stop-list" aria-label="逐站路线">
+              {routeResult.stops.map((stop) => (
+                <article className="route-stop" key={`${routeResult.id}-${stop.attraction_id}`}>
+                  <div className="route-stop__index">{stop.order}</div>
+                  <div>
+                    <strong>{stop.name}</strong>
+                    <span>
+                      {stop.scenic_area} · 停留 {stop.stay_minutes} 分钟
+                      {stop.walk_minutes_from_previous ? ` · 步行约 ${stop.walk_minutes_from_previous} 分钟` : ""}
+                    </span>
+                    <p>{stop.focus}：{stop.reason}</p>
+                    <button className="quick-question" type="button" onClick={() => void submitQuestion(stop.narration_question)}>
+                      进入本站讲解
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="empty-state mobile-empty">还没有生成路线。选择主题和时长后，灵境会给出逐站讲解顺序。</p>
+        )}
+      </section>
+
       <form className="mobile-input" aria-label="文本提问" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="mobile-question">
           输入问题
@@ -297,7 +425,7 @@ export function MobileHomePage() {
         <IconButton disabled icon={Mic} label="语音" />
         <IconButton icon={MessageSquareText} label="文本" onClick={() => document.getElementById("mobile-question")?.focus()} />
         <IconButton icon={Camera} label="拍照" onClick={() => fileInputRef.current?.click()} />
-        <IconButton disabled icon={Map} label="路线" />
+        <IconButton icon={Map} label="路线" onClick={focusRoutePanel} />
       </nav>
 
       <a className="route-link" href="/kiosk">

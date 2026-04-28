@@ -68,7 +68,8 @@
 
 .mobile-control-panel,
 .source-panel,
-.vision-panel {
+.vision-panel,
+.route-panel {
   display: grid;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
@@ -207,6 +208,100 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+.route-preferences,
+.route-result,
+.route-stop-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.route-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.route-theme {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: white;
+  color: var(--color-ink-700);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.route-theme--active {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.route-theme:focus-visible,
+.route-stop .quick-question:focus-visible {
+  outline: 3px solid var(--color-accent-500);
+  outline-offset: 3px;
+}
+
+.route-summary,
+.route-stop {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  background: white;
+}
+
+.route-summary {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.route-summary h3,
+.route-summary p {
+  margin: 0;
+}
+
+.route-summary h3 {
+  font-size: var(--font-lg);
+}
+
+.route-summary span,
+.route-stop span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-ink-500);
+  font-size: var(--font-sm);
+}
+
+.route-stop {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.route-stop__index {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+  font-weight: 800;
+}
+
+.route-stop strong {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-ink-900);
+}
+
+.route-stop p {
+  margin: var(--space-2) 0;
+  color: var(--color-ink-700);
 }
 
 .mobile-empty {

@@ -1,0 +1,6 @@
+{"id":"route_001","theme":"family","time_budget_minutes":180,"group_type":"family","interests":["亲子轻松","佛教文化"],"expected_theme":"family","expected_keywords":["九龙灌浴","百子戏弥勒"],"min_stops":3}
+{"id":"route_002","theme":"history","time_budget_minutes":240,"group_type":"friends","interests":["历史文化"],"expected_theme":"history","expected_keywords":["祥符禅寺","佛教文化博览馆"],"min_stops":4}
+{"id":"route_003","theme":"nature","time_budget_minutes":240,"group_type":"couple","interests":["自然风光","休闲漫步"],"expected_theme":"nature","expected_keywords":["梵天花海","五灯湖"],"min_stops":3}
+{"id":"route_004","theme":"blessing","time_budget_minutes":210,"group_type":"elder","interests":["祈福朝圣"],"expected_theme":"blessing","expected_keywords":["祥符禅寺","灵山大佛"],"min_stops":4}
+{"id":"route_005","theme":"photo","time_budget_minutes":300,"group_type":"friends","interests":["拍照打卡"],"expected_theme":"photo","expected_keywords":["灵山梵宫","香月花街"],"min_stops":4}
+{"id":"route_006","time_budget_minutes":150,"group_type":"family","interests":["孩子","轻松"],"expected_theme":"family","expected_keywords":["九龙灌浴"],"min_stops":3}

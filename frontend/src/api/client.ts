@@ -36,6 +36,43 @@ export type VisionResponse = {
   latency_ms: number;
 };
 
+export type RouteStop = {
+  order: number;
+  attraction_id: string;
+  name: string;
+  scenic_area: string;
+  category?: string;
+  tags?: string[];
+  stay_minutes: number;
+  walk_minutes_from_previous: number;
+  focus: string;
+  reason: string;
+  narration_question: string;
+};
+
+export type RouteRecommendation = {
+  id: string;
+  title: string;
+  theme: string;
+  theme_label: string;
+  summary: string;
+  suitable_for: string[];
+  estimated_duration_minutes: number;
+  time_budget_minutes: number;
+  stops: RouteStop[];
+  assumptions: string[];
+  performance_tips: string[];
+  share: {
+    share_code: string;
+    share_url: string;
+    qr_payload: string;
+    expires_at: string;
+    expires_in_minutes: number;
+  };
+  mode: string;
+  latency_ms: number;
+};
+
 type ApiErrorPayload = {
   code?: string;
   message?: string;
@@ -108,6 +145,34 @@ export async function recognizeImage({
   }
   return requestJson<VisionResponse>("/api/vision/recognize", {
     body,
+    method: "POST",
+  });
+}
+
+export async function recommendRoute({
+  theme,
+  timeBudgetMinutes,
+  groupType,
+  intensity,
+  interests,
+  startAttractionId,
+}: {
+  theme?: string;
+  timeBudgetMinutes?: number;
+  groupType?: string;
+  intensity?: string;
+  interests?: string[];
+  startAttractionId?: string;
+}): Promise<RouteRecommendation> {
+  return requestJson<RouteRecommendation>("/api/routes/recommend", {
+    body: JSON.stringify({
+      theme,
+      time_budget_minutes: timeBudgetMinutes,
+      group_type: groupType,
+      intensity,
+      interests,
+      start_attraction_id: startAttractionId || null,
+    }),
     method: "POST",
   });
 }
