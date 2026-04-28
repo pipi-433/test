@@ -55,6 +55,21 @@ cd frontend
 npm run build
 ```
 
+## 资料解析
+
+Task 02 使用标准库解析只读资料包，不需要额外 Python 依赖：
+
+```powershell
+python .\scripts\parse_sources.py
+python .\scripts\validate_processed_data.py
+```
+
+输出文件：
+
+- `data/processed/attractions.json`
+- `data/processed/knowledge_chunks.json`
+- `data/processed/behavior_summary.json`
+
 ## 后续任务
 
-Task 02 将只从 `示范景区公开资料包/` 读取资料，生成 `data/processed/attractions.json`、`knowledge_chunks.json` 和 `behavior_summary.json`，不会修改原始资料。
+Task 03 将基于 `data/processed/` 中的 JSON 产物建立 SQLite 表和景点 API；原始资料包仍作为只读来源。

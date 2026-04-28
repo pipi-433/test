@@ -1,0 +1,293 @@
+{
+  "source_file": "景点景区旅游数据行为分析数据.xlsx",
+  "source_sha256": "173113373ecb75a2e6e572f3a6396597bc66be1e5af68547d04002d36251af52",
+  "generated_at": "2026-04-28T11:06:25+00:00",
+  "caveat": "该 xlsx 为公开样例游客行为数据/行业画像数据，包含多景区样本；不能声称为灵山胜境或拈花湾真实运营数据。",
+  "row_count": 140447,
+  "fields": [
+    "tourist_id",
+    "user_nickname",
+    "age",
+    "gender",
+    "attraction_name",
+    "attraction_content",
+    "attraction_type",
+    "visit_date",
+    "stay_duration",
+    "ticket_cost",
+    "food_cost",
+    "shopping_cost",
+    "transport_cost",
+    "entertainment_cost",
+    "total_cost",
+    "group_size",
+    "satisfaction"
+  ],
+  "date_range": {
+    "start": "2025-01-01",
+    "end": "2025-12-31"
+  },
+  "distributions": {
+    "gender": [
+      {
+        "value": "男",
+        "count": 70329
+      },
+      {
+        "value": "女",
+        "count": 70118
+      }
+    ],
+    "age_group": [
+      {
+        "value": "26-35",
+        "count": 49307
+      },
+      {
+        "value": "36-45",
+        "count": 34484
+      },
+      {
+        "value": "46-60",
+        "count": 24030
+      },
+      {
+        "value": "18-25",
+        "count": 21749
+      },
+      {
+        "value": "60+",
+        "count": 10877
+      }
+    ],
+    "attraction_type": [
+      {
+        "value": "古镇水乡",
+        "count": 31564
+      },
+      {
+        "value": "风景名胜与休闲度假",
+        "count": 25682
+      },
+      {
+        "value": "主题乐园",
+        "count": 17524
+      },
+      {
+        "value": "动植物园与水族馆",
+        "count": 16302
+      },
+      {
+        "value": "现代地标",
+        "count": 16257
+      },
+      {
+        "value": "博物馆与展馆",
+        "count": 12297
+      },
+      {
+        "value": "自然公园",
+        "count": 11717
+      },
+      {
+        "value": "历史文化",
+        "count": 9104
+      }
+    ],
+    "satisfaction": [
+      {
+        "value": "3",
+        "count": 56819
+      },
+      {
+        "value": "4",
+        "count": 45908
+      },
+      {
+        "value": "5",
+        "count": 31155
+      },
+      {
+        "value": "2",
+        "count": 6565
+      }
+    ],
+    "group_size": [
+      {
+        "value": "2",
+        "count": 50908
+      },
+      {
+        "value": "3",
+        "count": 36003
+      },
+      {
+        "value": "4",
+        "count": 28213
+      },
+      {
+        "value": "1",
+        "count": 20197
+      },
+      {
+        "value": "5",
+        "count": 5126
+      }
+    ]
+  },
+  "top_attractions": [
+    {
+      "value": "同里古镇",
+      "count": 5476
+    },
+    {
+      "value": "宁波方特东方神画",
+      "count": 5396
+    },
+    {
+      "value": "杭州宋城",
+      "count": 5387
+    },
+    {
+      "value": "金茂大厦",
+      "count": 5345
+    },
+    {
+      "value": "周庄",
+      "count": 5333
+    },
+    {
+      "value": "东方明珠",
+      "count": 5316
+    },
+    {
+      "value": "豫园",
+      "count": 5304
+    },
+    {
+      "value": "上海科技馆",
+      "count": 5292
+    },
+    {
+      "value": "世纪公园",
+      "count": 5277
+    },
+    {
+      "value": "西湖风景名胜区",
+      "count": 5273
+    },
+    {
+      "value": "上海博物馆",
+      "count": 5262
+    },
+    {
+      "value": "乌镇",
+      "count": 5255
+    },
+    {
+      "value": "上海海洋水族馆",
+      "count": 5248
+    },
+    {
+      "value": "上海海昌海洋公园",
+      "count": 5236
+    },
+    {
+      "value": "西塘古镇",
+      "count": 5228
+    },
+    {
+      "value": "上海欢乐谷",
+      "count": 5181
+    },
+    {
+      "value": "朱家角古镇景区",
+      "count": 5178
+    },
+    {
+      "value": "上海野生动物园",
+      "count": 5158
+    },
+    {
+      "value": "拙政园",
+      "count": 5149
+    },
+    {
+      "value": "上海之巅观光厅",
+      "count": 5115
+    }
+  ],
+  "averages": {
+    "stay_duration": 4.23,
+    "satisfaction": 3.72,
+    "ticket_cost": 100.75,
+    "food_cost": 196.08,
+    "shopping_cost": 210.23,
+    "transport_cost": 72.51,
+    "entertainment_cost": 113.32,
+    "total_cost": 692.89
+  },
+  "by_attraction_type": [
+    {
+      "attraction_type": "古镇水乡",
+      "count": 31564,
+      "avg_satisfaction": 3.48,
+      "avg_stay_duration": 3.99,
+      "avg_total_cost": 598.26
+    },
+    {
+      "attraction_type": "风景名胜与休闲度假",
+      "count": 25682,
+      "avg_satisfaction": 3.58,
+      "avg_stay_duration": 4.0,
+      "avg_total_cost": 651.49
+    },
+    {
+      "attraction_type": "主题乐园",
+      "count": 17524,
+      "avg_satisfaction": 3.26,
+      "avg_stay_duration": 8.98,
+      "avg_total_cost": 1576.02
+    },
+    {
+      "attraction_type": "动植物园与水族馆",
+      "count": 16302,
+      "avg_satisfaction": 3.39,
+      "avg_stay_duration": 4.5,
+      "avg_total_cost": 1068.21
+    },
+    {
+      "attraction_type": "现代地标",
+      "count": 16257,
+      "avg_satisfaction": 3.59,
+      "avg_stay_duration": 2.75,
+      "avg_total_cost": 512.97
+    },
+    {
+      "attraction_type": "博物馆与展馆",
+      "count": 12297,
+      "avg_satisfaction": 4.76,
+      "avg_stay_duration": 2.75,
+      "avg_total_cost": 164.05
+    },
+    {
+      "attraction_type": "自然公园",
+      "count": 11717,
+      "avg_satisfaction": 4.6,
+      "avg_stay_duration": 3.24,
+      "avg_total_cost": 234.93
+    },
+    {
+      "attraction_type": "历史文化",
+      "count": 9104,
+      "avg_satisfaction": 4.2,
+      "avg_stay_duration": 2.0,
+      "avg_total_cost": 390.74
+    }
+  ],
+  "metadata": {
+    "source_size_bytes": 16740760,
+    "source_modified_ns": 1774236068503292500,
+    "parser": "scripts/parse_sources.py"
+  }
+}
