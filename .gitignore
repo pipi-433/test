@@ -1,0 +1,10 @@
+.env
+.venv/
+node_modules/
+dist/
+.npm-cache/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+logs/
+data/app.db
