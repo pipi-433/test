@@ -1,0 +1,10 @@
+{"id":"qa_001","category":"景点事实","question":"灵山大佛有多高？","attraction_id":"lingshan-ls-011","expected_keywords":["88m","101.5m"],"must_not_include":["不知道"],"expect_sources":true}
+{"id":"qa_002","category":"游览建议","question":"九龙灌浴适合怎么游览？","attraction_id":"lingshan-ls-006","visitor_profile":{"group_type":"family","time_budget_minutes":120,"interests":["佛教文化","亲子友好"]},"expected_keywords":["九龙灌浴","亲子","本地资料切片"],"must_not_include":["由外部模型生成"],"expect_sources":true}
+{"id":"qa_003","category":"文化讲解","question":"五明桥代表什么佛教智慧？","attraction_id":"lingshan-ls-002","expected_keywords":["五明","智慧"],"must_not_include":["票价"],"expect_sources":true}
+{"id":"qa_004","category":"演艺时间","question":"灵山梵宫吉祥颂演出时间是什么？","attraction_id":"lingshan-ls-013","expected_keywords":["吉祥颂","10:35"],"must_not_include":["实时天气"],"expect_sources":true}
+{"id":"qa_005","category":"历史文化","question":"祥符禅寺有什么历史？","attraction_id":"lingshan-ls-010","expected_keywords":["祥符禅寺","唐"],"must_not_include":["迪士尼"],"expect_sources":true}
+{"id":"qa_006","category":"拈花湾","question":"拈花湾香月花街有什么体验？","attraction_id":"nianhuawan-nh-003","expected_keywords":["香月花街","禅意"],"must_not_include":["灵山大佛"],"expect_sources":true}
+{"id":"qa_007","category":"拍照打卡","question":"梵天花海适合拍照吗？","attraction_id":"nianhuawan-nh-002","expected_keywords":["梵天花海","拍"],"must_not_include":["门票210"],"expect_sources":true}
+{"id":"qa_008","category":"景点事实","question":"五印坛城有什么特色？","attraction_id":"lingshan-ls-014","expected_keywords":["五印坛城","藏传佛教"],"must_not_include":["购物"],"expect_sources":true}
+{"id":"qa_009","category":"无资料问题","question":"火星基地在哪里？","expected_keywords":["没有在本地资料里检索到","不编造"],"must_not_include":["火星基地位于"],"expect_sources":false}
+{"id":"qa_010","category":"不存在景点","question":"这个景点怎么游览？","attraction_id":"not-real","expected_keywords":["没有找到这个景点编号"],"must_not_include":["推荐你直接前往"],"expect_sources":false}

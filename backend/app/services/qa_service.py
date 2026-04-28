@@ -1,0 +1,260 @@
+from __future__ import annotations
+
+import re
+import time
+from dataclasses import dataclass
+from typing import Any
+
+from app.repositories.content_repository import (
+    get_attraction,
+    list_all_knowledge_chunks,
+    list_attractions,
+    list_knowledge_chunks,
+)
+
+
+DEFAULT_TOP_K = 5
+STOPWORDS = {
+    "什么",
+    "怎么",
+    "哪里",
+    "如何",
+    "一下",
+    "介绍",
+    "讲解",
+    "景点",
+    "景区",
+    "适合",
+    "游览",
+    "推荐",
+    "资料",
+    "这个",
+    "那个",
+    "请问",
+    "可以",
+    "有没有",
+}
+
+
+@dataclass
+class ScoredChunk:
+    chunk: dict[str, Any]
+    score: float
+    reasons: list[str]
+
+
+def _norm(text: Any) -> str:
+    return str(text or "").lower()
+
+
+def _windows(text: str, size: int) -> set[str]:
+    compact = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9-]+", "", text)
+    return {compact[index : index + size].lower() for index in range(max(0, len(compact) - size + 1))}
+
+
+def _extract_terms(question: str, visitor_profile: dict[str, Any] | None, attractions: list[dict[str, Any]]) -> list[str]:
+    terms: set[str] = set()
+    raw = _norm(question)
+
+    for item in re.findall(r"[A-Za-z]+-\d+|[A-Za-z0-9_-]+|[\u4e00-\u9fff]{2,}", question):
+        value = item.lower()
+        if value not in STOPWORDS and len(value) >= 2:
+            terms.add(value)
+
+    for size in (2, 3, 4):
+        terms.update(token for token in _windows(question, size) if token not in STOPWORDS)
+
+    for attraction in attractions:
+        name = _norm(attraction.get("name"))
+        if name and name in raw:
+            terms.add(name)
+        for tag in attraction.get("tags", []):
+            tag_norm = _norm(tag)
+            if tag_norm and tag_norm in raw:
+                terms.add(tag_norm)
+
+    profile = visitor_profile or {}
+    for interest in profile.get("interests", []) or []:
+        value = _norm(interest).strip()
+        if value:
+            terms.add(value)
+
+    return sorted(terms, key=lambda value: (-len(value), value))[:80]
+
+
+def _score_chunk(chunk: dict[str, Any], terms: list[str], attraction: dict[str, Any] | None) -> ScoredChunk:
+    title = _norm(chunk.get("title"))
+    content = _norm(chunk.get("content"))
+    tags = [_norm(tag) for tag in chunk.get("tags", [])]
+    haystack = f"{title} {content} {' '.join(tags)}"
+    score = 0.0
+    reasons: list[str] = []
+
+    priority = float(chunk.get("priority") or 0)
+    score += min(priority, 100.0) / 100.0 * 0.18
+
+    if attraction and chunk.get("attraction_id") == attraction.get("id"):
+        score += 1.2
+        reasons.append("attraction_filter")
+
+    if attraction:
+        name = _norm(attraction.get("name"))
+        if name and name in haystack:
+            score += 0.7
+            reasons.append("attraction_name")
+
+    for term in terms:
+        if len(term) < 2:
+            continue
+        if term in title:
+            score += 1.0 if len(term) >= 3 else 0.55
+            reasons.append(f"title:{term}")
+        if term in tags:
+            score += 0.8
+            reasons.append(f"tag:{term}")
+        if term in content:
+            score += 0.65 if len(term) >= 3 else 0.28
+            reasons.append(f"content:{term}")
+
+    # Keep repeated generic bigram hits from dominating.
+    score = round(min(score, 20.0), 4)
+    return ScoredChunk(chunk=chunk, score=score, reasons=reasons[:8])
+
+
+def retrieve_chunks(
+    *,
+    question: str,
+    attraction_id: str | None = None,
+    visitor_profile: dict[str, Any] | None = None,
+    top_k: int = DEFAULT_TOP_K,
+) -> tuple[list[ScoredChunk], dict[str, Any] | None, list[str]]:
+    attractions = list_attractions()
+    attraction = None
+    if attraction_id:
+        attraction = get_attraction(attraction_id)
+        if attraction is None:
+            # The endpoint handles this as a friendly fallback rather than a hard error.
+            return [], None, []
+        chunks = list_knowledge_chunks(attraction["id"])
+    else:
+        chunks = list_all_knowledge_chunks()
+
+    terms = _extract_terms(question, visitor_profile, attractions)
+    if attraction:
+        terms.extend([_norm(attraction.get("name")), *[_norm(tag) for tag in attraction.get("tags", [])]])
+        terms = sorted({term for term in terms if term}, key=lambda value: (-len(value), value))[:80]
+    scored = [_score_chunk(chunk, terms, attraction) for chunk in chunks]
+    scored = [
+        item
+        for item in scored
+        if item.score >= (0.8 if attraction else 0.55) and any(not reason.startswith("attraction_filter") for reason in item.reasons)
+    ]
+    scored.sort(key=lambda item: (-item.score, -(item.chunk.get("priority") or 0), item.chunk.get("id", "")))
+    return scored[: max(1, min(top_k, 10))], attraction, terms
+
+
+def _snippet(text: str, limit: int = 220) -> str:
+    text = re.sub(r"\s+", " ", text).strip()
+    sentences = re.split(r"(?<=[。！？；])", text)
+    picked = ""
+    for sentence in sentences:
+        if not sentence:
+            continue
+        if len(picked) + len(sentence) > limit and picked:
+            break
+        picked += sentence
+        if len(picked) >= limit:
+            break
+    if not picked:
+        picked = text[:limit]
+    return picked[:limit].rstrip("，；、 ") + ("。" if picked and picked[-1] not in "。！？" else "")
+
+
+def _profile_hint(visitor_profile: dict[str, Any] | None) -> str:
+    profile = visitor_profile or {}
+    hints: list[str] = []
+    group_type = profile.get("group_type")
+    time_budget = profile.get("time_budget_minutes")
+    interests = profile.get("interests") or []
+    if group_type == "family":
+        hints.append("同行有亲子需求，建议节奏放缓，优先选择停留舒适、讲解故事性强的点位")
+    elif group_type:
+        hints.append(f"已按 {group_type} 同行类型控制讲解重点")
+    if time_budget:
+        hints.append(f"你的可用时间约 {time_budget} 分钟，建议先抓重点，不要把路线排得太满")
+    if interests:
+        hints.append(f"我会优先结合 {'、'.join(map(str, interests[:4]))} 来讲")
+    return "；".join(hints)
+
+
+def build_mock_answer(
+    *,
+    question: str,
+    sources: list[ScoredChunk],
+    attraction: dict[str, Any] | None,
+    attraction_id: str | None,
+    visitor_profile: dict[str, Any] | None,
+) -> str:
+    if attraction_id and attraction is None:
+        return (
+            "我在本地景区知识库里没有找到这个景点编号。"
+            "你可以换成景点名称提问，或先查看景点列表后再继续。"
+        )
+
+    if not sources:
+        return (
+            "这个问题我暂时没有在本地资料里检索到可靠依据，所以先不编造答案。"
+            "你可以换成具体景点名、演出名或游览需求再问一次，我会继续用 mock 知识库帮你查。"
+        )
+
+    place = attraction["name"] if attraction else "你问到的内容"
+    lines = [f"我用本地 mock 知识库为你查到：{place}可以这样理解。"]
+    for index, item in enumerate(sources[:3], start=1):
+        lines.append(f"{index}. {_snippet(item.chunk.get('content', ''))}")
+
+    hint = _profile_hint(visitor_profile)
+    if hint:
+        lines.append(f"结合你的游览偏好，{hint}。")
+
+    lines.append("以上回答来自本地资料切片检索，当前模式为 mock。")
+    return "\n".join(lines)
+
+
+def answer_question(
+    *,
+    question: str,
+    attraction_id: str | None = None,
+    visitor_profile: dict[str, Any] | None = None,
+    top_k: int = DEFAULT_TOP_K,
+) -> dict[str, Any]:
+    start = time.perf_counter()
+    sources, attraction, _terms = retrieve_chunks(
+        question=question,
+        attraction_id=attraction_id,
+        visitor_profile=visitor_profile,
+        top_k=top_k,
+    )
+    answer = build_mock_answer(
+        question=question,
+        sources=sources,
+        attraction=attraction,
+        attraction_id=attraction_id,
+        visitor_profile=visitor_profile,
+    )
+    latency_ms = int((time.perf_counter() - start) * 1000)
+    return {
+        "answer": answer,
+        "sources": [
+            {
+                "chunk_id": item.chunk["id"],
+                "title": item.chunk["title"],
+                "source_file": item.chunk["source_file"],
+                "source_section": item.chunk["source_section"],
+                "attraction_id": item.chunk["attraction_id"],
+                "score": item.score,
+            }
+            for item in sources
+        ],
+        "mode": "mock",
+        "latency_ms": latency_ms,
+    }

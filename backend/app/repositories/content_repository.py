@@ -52,6 +52,18 @@ def list_knowledge_chunks(attraction_id: str | None = None) -> list[dict[str, An
     return [json.loads(row["payload_json"]) for row in rows]
 
 
+def list_all_knowledge_chunks() -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT payload_json
+            FROM knowledge_chunks
+            ORDER BY priority DESC, id
+            """
+        ).fetchall()
+    return [json.loads(row["payload_json"]) for row in rows]
+
+
 def get_behavior_summary() -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute(

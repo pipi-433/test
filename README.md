@@ -90,6 +90,32 @@ python .\scripts\validate_api_data.py
 - `GET /api/knowledge/chunks?attraction_id={id}`
 - `GET /api/analytics/behavior-summary`
 
+## Mock RAG 问答
+
+Task 04 提供本地 lexical retrieval + mock 生成，不需要 API Key、向量库或真实大模型：
+
+```powershell
+python .\scripts\eval_qa.py
+```
+
+问答 API：
+
+- `POST /api/qa`
+
+请求示例：
+
+```json
+{
+  "question": "灵山大佛适合怎么游览？",
+  "attraction_id": "lingshan-ls-011",
+  "visitor_profile": {
+    "group_type": "family",
+    "time_budget_minutes": 120,
+    "interests": ["佛教文化", "拍照打卡"]
+  }
+}
+```
+
 ## 后续任务
 
-Task 04 将在当前 SQLite 数据与 mock provider 基础上实现 RAG 问答；原始资料包仍作为只读来源。
+Task 04.5 将在当前 mock provider 基础上实现多模态识景最小闭环；原始资料包仍作为只读来源。
