@@ -1,6 +1,6 @@
 # 灵境导游
 
-中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐、模拟拥挤度分流、Kiosk 二维码路线带走和本地交互日志/反馈洞察闭环；默认无 API Key 可运行。
+中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐、自然语言路线推荐、Route Memory Agent、模拟拥挤度分流、Kiosk 二维码路线带走和本地交互日志/反馈洞察闭环；默认无 API Key 可运行。
 
 ## 本轮实现
 
@@ -9,6 +9,8 @@
 - 管理后台 `/admin`：左侧导航、顶部状态栏、指标卡、mock 图表、热门问题、provider 状态。
 - 后端 API：health、provider、景点、知识切片、QA、识景、路线推荐。
 - 拥挤度感知路线：mock_simulation 快照、路线评分拆解、决策说明、后台拥挤点预警。
+- 自然语言路线推荐：规则 parser 将“老人孩子、3 小时、别太挤、必去景点”等口语输入转为结构化约束，再由受控路线规划器生成路线。
+- Route Memory Agent：本地 mock 会话记忆保存偏好、必去点、避开点和上一条路线，支持缩短、少走路、避拥挤、多拍照、多历史等多轮重规划。
 - Kiosk 路线带走：终端生成拥挤度感知路线，展示二维码、短码和手机打开链接，手机访问 `/route/:id/share?code=...` 查看同一条路线。
 - 交互日志与反馈：QA、识景、路线、二维码带走和游客反馈写入本地 SQLite，后台 `/admin` 读取 `/api/analytics/overview` 展示运营洞察。
 - DX 配置：`.env.example`、README、Task 02 目录预留。
@@ -186,6 +188,50 @@ Invoke-RestMethod http://127.0.0.1:8000/api/crowd/snapshot
 ```
 
 重要边界：当前所有拥挤度均为 `mock_simulation` 演示数据，不代表真实景区客流，也没有接入闸机、摄像头、Wi-Fi 探针、GPS 或 IoT 硬件。
+
+## 自然语言路线推荐与 Route Memory Agent
+
+Task 06.8 增加本地规则版自然语言路线推荐。工程边界仍是“规则/mock parser + 受约束 Route Planner”，不接真实 LLM，不允许模型自由决定路线点位；后续 LLM/RAG 只能增强意图解析或表达，不得绕过 `ROUTE_CONSTRAINT_RULES`。
+
+新增 API：
+- `POST /api/routes/intent`
+- `POST /api/routes/conversation`
+
+意图解析示例：
+```json
+{
+  "message": "我带老人孩子，3 小时，别太挤，灵山大佛一定要去",
+  "selected_attraction_id": "lingshan-ls-011"
+}
+```
+
+对话式路线示例：
+```json
+{
+  "session_id": "mock-session-001",
+  "message": "太累了，缩短一点",
+  "current_route_id": "route-xxx",
+  "selected_attraction_id": "lingshan-ls-011"
+}
+```
+
+支持的结构化约束：
+- `must_visit_attraction_ids`：必去景点，不能因为模拟拥挤被直接删除，只能保留、延后或提示错峰。
+- `optional_attraction_ids`：可选兴趣点，时间允许时优先补充。
+- `avoid_attraction_ids`：用户明确不想去或已去过的点，除非与必去冲突。
+- `crowd_tolerance`：`low` / `medium` / `high`。
+
+每个路线站点会补充：
+- `constraint_type`: `must_visit` / `optional` / `recommended` / `alternative`
+- `constraint_reason`
+- `crowd_action`: `keep` / `delay` / `replace` / `avoid` / `keep_with_warning`
+
+评测：
+```powershell
+python .\scripts\eval_route_conversation.py
+```
+
+当前 parser、memory 和 session 都是本地 mock 演示机制，不接真实账号系统，不记录个人敏感身份，不接真实 GPS、真实客流硬件或真实 LLM。
 
 ### Kiosk 二维码带走
 

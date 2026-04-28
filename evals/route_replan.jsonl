@@ -1,0 +1,3 @@
+{"id":"replan-shorten","setup_message":"灵山大佛和九龙灌浴一定要去，4 小时，别太挤","message":"太累了，缩短一点","expected_operation":"shorten"}
+{"id":"replan-avoid-crowd","setup_message":"我带老人孩子，3 小时，灵山大佛一定要去","message":"人太多，换一个","expected_operation":"avoid_crowd"}
+{"id":"replan-must-high-keep","setup_message":"灵山大佛和九龙灌浴一定要去，别太挤","message":"帮我重新安排路线","expected_must_visit":["lingshan-ls-011","lingshan-ls-006"]}

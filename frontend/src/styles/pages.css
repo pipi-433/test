@@ -155,6 +155,7 @@
 }
 
 .mobile-control-panel,
+.clarification-panel,
 .source-panel,
 .vision-panel,
 .route-panel,
@@ -259,6 +260,17 @@
   margin: 0;
 }
 
+.clarification-panel {
+  border: 1px solid var(--color-accent-500);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  background: var(--color-accent-100);
+}
+
+.clarification-panel strong {
+  color: var(--color-warning);
+}
+
 .mobile-spot-summary {
   margin-bottom: var(--space-4);
 }
@@ -316,6 +328,35 @@
   gap: var(--space-3);
 }
 
+.must-visit-picker {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.must-visit-chip-row,
+.constraint-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.must-visit-chip {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: 0 var(--space-3);
+  background: white;
+  color: var(--color-ink-700);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.must-visit-chip--active {
+  border-color: var(--color-accent-500);
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+}
+
 .route-theme-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -339,6 +380,7 @@
 }
 
 .route-theme:focus-visible,
+.must-visit-chip:focus-visible,
 .route-stop .quick-question:focus-visible,
 .crowd-switch:focus-within {
   outline: 3px solid var(--color-accent-500);
@@ -490,6 +532,13 @@
 .crowd-note {
   border-left: 3px solid var(--color-accent-500);
   padding-left: var(--space-2);
+}
+
+.constraint-note {
+  border-left: 3px solid var(--color-primary-500);
+  padding-left: var(--space-2);
+  color: var(--color-primary-700);
+  font-weight: 650;
 }
 
 .mobile-empty {

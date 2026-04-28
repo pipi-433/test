@@ -74,6 +74,10 @@ export type RouteStop = {
   crowd_score: number;
   wait_minutes: number;
   crowd_note: string;
+  constraint_type?: "must_visit" | "optional" | "recommended" | "alternative";
+  constraint_reason?: string;
+  crowd_action?: "keep" | "delay" | "replace" | "avoid" | "keep_with_warning";
+  decision_reason?: string;
 };
 
 export type RouteRecommendation = {
@@ -83,6 +87,12 @@ export type RouteRecommendation = {
   theme_label: string;
   summary: string;
   suitable_for: string[];
+  constraints?: {
+    must_visit_attraction_ids: string[];
+    optional_attraction_ids: string[];
+    avoid_attraction_ids: string[];
+    rules?: Record<string, unknown>;
+  };
   estimated_duration_minutes: number;
   time_budget_minutes: number;
   recommendation_score: number;
@@ -112,6 +122,76 @@ export type RouteRecommendation = {
   };
   mode: string;
   latency_ms: number;
+};
+
+export type RouteIntentResult = {
+  intent: "route_recommend" | "route_replan" | "explanation_style" | "clarification" | "unknown";
+  operation:
+    | "shorten"
+    | "avoid_crowd"
+    | "less_walking"
+    | "more_photo"
+    | "more_history"
+    | "start_here"
+    | "set_must_visit"
+    | "remove_must_visit"
+    | "none";
+  theme: string | null;
+  time_budget_minutes: number | null;
+  group_type: string | null;
+  intensity: string | null;
+  interests: string[];
+  must_visit_attraction_ids: string[];
+  optional_attraction_ids: string[];
+  avoid_attraction_ids: string[];
+  avoid_crowd: boolean;
+  crowd_tolerance: CrowdLevel;
+  style: "child" | "deep_history" | "short_30s" | "photo" | "comfort" | "default";
+  intent_confidence: number;
+  needs_clarification: boolean;
+  clarification_question: string | null;
+  clarification_options: string[];
+  mode: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type RouteMemory = {
+  session_id: string;
+  preferences: {
+    theme?: string | null;
+    time_budget_minutes?: number;
+    group_type?: string | null;
+    intensity?: string | null;
+    interests?: string[];
+    avoid_crowd?: boolean;
+    crowd_tolerance?: CrowdLevel;
+    start_attraction_id?: string | null;
+  };
+  constraints: {
+    must_visit_attraction_ids: string[];
+    optional_attraction_ids: string[];
+    avoid_attraction_ids: string[];
+  };
+  current_route_id?: string | null;
+  current_stop_index: number;
+  removed_stops: string[];
+  delayed_stops: string[];
+  high_crowd_stops: string[];
+  last_operation?: string | null;
+  last_reason?: string | null;
+  turn_count: number;
+};
+
+export type RouteConversationResponse = {
+  session_id: string;
+  intent: RouteIntentResult;
+  memory: RouteMemory;
+  route: RouteRecommendation | null;
+  reply: string;
+  confidence: number;
+  needs_clarification: boolean;
+  clarification_options: string[];
+  mode: string;
 };
 
 export type FeedbackRequest = {
@@ -278,6 +358,9 @@ export async function recommendRoute({
   startAttractionId,
   avoidCrowd = true,
   crowdTolerance = "medium",
+  mustVisitAttractionIds,
+  optionalAttractionIds,
+  avoidAttractionIds,
   channel = "mobile",
 }: {
   theme?: string;
@@ -288,6 +371,9 @@ export async function recommendRoute({
   startAttractionId?: string;
   avoidCrowd?: boolean;
   crowdTolerance?: CrowdLevel;
+  mustVisitAttractionIds?: string[];
+  optionalAttractionIds?: string[];
+  avoidAttractionIds?: string[];
   channel?: "mobile" | "kiosk" | "share" | "admin" | "api";
 }): Promise<RouteRecommendation> {
   return requestJson<RouteRecommendation>("/api/routes/recommend", {
@@ -300,7 +386,53 @@ export async function recommendRoute({
       start_attraction_id: startAttractionId || null,
       avoid_crowd: avoidCrowd,
       crowd_tolerance: crowdTolerance,
+      must_visit_attraction_ids: mustVisitAttractionIds || [],
+      optional_attraction_ids: optionalAttractionIds || [],
+      avoid_attraction_ids: avoidAttractionIds || [],
       channel,
+    }),
+    method: "POST",
+  });
+}
+
+export async function parseRouteIntent({
+  message,
+  selectedAttractionId,
+  currentRouteId,
+}: {
+  message: string;
+  selectedAttractionId?: string;
+  currentRouteId?: string;
+}): Promise<RouteIntentResult> {
+  return requestJson<RouteIntentResult>("/api/routes/intent", {
+    body: JSON.stringify({
+      message,
+      selected_attraction_id: selectedAttractionId || null,
+      current_route_id: currentRouteId || null,
+      channel: "mobile",
+    }),
+    method: "POST",
+  });
+}
+
+export async function sendRouteConversation({
+  message,
+  sessionId,
+  currentRouteId,
+  selectedAttractionId,
+}: {
+  message: string;
+  sessionId?: string;
+  currentRouteId?: string;
+  selectedAttractionId?: string;
+}): Promise<RouteConversationResponse> {
+  return requestJson<RouteConversationResponse>("/api/routes/conversation", {
+    body: JSON.stringify({
+      message,
+      session_id: sessionId || null,
+      current_route_id: currentRouteId || null,
+      selected_attraction_id: selectedAttractionId || null,
+      channel: "mobile",
     }),
     method: "POST",
   });

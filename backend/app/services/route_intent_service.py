@@ -1,0 +1,254 @@
+from __future__ import annotations
+
+import re
+from typing import Any
+
+from app.repositories.content_repository import list_attractions
+
+
+THEME_KEYWORDS = {
+    "family": ["孩子", "亲子", "老人孩子", "带娃", "小朋友"],
+    "history": ["历史", "文化", "深入", "典故", "研学"],
+    "nature": ["自然", "花海", "休闲", "慢游"],
+    "blessing": ["祈福", "朝圣", "拜佛", "禅寺"],
+    "photo": ["拍照", "打卡", "出片", "摄影"],
+}
+
+STYLE_KEYWORDS = {
+    "child": ["讲给孩子听", "孩子听", "亲子版", "小朋友听"],
+    "deep_history": ["讲深入", "深入一点", "历史多一点", "文化多一点"],
+    "short_30s": ["30 秒", "三十秒", "简短点", "短一点", "一句话"],
+    "photo": ["拍照讲", "打卡讲", "取景"],
+    "comfort": ["安抚", "太累", "太挤", "赶时间"],
+}
+
+OPERATION_KEYWORDS = {
+    "shorten": ["缩短", "短一点", "时间不够", "太长"],
+    "less_walking": ["太累", "少走", "老人累", "走不动", "轻松点"],
+    "avoid_crowd": ["人太多", "换一个", "别太挤", "避开人多", "不排队", "别排队"],
+    "more_photo": ["多拍照", "打卡", "出片"],
+    "more_history": ["想听历史", "历史多一点", "文化多一点"],
+    "start_here": ["从这里", "我在", "从"],
+}
+
+TIME_WORDS = {
+    "一": 1,
+    "二": 2,
+    "两": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "半天": 4,
+    "全天": 8,
+}
+
+ATTRACTION_ALIASES = {
+    "大佛": "lingshan-ls-011",
+    "灵山大佛": "lingshan-ls-011",
+    "九龙": "lingshan-ls-006",
+    "九龙灌浴": "lingshan-ls-006",
+    "梵宫": "lingshan-ls-013",
+    "灵山梵宫": "lingshan-ls-013",
+    "祥符禅寺": "lingshan-ls-010",
+    "五印坛城": "lingshan-ls-014",
+    "梵天花海": "nianhuawan-nh-002",
+    "香月花街": "nianhuawan-nh-003",
+    "五灯湖": "nianhuawan-nh-005",
+}
+
+
+def _contains_any(message: str, values: list[str]) -> bool:
+    return any(value in message for value in values)
+
+
+def _match_attractions(message: str) -> list[str]:
+    attractions = list_attractions()
+    ids_by_name = {item["name"]: item["id"] for item in attractions}
+    matches: list[str] = []
+    for alias, attraction_id in ATTRACTION_ALIASES.items():
+        if alias in message and attraction_id not in matches:
+            matches.append(attraction_id)
+    for name, attraction_id in ids_by_name.items():
+        if name in message and attraction_id not in matches:
+            matches.append(attraction_id)
+    return matches
+
+
+def _parse_time_budget(message: str) -> int | None:
+    arabic = re.search(r"(\d+(?:\.\d+)?)\s*(?:个)?小时", message)
+    if arabic:
+        return int(float(arabic.group(1)) * 60)
+    for word, hours in TIME_WORDS.items():
+        if f"{word}小时" in message or word in {"半天", "全天"} and word in message:
+            return int(hours * 60)
+    return None
+
+
+def _infer_theme(message: str) -> str | None:
+    for theme, keywords in THEME_KEYWORDS.items():
+        if _contains_any(message, keywords):
+            return theme
+    return None
+
+
+def _infer_style(message: str) -> str:
+    for style, keywords in STYLE_KEYWORDS.items():
+        if _contains_any(message, keywords):
+            return style
+    return "default"
+
+
+def _infer_operation(message: str) -> str:
+    if _contains_any(message, ["一定要去", "必须看", "不能错过"]):
+        return "set_must_visit"
+    if _contains_any(message, ["算了不去", "不去了", "不用去"]):
+        return "remove_must_visit"
+    for operation, keywords in OPERATION_KEYWORDS.items():
+        if _contains_any(message, keywords):
+            return operation
+    return "none"
+
+
+def parse_route_intent(
+    *,
+    message: str,
+    selected_attraction_id: str | None = None,
+    current_route_id: str | None = None,
+    memory: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    text = " ".join(str(message or "").strip().split())
+    matched_ids = _match_attractions(text)
+    operation = _infer_operation(text)
+    style = _infer_style(text)
+    theme = _infer_theme(text)
+    time_budget = _parse_time_budget(text)
+    interests: list[str] = []
+    group_type: str | None = None
+    intensity: str | None = None
+    avoid_crowd = False
+    crowd_tolerance = "medium"
+    optional_ids: list[str] = []
+    avoid_ids: list[str] = []
+    must_visit_ids: list[str] = []
+
+    if _contains_any(text, ["老人", "爸妈", "父母", "长辈"]):
+        group_type = "family_elderly"
+        intensity = "easy"
+        interests.append("长辈友好")
+    if _contains_any(text, ["孩子", "亲子", "带娃", "小朋友"]):
+        theme = theme or "family"
+        group_type = group_type or "family"
+        interests.append("亲子")
+    if _contains_any(text, ["轻松", "少走", "太累", "老人累"]):
+        intensity = "easy"
+    if _contains_any(text, ["别太挤", "避开人多", "不排队", "别排队", "人太多", "换一个"]):
+        avoid_crowd = True
+        crowd_tolerance = "low"
+    if operation == "more_photo":
+        theme = "photo"
+        interests.append("拍照打卡")
+    if operation == "more_history":
+        theme = "history"
+        interests.append("历史文化")
+
+    if operation == "set_must_visit":
+        must_visit_ids = matched_ids
+    elif operation == "remove_must_visit":
+        avoid_ids = matched_ids
+    elif _contains_any(text, ["不想去", "跳过", "已经去过", "不去"]):
+        avoid_ids = matched_ids
+    else:
+        optional_ids = matched_ids if matched_ids and not theme else []
+
+    route_keywords = [
+        "路线",
+        "怎么玩",
+        "怎么安排",
+        "几小时",
+        "小时",
+        "半天",
+        "全天",
+        "老人",
+        "孩子",
+        "太累",
+        "人多",
+        "一定要去",
+        "必须看",
+        "缩短",
+        "换一个",
+        "少走",
+    ]
+    explicit_route_terms = [
+        "路线",
+        "怎么玩",
+        "怎么安排",
+        "小时",
+        "半天",
+        "全天",
+        "太累",
+        "人多",
+        "一定要去",
+        "必须看",
+        "缩短",
+        "换一个",
+        "少走",
+    ]
+    style_only = style != "default" and not _contains_any(text, explicit_route_terms) and not current_route_id
+    if style_only:
+        intent = "explanation_style"
+    elif operation in {"shorten", "less_walking", "avoid_crowd", "more_photo", "more_history", "start_here"} or current_route_id:
+        intent = "route_replan"
+    elif _contains_any(text, route_keywords) or theme or time_budget or must_visit_ids:
+        intent = "route_recommend"
+    else:
+        intent = "unknown"
+
+    confidence = 0.3
+    confidence += 0.16 if theme else 0
+    confidence += 0.16 if time_budget else 0
+    confidence += 0.16 if operation != "none" else 0
+    confidence += 0.12 if matched_ids else 0
+    confidence += 0.1 if group_type else 0
+    confidence += 0.1 if avoid_crowd else 0
+    confidence += 0.3 if style != "default" else 0
+    confidence += 0.2 if current_route_id and _contains_any(text, ["重新安排", "重规划", "路线"]) else 0
+    confidence = min(round(confidence, 2), 0.96)
+
+    needs_clarification = False
+    clarification_question: str | None = None
+    clarification_options: list[str] = []
+    if intent == "unknown" or confidence < 0.45:
+        needs_clarification = True
+        clarification_question = "你想让我做景点问答，还是帮你重新规划路线？"
+        clarification_options = ["帮我规划路线", "讲解当前景点", "避开拥挤重新安排"]
+        intent = "clarification"
+    elif operation == "set_must_visit" and not must_visit_ids:
+        needs_clarification = True
+        clarification_question = "你说有必去点，但我还不确定是哪几个景点。"
+        clarification_options = ["灵山大佛", "九龙灌浴", "灵山梵宫", "五印坛城"]
+        intent = "clarification"
+
+    return {
+        "intent": intent,
+        "operation": operation,
+        "theme": theme,
+        "time_budget_minutes": time_budget,
+        "group_type": group_type,
+        "intensity": intensity,
+        "interests": interests,
+        "must_visit_attraction_ids": must_visit_ids,
+        "optional_attraction_ids": optional_ids,
+        "avoid_attraction_ids": avoid_ids,
+        "avoid_crowd": avoid_crowd,
+        "crowd_tolerance": crowd_tolerance,
+        "style": style,
+        "intent_confidence": confidence,
+        "needs_clarification": needs_clarification,
+        "clarification_question": clarification_question,
+        "clarification_options": clarification_options,
+        "selected_attraction_id": selected_attraction_id,
+        "current_route_id": current_route_id,
+        "mode": "mock_rule_parser",
+        "metadata": {"matched_attraction_ids": matched_ids, "memory_turn_count": (memory or {}).get("turn_count")},
+    }

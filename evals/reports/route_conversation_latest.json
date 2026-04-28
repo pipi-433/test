@@ -1,0 +1,139 @@
+{
+  "generated_at": "2026-04-28T19:24:50+00:00",
+  "mode": "mock",
+  "total": 9,
+  "passed": 9,
+  "failed": 0,
+  "accuracy": 1.0,
+  "results": [
+    {
+      "id": "intent-family-elderly-crowd",
+      "type": "intent",
+      "passed": true,
+      "intent": "route_replan",
+      "operation": "avoid_crowd",
+      "confidence": 0.96,
+      "mismatches": []
+    },
+    {
+      "id": "intent-must-visit",
+      "type": "intent",
+      "passed": true,
+      "intent": "route_recommend",
+      "operation": "set_must_visit",
+      "confidence": 0.58,
+      "mismatches": []
+    },
+    {
+      "id": "intent-style-child",
+      "type": "intent",
+      "passed": true,
+      "intent": "explanation_style",
+      "operation": "none",
+      "confidence": 0.86,
+      "mismatches": []
+    },
+    {
+      "id": "intent-style-short",
+      "type": "intent",
+      "passed": true,
+      "intent": "explanation_style",
+      "operation": "none",
+      "confidence": 0.6,
+      "mismatches": []
+    },
+    {
+      "id": "replan-shorten",
+      "type": "replan",
+      "passed": true,
+      "operation": "shorten",
+      "route_id": "route-c50170c6c4",
+      "stop_ids": [
+        "lingshan-ls-011",
+        "lingshan-ls-001",
+        "lingshan-ls-009",
+        "lingshan-ls-013",
+        "lingshan-ls-006"
+      ],
+      "score": 81,
+      "operation_ok": true,
+      "must_ok": true,
+      "score_ok": true,
+      "breakdown_ok": true,
+      "trace_ok": true,
+      "stops_have_crowd": true,
+      "shortened_ok": true,
+      "no_identity": true
+    },
+    {
+      "id": "replan-avoid-crowd",
+      "type": "replan",
+      "passed": true,
+      "operation": "avoid_crowd",
+      "route_id": "route-76038ec2a0",
+      "stop_ids": [
+        "lingshan-ls-011",
+        "lingshan-ls-001",
+        "lingshan-ls-009",
+        "lingshan-ls-006",
+        "lingshan-ls-013"
+      ],
+      "score": 81,
+      "operation_ok": true,
+      "must_ok": true,
+      "score_ok": true,
+      "breakdown_ok": true,
+      "trace_ok": true,
+      "stops_have_crowd": true,
+      "shortened_ok": true,
+      "no_identity": true
+    },
+    {
+      "id": "replan-must-high-keep",
+      "type": "replan",
+      "passed": true,
+      "operation": "none",
+      "route_id": "route-2cf4b482d1",
+      "stop_ids": [
+        "lingshan-ls-011",
+        "lingshan-ls-001",
+        "lingshan-ls-009",
+        "lingshan-ls-013",
+        "nianhuawan-nh-005",
+        "lingshan-ls-006"
+      ],
+      "score": 82,
+      "operation_ok": true,
+      "must_ok": true,
+      "score_ok": true,
+      "breakdown_ok": true,
+      "trace_ok": true,
+      "stops_have_crowd": true,
+      "shortened_ok": true,
+      "no_identity": true
+    },
+    {
+      "id": "clarify-too-vague",
+      "type": "clarification",
+      "passed": true,
+      "needs_clarification": true,
+      "options": [
+        "帮我规划路线",
+        "讲解当前景点",
+        "避开拥挤重新安排"
+      ]
+    },
+    {
+      "id": "clarify-must-unknown",
+      "type": "clarification",
+      "passed": true,
+      "needs_clarification": true,
+      "options": [
+        "灵山大佛",
+        "九龙灌浴",
+        "灵山梵宫",
+        "五印坛城"
+      ]
+    }
+  ]
+}

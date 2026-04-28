@@ -15,8 +15,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, submitFeedback } from "../api/client";
-import type { Attraction, CrowdLevel, QAResponse, RouteRecommendation, VisionResponse } from "../api/client";
+import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, sendRouteConversation, submitFeedback } from "../api/client";
+import type { Attraction, CrowdLevel, QAResponse, RouteConversationResponse, RouteRecommendation, VisionResponse } from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock, type DigitalHumanState } from "../components/DigitalHumanMock";
 import { IconButton } from "../components/IconButton";
@@ -44,6 +44,36 @@ const crowdToleranceOptions: Array<{ value: CrowdLevel; label: string }> = [
   { value: "high", label: "可接受排队" },
 ];
 const feedbackTags = ["讲解清楚", "路线合理", "避开拥挤", "人多拥挤", "信息不准", "体验惊喜"];
+const routeIntentKeywords = [
+  "路线",
+  "怎么玩",
+  "安排",
+  "几小时",
+  "小时",
+  "半天",
+  "全天",
+  "老人",
+  "孩子",
+  "太累",
+  "人多",
+  "一定要去",
+  "必须看",
+  "不能错过",
+  "缩短",
+  "换一个",
+  "少走",
+  "讲给孩子听",
+  "30 秒",
+  "三十秒",
+  "讲深入",
+];
+const mustVisitOptions = [
+  { id: "lingshan-ls-011", label: "灵山大佛" },
+  { id: "lingshan-ls-006", label: "九龙灌浴" },
+  { id: "lingshan-ls-013", label: "灵山梵宫" },
+  { id: "lingshan-ls-010", label: "祥符禅寺" },
+  { id: "lingshan-ls-014", label: "五印坛城" },
+];
 
 function shortText(value: string | undefined, limit = 88) {
   if (!value) {
@@ -58,6 +88,26 @@ function crowdLabel(level: CrowdLevel) {
 
 function crowdTone(level: CrowdLevel) {
   return level === "high" ? "warning" : level === "medium" ? "neutral" : "ok";
+}
+
+function isRouteIntentQuestion(value: string) {
+  return routeIntentKeywords.some((keyword) => value.includes(keyword));
+}
+
+function constraintLabel(value: string | undefined) {
+  return value === "must_visit" ? "必去" : value === "optional" ? "可选" : value === "alternative" ? "替代" : "推荐";
+}
+
+function crowdActionLabel(value: string | undefined) {
+  return value === "delay"
+    ? "已错峰"
+    : value === "keep_with_warning"
+      ? "保留提醒"
+      : value === "replace"
+        ? "已替代"
+        : value === "avoid"
+          ? "已避开"
+          : "保留";
 }
 
 export function MobileHomePage() {
@@ -75,7 +125,11 @@ export function MobileHomePage() {
   const [routeBudget, setRouteBudget] = useState(240);
   const [avoidCrowd, setAvoidCrowd] = useState(true);
   const [crowdTolerance, setCrowdTolerance] = useState<CrowdLevel>("medium");
+  const [mustVisitIds, setMustVisitIds] = useState<string[]>([]);
   const [routeResult, setRouteResult] = useState<RouteRecommendation | null>(null);
+  const [routeSessionId, setRouteSessionId] = useState("");
+  const [routeConversation, setRouteConversation] = useState<RouteConversationResponse | null>(null);
+  const [clarificationOptions, setClarificationOptions] = useState<string[]>([]);
   const [loadingAttractions, setLoadingAttractions] = useState(true);
   const [qaLoading, setQaLoading] = useState(false);
   const [visionLoading, setVisionLoading] = useState(false);
@@ -135,6 +189,7 @@ export function MobileHomePage() {
     setError("");
     setQuestion(cleanQuestion);
     setQaResult(null);
+    setClarificationOptions([]);
     const matchedAttraction = attractions.find((item) => cleanQuestion.includes(item.name));
     const queryAttractionId = matchedAttraction?.id || selectedId;
     if (matchedAttraction && matchedAttraction.id !== selectedId) {
@@ -142,6 +197,29 @@ export function MobileHomePage() {
     }
     scrollAnswerIntoView();
     try {
+      if (isRouteIntentQuestion(cleanQuestion)) {
+        const result = await sendRouteConversation({
+          message: cleanQuestion,
+          sessionId: routeSessionId || undefined,
+          currentRouteId: routeResult?.id,
+          selectedAttractionId: queryAttractionId,
+        });
+        setRouteConversation(result);
+        setRouteSessionId(result.session_id);
+        setQaResult({ answer: result.reply, sources: [], mode: "route_memory", latency_ms: 0 });
+        setClarificationOptions(result.clarification_options || []);
+        if (result.route) {
+          setRouteResult(result.route);
+          setRouteTheme(result.route.theme);
+          setRouteBudget(result.route.time_budget_minutes);
+          setAvoidCrowd(result.route.crowd_policy.avoid_crowd);
+          setCrowdTolerance(result.route.crowd_policy.crowd_tolerance);
+          setMustVisitIds(result.memory.constraints.must_visit_attraction_ids || []);
+          window.setTimeout(() => routePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+        }
+        scrollAnswerIntoView("nearest");
+        return;
+      }
       const result = await askQuestion({ attractionId: queryAttractionId, question: cleanQuestion });
       setQaResult(result);
       scrollAnswerIntoView("nearest");
@@ -205,6 +283,7 @@ export function MobileHomePage() {
         startAttractionId: selectedId,
         avoidCrowd,
         crowdTolerance,
+        mustVisitAttractionIds: mustVisitIds,
       });
       setRouteResult(result);
     } catch (cause) {
@@ -224,6 +303,12 @@ export function MobileHomePage() {
   function toggleFeedbackTag(tag: string) {
     setSelectedFeedbackTags((current) =>
       current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag],
+    );
+  }
+
+  function toggleMustVisit(attractionId: string) {
+    setMustVisitIds((current) =>
+      current.includes(attractionId) ? current.filter((item) => item !== attractionId) : [...current, attractionId],
     );
   }
 
@@ -375,25 +460,34 @@ export function MobileHomePage() {
         </div>
       </section>
 
-      {qaResult ? (
+      {qaResult && qaResult.sources.length > 0 ? (
         <section className="source-panel" aria-label="回答来源">
           <div className="section-title-row">
             <h2>来源依据</h2>
             <StatusBadge tone="neutral">{qaResult.latency_ms} ms</StatusBadge>
           </div>
-          {qaResult.sources.length > 0 ? (
-            <div className="source-list">
-              {qaResult.sources.map((source) => (
-                <div className="source-item" key={source.chunk_id}>
-                  <strong>{source.title}</strong>
-                  <span>{source.source_file}</span>
-                  <span>分数 {source.score.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="empty-state mobile-empty">本次没有可靠命中，灵境已避免编造答案。</p>
-          )}
+          <div className="source-list">
+            {qaResult.sources.map((source) => (
+              <div className="source-item" key={source.chunk_id}>
+                <strong>{source.title}</strong>
+                <span>{source.source_file}</span>
+                <span>分数 {source.score.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {clarificationOptions.length > 0 ? (
+        <section className="clarification-panel" aria-label="澄清选项">
+          <strong>{routeConversation?.intent.clarification_question || "请选择一个更明确的方向"}</strong>
+          <div className="quick-question-row">
+            {clarificationOptions.map((option) => (
+              <button className="quick-question" key={option} onClick={() => void submitQuestion(`${question}，${option}`)} type="button">
+                {option}
+              </button>
+            ))}
+          </div>
         </section>
       ) : null}
 
@@ -529,6 +623,21 @@ export function MobileHomePage() {
               </option>
             ))}
           </select>
+          <div className="must-visit-picker" aria-label="必去景点约束">
+            <span className="field-label">必去景点</span>
+            <div className="must-visit-chip-row">
+              {mustVisitOptions.map((item) => (
+                <button
+                  className={mustVisitIds.includes(item.id) ? "must-visit-chip must-visit-chip--active" : "must-visit-chip"}
+                  key={item.id}
+                  onClick={() => toggleMustVisit(item.id)}
+                  type="button"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         {routeResult ? (
           <div className="route-result">
@@ -582,6 +691,14 @@ export function MobileHomePage() {
                   <div className="route-stop__index">{stop.order}</div>
                   <div>
                     <strong>{stop.name}</strong>
+                    <div className="constraint-badge-row">
+                      <StatusBadge tone={stop.constraint_type === "must_visit" ? "ok" : "neutral"}>
+                        {constraintLabel(stop.constraint_type)}
+                      </StatusBadge>
+                      <StatusBadge tone={stop.crowd_action === "delay" || stop.crowd_action === "keep_with_warning" ? "warning" : "neutral"}>
+                        {crowdActionLabel(stop.crowd_action)}
+                      </StatusBadge>
+                    </div>
                     <span>
                       {stop.scenic_area} · 停留 {stop.stay_minutes} 分钟
                       {stop.walk_minutes_from_previous ? ` · 步行约 ${stop.walk_minutes_from_previous} 分钟` : ""}
@@ -593,6 +710,7 @@ export function MobileHomePage() {
                       <span>等待约 {stop.wait_minutes} 分钟</span>
                     </div>
                     <p>{stop.focus}：{stop.reason}</p>
+                    {stop.constraint_reason ? <p className="constraint-note">{stop.constraint_reason}</p> : null}
                     <p className="crowd-note">{stop.crowd_note}</p>
                     <button className="quick-question" type="button" onClick={() => void submitQuestion(stop.narration_question)}>
                       进入本站讲解

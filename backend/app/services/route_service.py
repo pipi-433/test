@@ -15,6 +15,28 @@ from app.services.crowd_service import CROWD_SOURCE, get_crowd_record
 DEFAULT_THEME = "family"
 VALID_TOLERANCES = {"low", "medium", "high"}
 
+ROUTE_CONSTRAINT_RULES: dict[str, Any] = {
+    "priority": [
+        "valid_attraction_ids",
+        "must_visit",
+        "avoid_attraction",
+        "optional_attraction",
+        "theme_template",
+        "crowd_comfort",
+        "time_fit",
+    ],
+    "conflict_policy": {
+        "must_visit_vs_avoid": "must_visit wins; planner keeps the stop and records a clarification-ready trace.",
+        "invalid_attraction_id": "ignore invalid ids and explain in decision_trace.",
+        "time_over_budget": "must_visit may exceed time budget; route explains the tradeoff instead of deleting it.",
+    },
+    "crowd_policy": {
+        "must_visit_high": "keep with warning or delay; never delete only because of simulated crowd.",
+        "recommended_high": "delay or shorten when avoid_crowd is true.",
+        "optional_high": "replace or delay before recommended low-crowd stops.",
+    },
+}
+
 THEME_LABELS = {
     "family": "亲子轻松",
     "history": "历史文化",
@@ -122,6 +144,26 @@ def _attraction_map() -> dict[str, dict[str, Any]]:
     return {item["id"]: item for item in list_attractions()}
 
 
+def _clean_ids(values: list[str] | None, attractions: dict[str, dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for value in values or []:
+        attraction_id = str(value or "").strip()
+        if attraction_id and attraction_id in attractions and attraction_id not in seen:
+            cleaned.append(attraction_id)
+            seen.add(attraction_id)
+    return cleaned
+
+
+def _constraint_label(value: str) -> str:
+    return {
+        "must_visit": "必去",
+        "optional": "可选",
+        "recommended": "推荐",
+        "alternative": "替代",
+    }.get(value, "推荐")
+
+
 def _make_stop(
     *,
     order: int,
@@ -143,6 +185,10 @@ def _make_stop(
         "focus": focus,
         "reason": reason,
         "narration_question": f"请讲解{attraction['name']}的看点和游览建议。",
+        "constraint_type": "recommended",
+        "constraint_reason": "来自主题路线模板的系统推荐点。",
+        "crowd_action": "keep",
+        "decision_reason": "符合当前路线主题与基础动线。",
     }
 
 
@@ -202,6 +248,118 @@ def _estimated_minutes(stops: list[dict[str, Any]]) -> int:
     return sum(int(stop["stay_minutes"]) + int(stop["walk_minutes_from_previous"]) for stop in stops)
 
 
+def _apply_constraint_rules(
+    *,
+    stops: list[dict[str, Any]],
+    must_visit_attraction_ids: list[str] | None,
+    optional_attraction_ids: list[str] | None,
+    avoid_attraction_ids: list[str] | None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    attractions = _attraction_map()
+    must_visit = _clean_ids(must_visit_attraction_ids, attractions)
+    optional = [item for item in _clean_ids(optional_attraction_ids, attractions) if item not in must_visit]
+    avoid = _clean_ids(avoid_attraction_ids, attractions)
+    must_set = set(must_visit)
+    optional_set = set(optional)
+    avoid_set = set(avoid)
+    trace: list[str] = []
+    constrained: list[dict[str, Any]] = []
+
+    invalid_ids = [
+        item
+        for item in [*(must_visit_attraction_ids or []), *(optional_attraction_ids or []), *(avoid_attraction_ids or [])]
+        if str(item or "").strip() and str(item).strip() not in attractions
+    ]
+    if invalid_ids:
+        trace.append(f"约束规则忽略无效景点 id：{'、'.join(sorted(set(invalid_ids)))}。")
+
+    for stop in stops:
+        attraction_id = stop["attraction_id"]
+        if attraction_id in avoid_set and attraction_id not in must_set:
+            trace.append(f"{stop['name']} 被用户标记为避开景点，已从候选路线移除。")
+            continue
+        constraint_type = "must_visit" if attraction_id in must_set else "optional" if attraction_id in optional_set else "recommended"
+        if attraction_id in must_set and attraction_id in avoid_set:
+            trace.append(f"{stop['name']} 同时命中必去和避开约束，按规则必去优先保留，并提示用户可再澄清。")
+        constrained.append(
+            {
+                **stop,
+                "constraint_type": constraint_type,
+                "constraint_reason": f"{_constraint_label(constraint_type)}：{attractions[attraction_id]['name']}由{'用户明确指定' if constraint_type != 'recommended' else '路线模板推荐'}。",
+                "decision_reason": f"{_constraint_label(constraint_type)}点位，按约束优先级进入路线。",
+            }
+        )
+
+    existing_ids = {stop["attraction_id"] for stop in constrained}
+    for attraction_id in must_visit:
+        if attraction_id in existing_ids:
+            continue
+        attraction = attractions[attraction_id]
+        stop = _make_stop(
+            order=len(constrained) + 1,
+            attraction=attraction,
+            stay_minutes=35,
+            walk_minutes=12 if constrained else 0,
+            focus="必去景点讲解",
+            reason="用户明确提出一定要去，规划器按最高优先级保留。",
+        )
+        stop.update(
+            {
+                "constraint_type": "must_visit",
+                "constraint_reason": f"必去：{attraction['name']}由用户明确指定。",
+                "decision_reason": "必去景点不因主题模板或拥挤度被删除。",
+            }
+        )
+        constrained.append(stop)
+        existing_ids.add(attraction_id)
+        trace.append(f"{attraction['name']} 不在原模板中，已按必去约束追加到路线。")
+
+    for attraction_id in optional:
+        if attraction_id in existing_ids or attraction_id in avoid_set or len(constrained) >= 6:
+            continue
+        attraction = attractions[attraction_id]
+        stop = _make_stop(
+            order=len(constrained) + 1,
+            attraction=attraction,
+            stay_minutes=25,
+            walk_minutes=10 if constrained else 0,
+            focus="可选兴趣点",
+            reason="用户表达了兴趣，时间允许时作为补充站点。",
+        )
+        stop.update(
+            {
+                "constraint_type": "optional",
+                "constraint_reason": f"可选：{attraction['name']}由用户兴趣触发，可被替换或延后。",
+                "decision_reason": "可选点位在时间允许时加入路线。",
+            }
+        )
+        constrained.append(stop)
+        existing_ids.add(attraction_id)
+        trace.append(f"{attraction['name']} 已作为可选景点补充进路线。")
+
+    if not constrained:
+        fallback = next(iter(attractions.values()))
+        constrained.append(
+            _make_stop(
+                order=1,
+                attraction=fallback,
+                stay_minutes=20,
+                walk_minutes=0,
+                focus="兜底推荐",
+                reason="避开约束过滤了全部模板点，系统保留一个低风险入口点。",
+            )
+        )
+        constrained[0]["constraint_type"] = "alternative"
+        constrained[0]["constraint_reason"] = "替代：原候选被避开约束过滤后的兜底站点。"
+        constrained[0]["decision_reason"] = "兜底替代点位，避免返回空路线。"
+
+    for index, stop in enumerate(constrained, start=1):
+        stop["order"] = index
+        if index == 1:
+            stop["walk_minutes_from_previous"] = 0
+    return constrained[:7], trace
+
+
 def _safe_tolerance(value: str | None) -> str:
     normalized = _normalize(value)
     return normalized if normalized in VALID_TOLERANCES else "medium"
@@ -237,26 +395,44 @@ def _apply_crowd_to_stops(
 
     for stop in stops:
         record = get_crowd_record(stop["attraction_id"])
+        is_must_visit = stop.get("constraint_type") == "must_visit"
         should_delay = avoid_crowd and record["crowd_score"] > threshold and stop["order"] > 1
+        if is_must_visit and record["crowd_level"] == "high" and stop["order"] == 1:
+            crowd_action = "keep_with_warning"
+        elif is_must_visit and should_delay:
+            crowd_action = "delay"
+        elif should_delay:
+            crowd_action = "delay"
+        elif avoid_crowd and record["crowd_level"] == "high":
+            crowd_action = "keep_with_warning"
+        else:
+            crowd_action = "keep"
         adjusted_stop = {
             **stop,
             "crowd_level": record["crowd_level"],
             "crowd_score": record["crowd_score"],
             "wait_minutes": record["wait_minutes"],
             "crowd_note": _crowd_note(record, avoid_crowd=avoid_crowd, tolerance=tolerance, adjusted=should_delay),
+            "crowd_action": crowd_action,
         }
         if should_delay:
             adjusted_stop["stay_minutes"] = max(12, int(adjusted_stop["stay_minutes"]) - 8)
             delayed.append(adjusted_stop)
-            trace.append(
-                f"{stop['name']} 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。"
-                if record["crowd_level"] == "high"
-                else f"{stop['name']} 超过舒适阈值，已缩短停留。"
-            )
+            if is_must_visit:
+                trace.append(f"{stop['name']} 是必去点且当前拥挤，规则禁止删除，已延后并提示错峰。")
+            else:
+                trace.append(
+                    f"{stop['name']} 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。"
+                    if record["crowd_level"] == "high"
+                    else f"{stop['name']} 超过舒适阈值，已缩短停留。"
+                )
         else:
             enriched.append(adjusted_stop)
             if record["crowd_level"] == "high":
-                trace.append(f"{stop['name']} 是路线核心点但模拟拥挤度高，路线保留并提示错峰。")
+                if is_must_visit:
+                    trace.append(f"{stop['name']} 是必去点但模拟拥挤度高，路线保留并提示稍后错峰。")
+                else:
+                    trace.append(f"{stop['name']} 是路线核心点但模拟拥挤度高，路线保留并提示错峰。")
 
     if delayed:
         trace.append("已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。")
@@ -366,6 +542,9 @@ def recommend_route(
     start_attraction_id: str | None = None,
     avoid_crowd: bool = True,
     crowd_tolerance: str = "medium",
+    must_visit_attraction_ids: list[str] | None = None,
+    optional_attraction_ids: list[str] | None = None,
+    avoid_attraction_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     start = time.perf_counter()
     budget = _safe_budget(time_budget_minutes)
@@ -375,6 +554,12 @@ def recommend_route(
         theme=chosen_theme,
         time_budget_minutes=budget,
         start_attraction_id=start_attraction_id,
+    )
+    stops, constraint_trace = _apply_constraint_rules(
+        stops=stops,
+        must_visit_attraction_ids=must_visit_attraction_ids,
+        optional_attraction_ids=optional_attraction_ids,
+        avoid_attraction_ids=avoid_attraction_ids,
     )
     stops, crowd_trace = _apply_crowd_to_stops(
         stops=stops,
@@ -418,12 +603,17 @@ def recommend_route(
         "start_attraction_id": start_attraction_id,
         "avoid_crowd": avoid_crowd,
         "crowd_tolerance": tolerance,
+        "must_visit_attraction_ids": _clean_ids(must_visit_attraction_ids, _attraction_map()),
+        "optional_attraction_ids": _clean_ids(optional_attraction_ids, _attraction_map()),
+        "avoid_attraction_ids": _clean_ids(avoid_attraction_ids, _attraction_map()),
         "stops": [stop["attraction_id"] for stop in stops],
     }
     route_id = _route_id(route_core)
     share = _share_payload(route_id, template["title"])
     decision_trace = [
         f"根据主题={THEME_LABELS[chosen_theme]}、时长={budget}分钟、同行={group_type or '未指定'}、体力={intensity or '未指定'}生成候选路线。",
+        f"约束优先级：{' > '.join(ROUTE_CONSTRAINT_RULES['priority'])}。",
+        *constraint_trace,
         f"拥挤策略：avoid_crowd={str(avoid_crowd).lower()}，crowd_tolerance={tolerance}，数据源={CROWD_SOURCE}。",
         *crowd_trace,
     ]
@@ -440,6 +630,12 @@ def recommend_route(
         "theme_label": THEME_LABELS[chosen_theme],
         "summary": template["summary"],
         "suitable_for": template["suitable_for"],
+        "constraints": {
+            "must_visit_attraction_ids": _clean_ids(must_visit_attraction_ids, _attraction_map()),
+            "optional_attraction_ids": _clean_ids(optional_attraction_ids, _attraction_map()),
+            "avoid_attraction_ids": _clean_ids(avoid_attraction_ids, _attraction_map()),
+            "rules": ROUTE_CONSTRAINT_RULES,
+        },
         "estimated_duration_minutes": estimated,
         "time_budget_minutes": budget,
         "recommendation_score": recommendation_score,

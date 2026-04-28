@@ -1,0 +1,4 @@
+{"id":"intent-family-elderly-crowd","message":"我带老人孩子，3 小时，别太挤","expected":{"theme":"family","group_type":"family_elderly","time_budget_minutes":180,"avoid_crowd":true,"crowd_tolerance":"low"}}
+{"id":"intent-must-visit","message":"灵山大佛和九龙灌浴一定要去，其他你帮我安排","expected":{"must_visit_attraction_ids":["lingshan-ls-011","lingshan-ls-006"]}}
+{"id":"intent-style-child","message":"讲给孩子听","expected":{"intent":"explanation_style","style":"child"}}
+{"id":"intent-style-short","message":"30 秒讲完","expected":{"intent":"explanation_style","style":"short_30s"}}
