@@ -1,0 +1,4 @@
+{"id":"crowd-family-avoid","theme":"family","time_budget_minutes":240,"group_type":"family","intensity":"easy","interests":["亲子轻松","佛教文化"],"avoid_crowd":true,"crowd_tolerance":"medium","expected_policy":"avoid_or_explain_high"}
+{"id":"crowd-blessing-core","theme":"blessing","time_budget_minutes":240,"group_type":"family","intensity":"balanced","interests":["祈福朝圣"],"avoid_crowd":true,"crowd_tolerance":"low","expected_policy":"keep_core_with_explanation"}
+{"id":"crowd-nature-comfort","theme":"nature","time_budget_minutes":240,"group_type":"friends","intensity":"easy","interests":["自然风光","休闲慢游"],"avoid_crowd":true,"crowd_tolerance":"low","expected_policy":"prefer_low_crowd"}
+{"id":"crowd-photo-queue-ok","theme":"photo","time_budget_minutes":300,"group_type":"friends","intensity":"balanced","interests":["拍照打卡"],"avoid_crowd":false,"crowd_tolerance":"high","expected_policy":"allow_queue_with_explanation"}

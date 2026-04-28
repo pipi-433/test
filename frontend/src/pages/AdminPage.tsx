@@ -1,6 +1,20 @@
-import { Activity, Bot, ChartNoAxesCombined, Database, Gauge, Heart, HelpCircle, Search, Settings, Users } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Bot,
+  ChartNoAxesCombined,
+  Database,
+  Gauge,
+  Heart,
+  HelpCircle,
+  Search,
+  Settings,
+  Users,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { getCrowdSnapshot } from "../api/client";
+import type { CrowdSnapshotItem } from "../api/client";
 import { MetricCard } from "../components/MetricCard";
 import { PageShell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
@@ -10,17 +24,22 @@ type ProviderMap = Record<string, { provider: string; status: string }>;
 
 export function AdminPage() {
   const [providers, setProviders] = useState<ProviderMap | null>(null);
+  const [crowdItems, setCrowdItems] = useState<CrowdSnapshotItem[]>([]);
 
   useEffect(() => {
     fetch("/api/provider/status")
       .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then(setProviders)
       .catch(() => setProviders(null));
+    getCrowdSnapshot()
+      .then((snapshot) => setCrowdItems(snapshot.items))
+      .catch(() => setCrowdItems([]));
   }, []);
 
   const providerEntries = providers
     ? Object.entries(providers).map(([name, value]) => [name, value.provider, value.status])
     : providerRows;
+  const highCrowdItems = crowdItems.filter((item) => item.crowd_level === "high");
 
   return (
     <PageShell className="admin-page">
@@ -93,6 +112,32 @@ export function AdminPage() {
                   <StatusBadge tone={status === "ok" ? "ok" : "warning"}>{status}</StatusBadge>
                 </div>
               ))}
+            </div>
+          </article>
+
+          <article className="admin-panel">
+            <div className="section-title-row">
+              <div>
+                <h2>拥挤点预警</h2>
+                <p>source=mock_simulation，非真实客流</p>
+              </div>
+              <AlertTriangle aria-hidden="true" />
+            </div>
+            <div className="crowd-alert-list">
+              {highCrowdItems.length > 0 ? (
+                highCrowdItems.map((item) => (
+                  <div className="crowd-alert-row" key={item.attraction_id}>
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>{item.scenic_area} · 等待约 {item.wait_minutes} 分钟</span>
+                    </div>
+                    <StatusBadge tone="warning">{item.crowd_score}</StatusBadge>
+                    <p>建议通过游客端路线规划引导至低拥挤点，或提示错峰返回。</p>
+                  </div>
+                ))
+              ) : (
+                <p className="empty-state">当前没有 high 拥挤点。模拟数据加载失败时会显示空状态。</p>
+              )}
             </div>
           </article>
 

@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Clock3,
   Camera,
   FileImage,
@@ -10,10 +11,11 @@ import {
   Navigation,
   Route as RouteIcon,
   Send,
+  ShieldCheck,
 } from "lucide-react";
 
 import { askQuestion, fetchAttractions, recognizeImage, recommendRoute } from "../api/client";
-import type { Attraction, QAResponse, RouteRecommendation, VisionResponse } from "../api/client";
+import type { Attraction, CrowdLevel, QAResponse, RouteRecommendation, VisionResponse } from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock, type DigitalHumanState } from "../components/DigitalHumanMock";
 import { IconButton } from "../components/IconButton";
@@ -35,12 +37,25 @@ const routeBudgets = [
   { value: 360, label: "6 小时" },
   { value: 480, label: "全天" },
 ];
+const crowdToleranceOptions: Array<{ value: CrowdLevel; label: string }> = [
+  { value: "low", label: "舒适优先" },
+  { value: "medium", label: "普通" },
+  { value: "high", label: "可接受排队" },
+];
 
 function shortText(value: string | undefined, limit = 88) {
   if (!value) {
     return "本地资料暂未提供详细简介，可先向灵境提问获取讲解。";
   }
   return value.length > limit ? `${value.slice(0, limit)}...` : value;
+}
+
+function crowdLabel(level: CrowdLevel) {
+  return level === "high" ? "拥挤" : level === "medium" ? "适中" : "舒适";
+}
+
+function crowdTone(level: CrowdLevel) {
+  return level === "high" ? "warning" : level === "medium" ? "neutral" : "ok";
 }
 
 export function MobileHomePage() {
@@ -53,6 +68,8 @@ export function MobileHomePage() {
   const [visionResult, setVisionResult] = useState<VisionResponse | null>(null);
   const [routeTheme, setRouteTheme] = useState("family");
   const [routeBudget, setRouteBudget] = useState(240);
+  const [avoidCrowd, setAvoidCrowd] = useState(true);
+  const [crowdTolerance, setCrowdTolerance] = useState<CrowdLevel>("medium");
   const [routeResult, setRouteResult] = useState<RouteRecommendation | null>(null);
   const [loadingAttractions, setLoadingAttractions] = useState(true);
   const [qaLoading, setQaLoading] = useState(false);
@@ -153,6 +170,8 @@ export function MobileHomePage() {
         intensity: routeBudget <= 120 ? "easy" : "balanced",
         interests: selectedAttraction?.tags?.slice(0, 3) || [nextTheme],
         startAttractionId: selectedId,
+        avoidCrowd,
+        crowdTolerance,
       });
       setRouteResult(result);
     } catch (cause) {
@@ -328,7 +347,7 @@ export function MobileHomePage() {
         <div className="section-title-row">
           <div>
             <h2>路线推荐</h2>
-            <p>根据兴趣、时长和当前景点生成 mock 逐站路线。</p>
+            <p>根据兴趣、时长、当前景点和模拟拥挤度生成可解释路线。</p>
           </div>
           <Button
             icon={<RouteIcon size={18} />}
@@ -368,17 +387,70 @@ export function MobileHomePage() {
               </option>
             ))}
           </select>
+          <label className="crowd-switch">
+            <input checked={avoidCrowd} onChange={(event) => setAvoidCrowd(event.target.checked)} type="checkbox" />
+            <span>
+              <ShieldCheck aria-hidden="true" size={18} />
+              避开拥挤
+            </span>
+          </label>
+          <label className="field-label" htmlFor="crowd-tolerance">
+            拥挤容忍度
+          </label>
+          <select
+            className="select-input"
+            id="crowd-tolerance"
+            onChange={(event) => setCrowdTolerance(event.target.value as CrowdLevel)}
+            value={crowdTolerance}
+          >
+            {crowdToleranceOptions.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </div>
         {routeResult ? (
           <div className="route-result">
             <div className="route-summary">
-              <StatusBadge tone="ok">{routeResult.theme_label}</StatusBadge>
+              <div className="route-score-row">
+                <StatusBadge tone="ok">{routeResult.theme_label}</StatusBadge>
+                <strong>{routeResult.recommendation_score} 分</strong>
+              </div>
               <h3>{routeResult.title}</h3>
               <p>{routeResult.summary}</p>
               <span>
                 <Clock3 aria-hidden="true" size={16} />
                 约 {routeResult.estimated_duration_minutes} 分钟 · 分享码 {routeResult.share.share_code}
               </span>
+              <div className="score-grid" aria-label="路线评分拆解">
+                {Object.entries(routeResult.score_breakdown).map(([key, value]) => (
+                  <span key={key}>
+                    {key === "theme_match"
+                      ? "主题"
+                      : key === "time_fit"
+                        ? "时长"
+                        : key === "group_fit"
+                          ? "同行"
+                          : key === "crowd_comfort"
+                            ? "舒适"
+                            : "质量"}
+                    <strong>{value}</strong>
+                  </span>
+                ))}
+              </div>
+              <p className="simulation-note">
+                <AlertTriangle aria-hidden="true" size={16} />
+                {routeResult.crowd_policy.caveat}
+              </p>
+            </div>
+            <div className="decision-trace" aria-label="路线决策说明">
+              <strong>决策说明</strong>
+              <ul>
+                {routeResult.decision_trace.slice(0, 4).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
             </div>
             <div className="route-stop-list" aria-label="逐站路线">
               {routeResult.stops.map((stop) => (
@@ -390,7 +462,14 @@ export function MobileHomePage() {
                       {stop.scenic_area} · 停留 {stop.stay_minutes} 分钟
                       {stop.walk_minutes_from_previous ? ` · 步行约 ${stop.walk_minutes_from_previous} 分钟` : ""}
                     </span>
+                    <div className="crowd-inline">
+                      <StatusBadge tone={crowdTone(stop.crowd_level)}>
+                        {crowdLabel(stop.crowd_level)} · {stop.crowd_score}
+                      </StatusBadge>
+                      <span>等待约 {stop.wait_minutes} 分钟</span>
+                    </div>
                     <p>{stop.focus}：{stop.reason}</p>
+                    <p className="crowd-note">{stop.crowd_note}</p>
                     <button className="quick-question" type="button" onClick={() => void submitQuestion(stop.narration_question)}>
                       进入本站讲解
                     </button>

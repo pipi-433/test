@@ -1,6 +1,6 @@
 # 灵境导游
 
-中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景和 mock 路线推荐闭环；默认无 API Key 可运行。
+中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐和模拟拥挤度分流闭环；默认无 API Key 可运行。
 
 ## 本轮实现
 
@@ -8,6 +8,7 @@
 - 景区终端 `/kiosk`：横屏触控欢迎态、大数字人、大按钮、热门问题、路线摘要、二维码占位。
 - 管理后台 `/admin`：左侧导航、顶部状态栏、指标卡、mock 图表、热门问题、provider 状态。
 - 后端 API：health、provider、景点、知识切片、QA、识景、路线推荐。
+- 拥挤度感知路线：mock_simulation 快照、路线评分拆解、决策说明、后台拥挤点预警。
 - DX 配置：`.env.example`、README、Task 02 目录预留。
 
 ## Mock Provider 模式
@@ -138,15 +139,17 @@ python .\scripts\eval_vision.py
 
 ## Mock 路线推荐
 
-Task 06 提供亲子、历史、自然、祈福、拍照 5 类路线模板，不需要真实 GPS 或真实模型：
+Task 06/06.5 提供亲子、历史、自然、祈福、拍照 5 类路线模板，并在 mock_simulation 拥挤度快照下做可解释分流推荐。不需要真实 GPS、真实客流硬件或真实模型：
 
 ```powershell
 python .\scripts\eval_routes.py
+python .\scripts\eval_crowd_routes.py
 ```
 
 路线 API：
 
 - `GET /api/routes/themes`
+- `GET /api/crowd/snapshot`
 - `POST /api/routes/recommend`
 - `GET /api/routes/{id}/share`
 
@@ -159,12 +162,27 @@ python .\scripts\eval_routes.py
   "group_type": "family",
   "intensity": "easy",
   "interests": ["亲子轻松", "佛教文化"],
-  "start_attraction_id": "lingshan-ls-011"
+  "start_attraction_id": "lingshan-ls-011",
+  "avoid_crowd": true,
+  "crowd_tolerance": "medium"
 }
 ```
 
-返回会包含路线名称、主题、预计时长、逐站点位、停留时间、讲解重点、适合原因和 30 分钟有效的 mock 分享码。
+返回会包含路线名称、主题、预计时长、逐站点位、停留时间、讲解重点、适合原因、`recommendation_score`、`score_breakdown`、`decision_trace`、`crowd_policy` 和 30 分钟有效的 mock 分享码。每个 stop 会包含：
+
+- `crowd_level`: `low` / `medium` / `high`
+- `crowd_score`: 0-100
+- `wait_minutes`
+- `crowd_note`
+
+拥挤度快照示例：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/crowd/snapshot
+```
+
+重要边界：当前所有拥挤度均为 `mock_simulation` 演示数据，不代表真实景区客流，也没有接入闸机、摄像头、Wi-Fi 探针、GPS 或 IoT 硬件。
 
 ## 后续任务
 
-Task 07 将在当前 mock QA、识景和路线基础上继续补数字人语音/TTS 状态机或终端路线二维码带走；原始资料包仍作为只读来源。
+Task 07 将在当前 mock QA、识景、路线和拥挤度分流基础上继续打磨拍照识景演示能力；原始资料包仍作为只读来源。

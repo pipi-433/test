@@ -1,5 +1,8 @@
-import { Camera, MapPinned, Mic, QrCode, Route, Sparkles } from "lucide-react";
+import { AlertTriangle, Camera, MapPinned, Mic, QrCode, Route, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 
+import { getCrowdSnapshot } from "../api/client";
+import type { CrowdSnapshotItem } from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock } from "../components/DigitalHumanMock";
 import { IconButton } from "../components/IconButton";
@@ -9,6 +12,14 @@ import { StatusBadge } from "../components/StatusBadge";
 import { quickQuestions, routeSteps } from "../data/mock";
 
 export function KioskPage() {
+  const [crowdItems, setCrowdItems] = useState<CrowdSnapshotItem[]>([]);
+
+  useEffect(() => {
+    getCrowdSnapshot()
+      .then((snapshot) => setCrowdItems(snapshot.items.filter((item) => item.crowd_level === "high")))
+      .catch(() => setCrowdItems([]));
+  }, []);
+
   return (
     <PageShell className="kiosk-page">
       <header className="kiosk-header">
@@ -58,6 +69,16 @@ export function KioskPage() {
               <h2>亲子轻松路线</h2>
               <StatusBadge tone="warning">mock 推荐</StatusBadge>
             </div>
+            <p className="kiosk-crowd-note">
+              <AlertTriangle aria-hidden="true" size={20} />
+              当前为模拟拥挤度/演示数据，不代表真实客流。
+            </p>
+            {crowdItems.slice(0, 2).map((item) => (
+              <div className="kiosk-crowd-row" key={item.attraction_id}>
+                <strong>{item.name}</strong>
+                <span>拥挤 {item.crowd_score} · 等待约 {item.wait_minutes} 分钟，建议错峰或先游览低拥挤点。</span>
+              </div>
+            ))}
             {routeSteps.map((step, index) => (
               <RouteStep
                 description={step.description}

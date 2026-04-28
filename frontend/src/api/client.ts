@@ -36,6 +36,28 @@ export type VisionResponse = {
   latency_ms: number;
 };
 
+export type CrowdLevel = "low" | "medium" | "high";
+
+export type CrowdSnapshotItem = {
+  attraction_id: string;
+  name: string;
+  scenic_area?: string;
+  crowd_level: CrowdLevel;
+  crowd_score: number;
+  wait_minutes: number;
+  source: "mock_simulation";
+  updated_at: string;
+  note: string;
+};
+
+export type CrowdSnapshotResponse = {
+  items: CrowdSnapshotItem[];
+  count: number;
+  source: "mock_simulation";
+  updated_at: string;
+  caveat: string;
+};
+
 export type RouteStop = {
   order: number;
   attraction_id: string;
@@ -48,6 +70,10 @@ export type RouteStop = {
   focus: string;
   reason: string;
   narration_question: string;
+  crowd_level: CrowdLevel;
+  crowd_score: number;
+  wait_minutes: number;
+  crowd_note: string;
 };
 
 export type RouteRecommendation = {
@@ -59,6 +85,21 @@ export type RouteRecommendation = {
   suitable_for: string[];
   estimated_duration_minutes: number;
   time_budget_minutes: number;
+  recommendation_score: number;
+  score_breakdown: {
+    theme_match: number;
+    time_fit: number;
+    group_fit: number;
+    crowd_comfort: number;
+    stop_quality: number;
+  };
+  decision_trace: string[];
+  crowd_policy: {
+    avoid_crowd: boolean;
+    crowd_tolerance: CrowdLevel;
+    source: "mock_simulation";
+    caveat: string;
+  };
   stops: RouteStop[];
   assumptions: string[];
   performance_tips: string[];
@@ -102,6 +143,10 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 export async function fetchAttractions(): Promise<Attraction[]> {
   const payload = await requestJson<{ items: Attraction[] }>("/api/attractions");
   return payload.items;
+}
+
+export async function getCrowdSnapshot(): Promise<CrowdSnapshotResponse> {
+  return requestJson<CrowdSnapshotResponse>("/api/crowd/snapshot");
 }
 
 export async function askQuestion({
@@ -156,6 +201,8 @@ export async function recommendRoute({
   intensity,
   interests,
   startAttractionId,
+  avoidCrowd = true,
+  crowdTolerance = "medium",
 }: {
   theme?: string;
   timeBudgetMinutes?: number;
@@ -163,6 +210,8 @@ export async function recommendRoute({
   intensity?: string;
   interests?: string[];
   startAttractionId?: string;
+  avoidCrowd?: boolean;
+  crowdTolerance?: CrowdLevel;
 }): Promise<RouteRecommendation> {
   return requestJson<RouteRecommendation>("/api/routes/recommend", {
     body: JSON.stringify({
@@ -172,6 +221,8 @@ export async function recommendRoute({
       intensity,
       interests,
       start_attraction_id: startAttractionId || null,
+      avoid_crowd: avoidCrowd,
+      crowd_tolerance: crowdTolerance,
     }),
     method: "POST",
   });

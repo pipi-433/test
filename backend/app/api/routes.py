@@ -12,6 +12,7 @@ from app.services.content_service import (
     get_behavior_summary_or_error,
     get_chunks,
 )
+from app.services.crowd_service import get_crowd_snapshot
 from app.services.qa_service import answer_question
 from app.services.route_service import get_route_share, recommend_route, route_theme_options
 from app.services.vision_service import recognize_image_mock
@@ -46,6 +47,8 @@ class RouteRecommendRequest(BaseModel):
     intensity: str | None = None
     interests: list[str] | None = None
     start_attraction_id: str | None = None
+    avoid_crowd: bool = True
+    crowd_tolerance: str = "medium"
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -111,6 +114,11 @@ def route_themes() -> dict[str, object]:
     return {"items": items, "count": len(items)}
 
 
+@router.get("/crowd/snapshot")
+def crowd_snapshot() -> dict[str, object]:
+    return get_crowd_snapshot()
+
+
 @router.post("/routes/recommend")
 def routes_recommend(payload: RouteRecommendRequest) -> dict[str, object]:
     return recommend_route(
@@ -120,6 +128,8 @@ def routes_recommend(payload: RouteRecommendRequest) -> dict[str, object]:
         intensity=payload.intensity,
         interests=payload.interests,
         start_attraction_id=payload.start_attraction_id,
+        avoid_crowd=payload.avoid_crowd,
+        crowd_tolerance=payload.crowd_tolerance,
     )
 
 

@@ -6,9 +6,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.repositories.content_repository import get_attraction, list_attractions
+from app.services.crowd_service import CROWD_SOURCE, get_crowd_record
 
 
 DEFAULT_THEME = "family"
+VALID_TOLERANCES = {"low", "medium", "high"}
 
 THEME_LABELS = {
     "family": "亲子轻松",
@@ -197,6 +199,133 @@ def _estimated_minutes(stops: list[dict[str, Any]]) -> int:
     return sum(int(stop["stay_minutes"]) + int(stop["walk_minutes_from_previous"]) for stop in stops)
 
 
+def _safe_tolerance(value: str | None) -> str:
+    normalized = _normalize(value)
+    return normalized if normalized in VALID_TOLERANCES else "medium"
+
+
+def _crowd_note(record: dict[str, Any], *, avoid_crowd: bool, tolerance: str, adjusted: bool) -> str:
+    level = record["crowd_level"]
+    wait = record["wait_minutes"]
+    if level == "high" and avoid_crowd:
+        if adjusted:
+            return f"模拟拥挤度高，预计等待 {wait} 分钟；已建议错峰或延后，不把这里作为长停留点。"
+        return f"模拟拥挤度高，预计等待 {wait} 分钟；这是核心点，建议稍后返回或缩短停留。"
+    if level == "high":
+        return f"模拟拥挤度高，预计等待 {wait} 分钟；你选择可接受排队，路线保留该点。"
+    if level == "medium" and tolerance == "low":
+        return f"模拟拥挤度适中，预计等待 {wait} 分钟；舒适优先时建议快速通过。"
+    if level == "medium":
+        return f"模拟拥挤度适中，预计等待 {wait} 分钟；按计划游览即可。"
+    return f"模拟拥挤度较低，预计等待 {wait} 分钟；适合停留和讲解。"
+
+
+def _apply_crowd_to_stops(
+    *,
+    stops: list[dict[str, Any]],
+    avoid_crowd: bool,
+    crowd_tolerance: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    enriched: list[dict[str, Any]] = []
+    trace: list[str] = []
+    tolerance = _safe_tolerance(crowd_tolerance)
+    threshold = {"low": 45, "medium": 70, "high": 90}[tolerance]
+    delayed: list[dict[str, Any]] = []
+
+    for stop in stops:
+        record = get_crowd_record(stop["attraction_id"])
+        should_delay = avoid_crowd and record["crowd_score"] > threshold and stop["order"] > 1
+        adjusted_stop = {
+            **stop,
+            "crowd_level": record["crowd_level"],
+            "crowd_score": record["crowd_score"],
+            "wait_minutes": record["wait_minutes"],
+            "crowd_note": _crowd_note(record, avoid_crowd=avoid_crowd, tolerance=tolerance, adjusted=should_delay),
+        }
+        if should_delay:
+            adjusted_stop["stay_minutes"] = max(12, int(adjusted_stop["stay_minutes"]) - 8)
+            delayed.append(adjusted_stop)
+            trace.append(
+                f"{stop['name']} 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。"
+                if record["crowd_level"] == "high"
+                else f"{stop['name']} 超过舒适阈值，已缩短停留。"
+            )
+        else:
+            enriched.append(adjusted_stop)
+            if record["crowd_level"] == "high":
+                trace.append(f"{stop['name']} 是路线核心点但模拟拥挤度高，路线保留并提示错峰。")
+
+    if delayed:
+        trace.append("已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。")
+    adjusted = [*enriched, *delayed]
+    for index, stop in enumerate(adjusted, start=1):
+        stop["order"] = index
+        if index == 1:
+            stop["walk_minutes_from_previous"] = 0
+    return adjusted, trace
+
+
+def _score_route(
+    *,
+    theme: str,
+    stops: list[dict[str, Any]],
+    budget: int,
+    estimated: int,
+    group_type: str | None,
+    intensity: str | None,
+    interests: list[str] | None,
+    avoid_crowd: bool,
+    tolerance: str,
+) -> dict[str, int]:
+    route_text = " ".join(
+        [
+            theme,
+            group_type or "",
+            intensity or "",
+            " ".join(interests or []),
+            " ".join(str(tag) for stop in stops for tag in stop.get("tags", [])),
+        ]
+    ).lower()
+    theme_keywords = {
+        "family": ["亲子", "family", "孩子", "长辈"],
+        "history": ["历史", "文化", "研学"],
+        "nature": ["自然", "花海", "休闲", "慢游"],
+        "blessing": ["祈福", "朝圣", "佛教", "禅寺"],
+        "photo": ["拍照", "打卡", "摄影", "夜景"],
+    }
+    theme_match = 82 + (10 if any(key in route_text for key in theme_keywords[theme]) else 0)
+    time_over = max(0, estimated - budget)
+    time_fit = max(60, 96 - int(time_over * 0.65) - abs(budget - estimated) // 18)
+    group_fit = 88
+    if theme == "family" and group_type in {"family", "亲子", "长辈"}:
+        group_fit = 96
+    elif group_type:
+        group_fit = 86
+    avg_crowd = sum(int(stop.get("crowd_score", 20)) for stop in stops) / max(len(stops), 1)
+    high_count = sum(1 for stop in stops if stop.get("crowd_level") == "high")
+    tolerance_bonus = {"low": 0, "medium": 5, "high": 10}[tolerance]
+    crowd_comfort = max(45, int(104 - avg_crowd - high_count * (9 if avoid_crowd else 4) + tolerance_bonus))
+    stop_quality = min(96, 78 + len(stops) * 3)
+    return {
+        "theme_match": min(theme_match, 96),
+        "time_fit": min(time_fit, 98),
+        "group_fit": group_fit,
+        "crowd_comfort": min(crowd_comfort, 96),
+        "stop_quality": stop_quality,
+    }
+
+
+def _overall_score(score_breakdown: dict[str, int]) -> int:
+    weighted = (
+        score_breakdown["theme_match"] * 0.24
+        + score_breakdown["time_fit"] * 0.2
+        + score_breakdown["group_fit"] * 0.16
+        + score_breakdown["crowd_comfort"] * 0.24
+        + score_breakdown["stop_quality"] * 0.16
+    )
+    return max(0, min(100, round(weighted)))
+
+
 def _route_id(payload: dict[str, Any]) -> str:
     digest = hashlib.sha1(str(payload).encode("utf-8")).hexdigest()[:10]
     return f"route-{digest}"
@@ -224,21 +353,43 @@ def recommend_route(
     intensity: str | None = None,
     interests: list[str] | None = None,
     start_attraction_id: str | None = None,
+    avoid_crowd: bool = True,
+    crowd_tolerance: str = "medium",
 ) -> dict[str, Any]:
     start = time.perf_counter()
     budget = _safe_budget(time_budget_minutes)
     chosen_theme = _infer_theme(theme, group_type, interests)
+    tolerance = _safe_tolerance(crowd_tolerance)
     stops = _select_template_stops(
         theme=chosen_theme,
         time_budget_minutes=budget,
         start_attraction_id=start_attraction_id,
     )
+    stops, crowd_trace = _apply_crowd_to_stops(
+        stops=stops,
+        avoid_crowd=avoid_crowd,
+        crowd_tolerance=tolerance,
+    )
     estimated = _estimated_minutes(stops)
     template = ROUTE_TEMPLATES[chosen_theme]
+    score_breakdown = _score_route(
+        theme=chosen_theme,
+        stops=stops,
+        budget=budget,
+        estimated=estimated,
+        group_type=group_type,
+        intensity=intensity,
+        interests=interests,
+        avoid_crowd=avoid_crowd,
+        tolerance=tolerance,
+    )
+    recommendation_score = _overall_score(score_breakdown)
+    high_stops = [stop for stop in stops if stop.get("crowd_level") == "high"]
     assumptions = [
         f"按{THEME_LABELS[chosen_theme]}偏好生成",
         f"游览时长约 {budget} 分钟",
         "当前为 mock 模式，步行时间为演示估算，不代表真实导航",
+        "拥挤度来自 mock_simulation 模拟数据，不代表真实景区客流",
     ]
     if group_type:
         assumptions.append(f"同行类型：{group_type}")
@@ -254,10 +405,23 @@ def recommend_route(
         "intensity": intensity,
         "interests": interests or [],
         "start_attraction_id": start_attraction_id,
+        "avoid_crowd": avoid_crowd,
+        "crowd_tolerance": tolerance,
         "stops": [stop["attraction_id"] for stop in stops],
     }
     route_id = _route_id(route_core)
     share = _share_payload(route_id, template["title"])
+    decision_trace = [
+        f"根据主题={THEME_LABELS[chosen_theme]}、时长={budget}分钟、同行={group_type or '未指定'}、体力={intensity or '未指定'}生成候选路线。",
+        f"拥挤策略：avoid_crowd={str(avoid_crowd).lower()}，crowd_tolerance={tolerance}，数据源={CROWD_SOURCE}。",
+        *crowd_trace,
+    ]
+    if high_stops:
+        names = "、".join(stop["name"] for stop in high_stops)
+        decision_trace.append(f"高拥挤点：{names}；核心点保留时会提示错峰，非核心点会降权或延后。")
+    else:
+        decision_trace.append("当前候选路线没有 high 拥挤站点，整体舒适度较好。")
+    decision_trace.append("mock_simulation 仅用于比赛演示，不代表实时客流。")
     result = {
         "id": route_id,
         "title": template["title"],
@@ -267,11 +431,21 @@ def recommend_route(
         "suitable_for": template["suitable_for"],
         "estimated_duration_minutes": estimated,
         "time_budget_minutes": budget,
+        "recommendation_score": recommendation_score,
+        "score_breakdown": score_breakdown,
+        "decision_trace": decision_trace,
+        "crowd_policy": {
+            "avoid_crowd": avoid_crowd,
+            "crowd_tolerance": tolerance,
+            "source": CROWD_SOURCE,
+            "caveat": "当前为模拟拥挤度/演示数据，不代表真实客流。",
+        },
         "stops": stops,
         "assumptions": assumptions,
         "performance_tips": [
             "演艺点建议提前 10-15 分钟到达。",
             "如果现场拥挤，可跳过单个停留点，直接进入下一站。",
+            "高拥挤站点建议避开整点前后 20 分钟，或先游览低拥挤替代点。",
         ],
         "share": share,
         "mode": "mock",
