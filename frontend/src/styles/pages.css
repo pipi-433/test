@@ -28,7 +28,7 @@
   position: relative;
   max-width: 440px;
   margin: 0 auto;
-  padding: var(--space-4) var(--space-4) 138px;
+  padding: var(--space-4) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
   background: var(--color-surface-muted);
 }
 
@@ -222,18 +222,17 @@
 }
 
 .mobile-actions {
-  position: fixed;
-  left: 50%;
-  bottom: 0;
+  position: relative;
   z-index: 10;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
-  width: min(440px, 100%);
-  padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+  width: 100%;
+  margin-top: var(--space-5);
+  padding: var(--space-3);
   background: rgb(255 255 255 / 96%);
-  border-top: 1px solid var(--color-border);
-  transform: translateX(-50%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
   box-shadow: 0 -8px 20px rgb(23 33 31 / 8%);
 }
 
