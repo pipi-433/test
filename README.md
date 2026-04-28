@@ -116,6 +116,26 @@ python .\scripts\eval_qa.py
 }
 ```
 
+## Mock 识景
+
+Task 04.5 提供文件名 / hint / text_hint 驱动的 mock 识景，不需要真实 VLM 或 API Key：
+
+```powershell
+python .\scripts\eval_vision.py
+```
+
+识景 API：
+
+- `POST /api/vision/recognize`
+
+表单字段：
+
+- `file`: 上传图片文件或 mock 样例文件
+- `hint`: 可选，景点名称、景点 id 或关键词
+- `text_hint`: 可选，补充描述
+
+返回会包含 `matched_attraction`、`confidence`、`explanation`、`suggested_questions`、`mode`、`latency_ms`。无匹配时 `matched_attraction` 为 `null`，不会编造识别结果。
+
 ## 后续任务
 
-Task 04.5 将在当前 mock provider 基础上实现多模态识景最小闭环；原始资料包仍作为只读来源。
+Task 05 将在当前 mock QA 与 mock 识景基础上打磨游客端数字人交互；原始资料包仍作为只读来源。

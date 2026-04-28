@@ -1,0 +1,7 @@
+{"id":"vision_001","image_path":"evals/vision_samples/lingshan_dafo_mock.jpg","hint":"灵山大佛","expected_attraction_id":"lingshan-ls-011","expected_attraction_name":"灵山大佛","expect_match":true}
+{"id":"vision_002","image_path":"evals/vision_samples/jiulong_guanyu_mock.jpg","hint":"九龙灌浴","expected_attraction_id":"lingshan-ls-006","expected_attraction_name":"九龙灌浴","expect_match":true}
+{"id":"vision_003","image_path":"evals/vision_samples/lingshan_fangong_mock.jpg","text_hint":"梵宫 吉祥颂 演出","expected_attraction_id":"lingshan-ls-013","expected_attraction_name":"灵山梵宫","expect_match":true}
+{"id":"vision_004","image_path":"evals/vision_samples/wuyin_tancheng_mock.jpg","hint":"五印坛城 藏传佛教","expected_attraction_id":"lingshan-ls-014","expected_attraction_name":"五印坛城","expect_match":true}
+{"id":"vision_005","image_path":"evals/vision_samples/xiangyue_huajie_mock.jpg","hint":"香月花街","expected_attraction_id":"nianhuawan-nh-003","expected_attraction_name":"香月花街","expect_match":true}
+{"id":"vision_006","image_path":"evals/vision_samples/fantian_huahai_mock.jpg","hint":"梵天花海 拍照","expected_attraction_id":"nianhuawan-nh-002","expected_attraction_name":"梵天花海","expect_match":true}
+{"id":"vision_007","image_path":"evals/vision_samples/unknown_mock.jpg","hint":"火星基地 外星展馆","expected_attraction_id":null,"expected_attraction_name":null,"expect_match":false}
