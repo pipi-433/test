@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-04-28T17:02:16+00:00",
+  "mode": "mock",
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "accuracy": 1.0,
+  "route_id": "route-0b158cfbf9",
+  "share_code": "LJ-A3B7EB",
+  "results": [
+    {
+      "id": "share-code-and-url-created",
+      "passed": true,
+      "share_code": "LJ-A3B7EB",
+      "share_url": "/route/route-0b158cfbf9/share?code=LJ-A3B7EB"
+    },
+    {
+      "id": "valid-code-returns-full-route",
+      "passed": true
+    },
+    {
+      "id": "stops-count-stable",
+      "passed": true,
+      "original": 6,
+      "shared": 6
+    },
+    {
+      "id": "does-not-expose-session-id",
+      "passed": true
+    },
+    {
+      "id": "bad-code-rejected",
+      "passed": true,
+      "expected": "ROUTE_SHARE_CODE_INVALID",
+      "actual": "ROUTE_SHARE_CODE_INVALID"
+    },
+    {
+      "id": "unknown-route-rejected",
+      "passed": true,
+      "expected": "ROUTE_SHARE_NOT_FOUND",
+      "actual": "ROUTE_SHARE_NOT_FOUND"
+    },
+    {
+      "id": "expired-share-rejected",
+      "passed": true,
+      "expected": "ROUTE_SHARE_EXPIRED",
+      "actual": "ROUTE_SHARE_EXPIRED"
+    }
+  ]
+}

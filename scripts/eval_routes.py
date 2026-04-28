@@ -47,7 +47,7 @@ def check_case(case: dict[str, Any]) -> dict[str, Any]:
     theme_ok = response["theme"] == case.get("expected_theme")
     stop_count_ok = len(response["stops"]) >= int(case.get("min_stops", 3))
     duration_ok = response["estimated_duration_minutes"] <= response["time_budget_minutes"] + 45
-    share = get_route_share(response["id"])
+    share = get_route_share(response["id"], response["share"]["share_code"])["share"]
     share_ok = share["share_code"].startswith("LJ-") and share["expires_in_minutes"] == 30
     passed = theme_ok and stop_count_ok and duration_ok and share_ok and not missing_keywords
     return {

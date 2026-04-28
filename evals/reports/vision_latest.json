@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-04-28T16:26:20+00:00",
+  "generated_at": "2026-04-28T16:54:26+00:00",
   "mode": "mock",
   "total": 7,
   "passed": 7,
   "failed": 0,
   "accuracy": 1.0,
-  "avg_latency_ms": 12.86,
+  "avg_latency_ms": 2.14,
   "results": [
     {
       "id": "vision_001",
@@ -16,7 +16,7 @@
       "passed": true,
       "match_ok": true,
       "id_ok": true,
-      "latency_ms": 82,
+      "latency_ms": 5,
       "explanation": "mock 识景根据文件名/提示词命中 灵山大佛。匹配依据：alias:灵山大佛, alias:灵山大佛, alias:大佛, alias:lingshan dafo, alias:dafo。"
     },
     {
@@ -28,7 +28,7 @@
       "passed": true,
       "match_ok": true,
       "id_ok": true,
-      "latency_ms": 1,
+      "latency_ms": 3,
       "explanation": "mock 识景根据文件名/提示词命中 九龙灌浴。匹配依据：alias:九龙灌浴, alias:九龙灌浴, alias:九龙, alias:灌浴, alias:jiulong guanyu, alias:jiulong。"
     },
     {

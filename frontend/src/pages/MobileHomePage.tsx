@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Clock3,
   Camera,
+  ExternalLink,
   FileImage,
   Layers,
   Map,
@@ -423,6 +424,10 @@ export function MobileHomePage() {
                 <Clock3 aria-hidden="true" size={16} />
                 约 {routeResult.estimated_duration_minutes} 分钟 · 分享码 {routeResult.share.share_code}
               </span>
+              <a className="route-share-link" href={routeResult.share.share_url}>
+                <ExternalLink aria-hidden="true" size={16} />
+                打开手机路线带走页
+              </a>
               <div className="score-grid" aria-label="路线评分拆解">
                 {Object.entries(routeResult.score_breakdown).map(([key, value]) => (
                   <span key={key}>

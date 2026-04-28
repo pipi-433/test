@@ -5,6 +5,9 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from fastapi import status
+
+from app.core.errors import ApiError
 from app.repositories.content_repository import get_attraction, list_attractions
 from app.services.crowd_service import CROWD_SOURCE, get_crowd_record
 
@@ -345,6 +348,14 @@ def _share_payload(route_id: str, title: str | None = None) -> dict[str, Any]:
     }
 
 
+def _parse_share_expires_at(value: str) -> datetime:
+    normalized = value.replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 def recommend_route(
     *,
     theme: str | None = None,
@@ -455,9 +466,39 @@ def recommend_route(
     return result
 
 
-def get_route_share(route_id: str) -> dict[str, Any]:
+def get_route_share(route_id: str, code: str | None = None) -> dict[str, Any]:
     route = ROUTE_CACHE.get(route_id)
-    return _share_payload(route_id, route.get("title") if route else None)
+    if route is None:
+        raise ApiError(
+            code="ROUTE_SHARE_NOT_FOUND",
+            message="没有找到这条路线分享。",
+            cause=f"Route share cache does not contain route_id={route_id}.",
+            fix="请先在当前服务进程中重新生成路线，再使用新的分享链接。",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    share = route.get("share") or {}
+    expected_code = str(share.get("share_code") or "")
+    if not code or code != expected_code:
+        raise ApiError(
+            code="ROUTE_SHARE_CODE_INVALID",
+            message="分享码不正确，请回到终端重新生成路线。",
+            cause=f"Invalid share code for route_id={route_id}.",
+            fix="确认 URL 中的 code 参数与路线分享码一致。",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    expires_at = _parse_share_expires_at(str(share.get("expires_at") or "1970-01-01T00:00:00+00:00"))
+    if expires_at <= datetime.now(timezone.utc):
+        raise ApiError(
+            code="ROUTE_SHARE_EXPIRED",
+            message="这条路线分享已过期，请在 Kiosk 重新生成。",
+            cause=f"Share expired at {expires_at.isoformat()} for route_id={route_id}.",
+            fix="分享码默认 30 分钟有效，过期后重新调用 POST /api/routes/recommend。",
+            status_code=status.HTTP_410_GONE,
+        )
+
+    return route
 
 
 def route_theme_options() -> list[dict[str, str]]:

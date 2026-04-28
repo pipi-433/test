@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
 from pydantic import BaseModel
 
 from app.core.errors import ApiError
@@ -134,8 +134,8 @@ def routes_recommend(payload: RouteRecommendRequest) -> dict[str, object]:
 
 
 @router.get("/routes/{route_id}/share")
-def route_share(route_id: str) -> dict[str, object]:
-    return get_route_share(route_id)
+def route_share(route_id: str, code: str | None = Query(default=None)) -> dict[str, object]:
+    return get_route_share(route_id, code)
 
 
 def _parse_content_disposition(value: str) -> dict[str, str]:

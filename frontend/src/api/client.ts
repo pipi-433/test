@@ -121,6 +121,20 @@ type ApiErrorPayload = {
   fix?: string;
 };
 
+export class ApiClientError extends Error {
+  code?: string;
+  causeText?: string;
+  fix?: string;
+
+  constructor(payload: ApiErrorPayload, fallback: string) {
+    super(payload.message || payload.cause || fallback);
+    this.name = "ApiClientError";
+    this.code = payload.code;
+    this.causeText = payload.cause;
+    this.fix = payload.fix;
+  }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
@@ -134,7 +148,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       payload = {};
     }
-    throw new Error(payload.message || payload.cause || `请求失败：${response.status}`);
+    throw new ApiClientError(payload, `请求失败：${response.status}`);
   }
 
   return (await response.json()) as T;
@@ -226,4 +240,9 @@ export async function recommendRoute({
     }),
     method: "POST",
   });
+}
+
+export async function getRouteShare(routeId: string, code: string): Promise<RouteRecommendation> {
+  const params = new URLSearchParams({ code });
+  return requestJson<RouteRecommendation>(`/api/routes/${encodeURIComponent(routeId)}/share?${params.toString()}`);
 }
