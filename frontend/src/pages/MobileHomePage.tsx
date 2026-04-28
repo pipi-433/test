@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Clock3,
@@ -8,7 +8,6 @@ import {
   Heart,
   Layers,
   Map,
-  MessageSquareText,
   Mic,
   Navigation,
   Route as RouteIcon,
@@ -64,6 +63,9 @@ function crowdTone(level: CrowdLevel) {
 export function MobileHomePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const routePanelRef = useRef<HTMLElement | null>(null);
+  const answerPanelRef = useRef<HTMLElement | null>(null);
+  const composerInputRef = useRef<HTMLInputElement | null>(null);
+  const composingRef = useRef(false);
   const [attractions, setAttractions] = useState<Attraction[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [question, setQuestion] = useState("灵山大佛适合怎么游览？");
@@ -117,6 +119,12 @@ export function MobileHomePage() {
 
   const humanState: DigitalHumanState = qaLoading || visionLoading || routeLoading ? "thinking" : qaResult ? "speaking" : "welcome";
 
+  function scrollAnswerIntoView(block: ScrollLogicalPosition = "start") {
+    window.setTimeout(() => {
+      answerPanelRef.current?.scrollIntoView({ behavior: "smooth", block });
+    }, 0);
+  }
+
   async function submitQuestion(nextQuestion = question) {
     const cleanQuestion = nextQuestion.trim();
     if (!cleanQuestion) {
@@ -126,17 +134,34 @@ export function MobileHomePage() {
     setQaLoading(true);
     setError("");
     setQuestion(cleanQuestion);
+    setQaResult(null);
+    const matchedAttraction = attractions.find((item) => cleanQuestion.includes(item.name));
+    const queryAttractionId = matchedAttraction?.id || selectedId;
+    if (matchedAttraction && matchedAttraction.id !== selectedId) {
+      setSelectedId(matchedAttraction.id);
+    }
+    scrollAnswerIntoView();
     try {
-      const result = await askQuestion({ attractionId: selectedId, question: cleanQuestion });
+      const result = await askQuestion({ attractionId: queryAttractionId, question: cleanQuestion });
       setQaResult(result);
+      scrollAnswerIntoView("nearest");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "问答请求失败，请稍后重试。");
+      scrollAnswerIntoView("nearest");
     } finally {
       setQaLoading(false);
     }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitQuestion();
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || event.shiftKey || composingRef.current) {
+      return;
+    }
     event.preventDefault();
     void submitQuestion();
   }
@@ -237,29 +262,73 @@ export function MobileHomePage() {
       <DigitalHumanMock state={humanState} className="mobile-avatar" />
 
       <section className="mobile-greeting" aria-labelledby="mobile-greeting-title">
-        <span className="eyebrow">当前讲解</span>
-        <h2 id="mobile-greeting-title">
-          你好，我是灵境。选择景点后可以直接提问，也可以上传样例图片完成 mock 识景。
-        </h2>
+        <span className="eyebrow">AI 导游待命</span>
+        <h2 id="mobile-greeting-title">你好，我是灵境。直接问我景点故事、游览建议或避峰路线。</h2>
       </section>
 
-      <section className="mobile-control-panel" aria-label="景点与提问">
-        <label className="field-label" htmlFor="attraction-select">
-          景点选择
-        </label>
-        <select
-          className="select-input"
-          disabled={loadingAttractions || attractions.length === 0}
-          id="attraction-select"
-          onChange={(event) => setSelectedId(event.target.value)}
-          value={selectedId}
-        >
-          {attractions.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.scenic_area} · {item.name}
-            </option>
-          ))}
-        </select>
+      <section className="ask-composer" aria-labelledby="ask-composer-title">
+        <div className="ask-composer__header">
+          <div>
+            <span className="eyebrow">文本提问优先</span>
+            <h2 id="ask-composer-title">问灵境</h2>
+          </div>
+          <StatusBadge tone={qaLoading ? "neutral" : "ok"}>{qaLoading ? "检索中" : "可直接提问"}</StatusBadge>
+        </div>
+
+        <form className="composer-form" aria-label="文本提问" onSubmit={handleSubmit}>
+          <label className="field-label" htmlFor="mobile-question">
+            输入你的问题
+          </label>
+          <div className="composer-input-row">
+            <input
+              aria-describedby="composer-helper"
+              className="composer-input"
+              disabled={qaLoading}
+              id="mobile-question"
+              onChange={(event) => setQuestion(event.target.value)}
+              onCompositionEnd={() => {
+                composingRef.current = false;
+              }}
+              onCompositionStart={() => {
+                composingRef.current = true;
+              }}
+              onKeyDown={handleComposerKeyDown}
+              placeholder="问灵境：九龙灌浴几点表演？"
+              ref={composerInputRef}
+              type="text"
+              value={question}
+            />
+            <button
+              aria-label="语音输入稍后接入，当前文本优先"
+              className="composer-voice"
+              disabled
+              title="语音输入稍后接入，当前文本优先"
+              type="button"
+            >
+              <Mic aria-hidden="true" size={18} />
+            </button>
+            <Button
+              aria-label="发送问题"
+              className="composer-send"
+              disabled={!question.trim() || qaLoading}
+              icon={<Send size={18} />}
+              loading={qaLoading}
+              type="submit"
+              variant="primary"
+            >
+              发送
+            </Button>
+          </div>
+          <p className="composer-helper" id="composer-helper">
+            按 Enter 发送；语音入口当前为附属 mock，文本问答可直接演示。
+          </p>
+        </form>
+
+        {error ? (
+          <p className="inline-alert inline-alert--composer" role="alert">
+            {error}
+          </p>
+        ) : null}
 
         <div className="quick-question-row" aria-label="快捷问题">
           {starterQuestions.map((item) => (
@@ -268,27 +337,28 @@ export function MobileHomePage() {
             </button>
           ))}
         </div>
+
+        <div className="attraction-context">
+          <label className="field-label" htmlFor="attraction-select">
+            当前讲解景点
+          </label>
+          <select
+            className="select-input"
+            disabled={loadingAttractions || attractions.length === 0}
+            id="attraction-select"
+            onChange={(event) => setSelectedId(event.target.value)}
+            value={selectedId}
+          >
+            {attractions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.scenic_area} · {item.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </section>
 
-      {selectedAttraction ? (
-        <SpotCard
-          description={shortText(selectedAttraction.summary || selectedAttraction.description)}
-          meta={`${selectedAttraction.category || "景点"} · ${
-            (selectedAttraction.tags || []).slice(0, 2).join(" / ") || "本地知识库"
-          }`}
-          title={selectedAttraction.name}
-        />
-      ) : (
-        <p className="empty-state mobile-empty">正在等待景点数据，确认后端启动后会自动加载。</p>
-      )}
-
-      {error ? (
-        <p className="inline-alert" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <section className="mobile-chat" aria-label="问答讲解">
+      <section className="mobile-chat" aria-label="问答讲解" ref={answerPanelRef}>
         <div className="chat-row chat-row--visitor">
           <strong>游客</strong>
           <p>{question || "还没有输入问题"}</p>
@@ -326,6 +396,20 @@ export function MobileHomePage() {
           )}
         </section>
       ) : null}
+
+      {selectedAttraction ? (
+        <div className="mobile-spot-summary">
+          <SpotCard
+            description={shortText(selectedAttraction.summary || selectedAttraction.description)}
+            meta={`${selectedAttraction.category || "景点"} · ${
+              (selectedAttraction.tags || []).slice(0, 2).join(" / ") || "本地知识库"
+            }`}
+            title={selectedAttraction.name}
+          />
+        </div>
+      ) : (
+        <p className="empty-state mobile-empty">正在等待景点数据，确认后端启动后会自动加载。</p>
+      )}
 
       <section className="vision-panel" aria-label="图片识景">
         <div className="section-title-row">
@@ -572,28 +656,11 @@ export function MobileHomePage() {
         {feedbackDone ? <p className="success-note">{feedbackDone}</p> : null}
       </section>
 
-      <form className="mobile-input" aria-label="文本提问" onSubmit={handleSubmit}>
-        <label className="sr-only" htmlFor="mobile-question">
-          输入问题
-        </label>
-        <input
-          className="text-input"
-          id="mobile-question"
-          onChange={(event) => setQuestion(event.target.value)}
-          placeholder="问灵境，例如：梵宫怎么游览？"
-          type="text"
-          value={question}
-        />
-        <Button type="submit" aria-label="发送问题" icon={<Send size={18} />} loading={qaLoading} variant="primary">
-          发送
-        </Button>
-      </form>
-
       <nav className="mobile-actions" aria-label="游客主操作">
-        <IconButton disabled icon={Mic} label="语音" />
-        <IconButton icon={MessageSquareText} label="文本" onClick={() => document.getElementById("mobile-question")?.focus()} />
+        <IconButton disabled icon={Mic} label="语音稍后" />
         <IconButton icon={Camera} label="拍照" onClick={() => fileInputRef.current?.click()} />
         <IconButton icon={Map} label="路线" onClick={focusRoutePanel} />
+        <IconButton icon={Navigation} label="终端" onClick={() => window.location.assign("/kiosk")} />
       </nav>
 
       <a className="route-link" href="/kiosk">
