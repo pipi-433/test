@@ -114,6 +114,61 @@ export type RouteRecommendation = {
   latency_ms: number;
 };
 
+export type FeedbackRequest = {
+  channel: "mobile" | "kiosk" | "share" | "admin" | "api";
+  route_id?: string;
+  attraction_id?: string;
+  rating: number;
+  tags: string[];
+  comment?: string;
+};
+
+export type FeedbackResponse = {
+  id: string;
+  status: string;
+  created_at: string;
+};
+
+export type AnalyticsOverview = {
+  service_count: number;
+  qa_count: number;
+  vision_count: number;
+  route_count: number;
+  share_open_count: number;
+  feedback_count: number;
+  average_rating: number | null;
+  popular_questions: Array<{ question: string; count: number }>;
+  low_confidence_questions: Array<{ question: string; answer_preview?: string; confidence?: number; created_at: string }>;
+  route_theme_distribution: Array<{ theme: string; theme_label: string; count: number }>;
+  crowd_avoidance_count: number;
+  high_crowd_attractions: Array<{
+    attraction_id: string;
+    name: string;
+    scenic_area?: string;
+    crowd_level: CrowdLevel;
+    crowd_score: number;
+    wait_minutes: number;
+    source: string;
+  }>;
+  feedback_tags: Array<{ tag: string; count: number }>;
+  recent_events: Array<{
+    id: string;
+    event_type: string;
+    channel: string;
+    question?: string | null;
+    answer_preview?: string | null;
+    attraction_id?: string | null;
+    route_id?: string | null;
+    share_code?: string | null;
+    confidence?: number | null;
+    success: boolean;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  }>;
+  source_note: string;
+  mode: string;
+};
+
 type ApiErrorPayload = {
   code?: string;
   message?: string;
@@ -163,6 +218,10 @@ export async function getCrowdSnapshot(): Promise<CrowdSnapshotResponse> {
   return requestJson<CrowdSnapshotResponse>("/api/crowd/snapshot");
 }
 
+export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
+  return requestJson<AnalyticsOverview>("/api/analytics/overview");
+}
+
 export async function askQuestion({
   attractionId,
   question,
@@ -175,6 +234,7 @@ export async function askQuestion({
       attraction_id: attractionId || null,
       question,
       top_k: 5,
+      channel: "mobile",
       visitor_profile: {
         group_type: "family",
         time_budget_minutes: 120,
@@ -202,6 +262,7 @@ export async function recognizeImage({
   if (textHint) {
     body.append("text_hint", textHint);
   }
+  body.append("channel", "mobile");
   return requestJson<VisionResponse>("/api/vision/recognize", {
     body,
     method: "POST",
@@ -217,6 +278,7 @@ export async function recommendRoute({
   startAttractionId,
   avoidCrowd = true,
   crowdTolerance = "medium",
+  channel = "mobile",
 }: {
   theme?: string;
   timeBudgetMinutes?: number;
@@ -226,6 +288,7 @@ export async function recommendRoute({
   startAttractionId?: string;
   avoidCrowd?: boolean;
   crowdTolerance?: CrowdLevel;
+  channel?: "mobile" | "kiosk" | "share" | "admin" | "api";
 }): Promise<RouteRecommendation> {
   return requestJson<RouteRecommendation>("/api/routes/recommend", {
     body: JSON.stringify({
@@ -237,6 +300,7 @@ export async function recommendRoute({
       start_attraction_id: startAttractionId || null,
       avoid_crowd: avoidCrowd,
       crowd_tolerance: crowdTolerance,
+      channel,
     }),
     method: "POST",
   });
@@ -245,4 +309,11 @@ export async function recommendRoute({
 export async function getRouteShare(routeId: string, code: string): Promise<RouteRecommendation> {
   const params = new URLSearchParams({ code });
   return requestJson<RouteRecommendation>(`/api/routes/${encodeURIComponent(routeId)}/share?${params.toString()}`);
+}
+
+export async function submitFeedback(payload: FeedbackRequest): Promise<FeedbackResponse> {
+  return requestJson<FeedbackResponse>("/api/feedback", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
 }

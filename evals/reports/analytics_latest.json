@@ -1,0 +1,60 @@
+{
+  "generated_at": "2026-04-28T18:20:39+00:00",
+  "mode": "mock",
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "accuracy": 1.0,
+  "route_id": "route-0b158cfbf9",
+  "overview_after": {
+    "service_count": 3,
+    "qa_count": 1,
+    "route_count": 1,
+    "share_open_count": 1,
+    "feedback_count": 1,
+    "average_rating": 5.0,
+    "crowd_avoidance_count": 1
+  },
+  "results": [
+    {
+      "id": "qa-recorded",
+      "passed": true,
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "route-recorded",
+      "passed": true,
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "share-open-recorded",
+      "passed": true,
+      "before": 0,
+      "after": 1
+    },
+    {
+      "id": "feedback-recorded",
+      "passed": true,
+      "feedback_id": "fb-eccd2e43e2a4",
+      "average_rating": 5.0
+    },
+    {
+      "id": "overview-fields",
+      "passed": true
+    },
+    {
+      "id": "no-session-id",
+      "passed": true
+    },
+    {
+      "id": "route-share-stable",
+      "passed": true
+    },
+    {
+      "id": "qa-response-valid",
+      "passed": true
+    }
+  ]
+}

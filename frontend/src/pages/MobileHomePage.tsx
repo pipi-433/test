@@ -5,6 +5,7 @@ import {
   Camera,
   ExternalLink,
   FileImage,
+  Heart,
   Layers,
   Map,
   MessageSquareText,
@@ -15,7 +16,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { askQuestion, fetchAttractions, recognizeImage, recommendRoute } from "../api/client";
+import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, submitFeedback } from "../api/client";
 import type { Attraction, CrowdLevel, QAResponse, RouteRecommendation, VisionResponse } from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock, type DigitalHumanState } from "../components/DigitalHumanMock";
@@ -43,6 +44,7 @@ const crowdToleranceOptions: Array<{ value: CrowdLevel; label: string }> = [
   { value: "medium", label: "普通" },
   { value: "high", label: "可接受排队" },
 ];
+const feedbackTags = ["讲解清楚", "路线合理", "避开拥挤", "人多拥挤", "信息不准", "体验惊喜"];
 
 function shortText(value: string | undefined, limit = 88) {
   if (!value) {
@@ -76,6 +78,11 @@ export function MobileHomePage() {
   const [qaLoading, setQaLoading] = useState(false);
   const [visionLoading, setVisionLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [selectedFeedbackTags, setSelectedFeedbackTags] = useState<string[]>(["路线合理"]);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -186,6 +193,34 @@ export function MobileHomePage() {
     routePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (!routeResult) {
       void generateRoute();
+    }
+  }
+
+  function toggleFeedbackTag(tag: string) {
+    setSelectedFeedbackTags((current) =>
+      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag],
+    );
+  }
+
+  async function sendFeedback() {
+    setFeedbackLoading(true);
+    setFeedbackDone("");
+    setError("");
+    try {
+      const result = await submitFeedback({
+        channel: "mobile",
+        route_id: routeResult?.id,
+        attraction_id: selectedId || undefined,
+        rating: feedbackRating,
+        tags: selectedFeedbackTags,
+        comment: feedbackComment || undefined,
+      });
+      setFeedbackDone(`反馈已记录：${result.id}`);
+      setFeedbackComment("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "反馈提交失败，请稍后重试。");
+    } finally {
+      setFeedbackLoading(false);
     }
   }
 
@@ -486,6 +521,55 @@ export function MobileHomePage() {
         ) : (
           <p className="empty-state mobile-empty">还没有生成路线。选择主题和时长后，灵境会给出逐站讲解顺序。</p>
         )}
+      </section>
+
+      <section className="feedback-panel" aria-label="游客反馈">
+        <div className="section-title-row">
+          <div>
+            <h2>体验反馈</h2>
+            <p>本地演示日志，不记录个人身份。</p>
+          </div>
+          <Heart aria-hidden="true" />
+        </div>
+        <div className="rating-row" role="group" aria-label="满意度评分">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              className={feedbackRating === value ? "rating-button rating-button--active" : "rating-button"}
+              key={value}
+              onClick={() => setFeedbackRating(value)}
+              type="button"
+            >
+              {value} 分
+            </button>
+          ))}
+        </div>
+        <div className="feedback-tag-grid" aria-label="反馈标签">
+          {feedbackTags.map((tag) => (
+            <button
+              className={selectedFeedbackTags.includes(tag) ? "feedback-tag feedback-tag--active" : "feedback-tag"}
+              key={tag}
+              onClick={() => toggleFeedbackTag(tag)}
+              type="button"
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+        <label className="field-label" htmlFor="mobile-feedback-comment">
+          补充说明（可选）
+        </label>
+        <textarea
+          className="text-area"
+          id="mobile-feedback-comment"
+          onChange={(event) => setFeedbackComment(event.target.value)}
+          placeholder="例如：路线避开了拥挤点，讲解还可以更短一点。"
+          rows={3}
+          value={feedbackComment}
+        />
+        <Button icon={<Heart size={18} />} loading={feedbackLoading} onClick={() => void sendFeedback()} type="button" variant="secondary">
+          提交反馈
+        </Button>
+        {feedbackDone ? <p className="success-note">{feedbackDone}</p> : null}
       </section>
 
       <form className="mobile-input" aria-label="文本提问" onSubmit={handleSubmit}>

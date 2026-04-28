@@ -39,6 +39,7 @@ export function KioskPage() {
         startAttractionId: "lingshan-ls-011",
         avoidCrowd: true,
         crowdTolerance: "medium",
+        channel: "kiosk",
       });
       setRouteResult(result);
     } catch (cause) {

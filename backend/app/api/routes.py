@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.core.errors import ApiError
 from app.core.config import get_settings
 from app.providers import ProviderStatus, get_provider_status
+from app.services.analytics_service import analytics_overview, record_feedback, record_interaction_event
 from app.services.content_service import (
     get_attraction_or_error,
     get_attractions,
@@ -38,6 +39,7 @@ class QARequest(BaseModel):
     attraction_id: str | None = None
     visitor_profile: dict[str, Any] | None = None
     top_k: int = 5
+    channel: str = "mobile"
 
 
 class RouteRecommendRequest(BaseModel):
@@ -49,6 +51,16 @@ class RouteRecommendRequest(BaseModel):
     start_attraction_id: str | None = None
     avoid_crowd: bool = True
     crowd_tolerance: str = "medium"
+    channel: str = "mobile"
+
+
+class FeedbackRequest(BaseModel):
+    channel: str = "mobile"
+    route_id: str | None = None
+    attraction_id: str | None = None
+    rating: int
+    tags: list[str] = []
+    comment: str | None = None
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -88,6 +100,11 @@ def behavior_summary() -> dict:
     return get_behavior_summary_or_error()
 
 
+@router.get("/analytics/overview")
+def analytics() -> dict[str, object]:
+    return analytics_overview()
+
+
 @router.post("/qa")
 def qa(payload: QARequest) -> dict[str, object]:
     question = payload.question.strip()
@@ -100,12 +117,30 @@ def qa(payload: QARequest) -> dict[str, object]:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
     top_k = max(1, min(payload.top_k, 10))
-    return answer_question(
+    result = answer_question(
         question=question,
         attraction_id=payload.attraction_id,
         visitor_profile=payload.visitor_profile,
         top_k=top_k,
     )
+    source_scores = [float(source.get("score") or 0) for source in result.get("sources", [])]
+    confidence = min(1.0, max(source_scores) / 4.0) if source_scores else 0.0
+    record_interaction_event(
+        event_type="qa",
+        channel=payload.channel,
+        question=question,
+        answer_preview=str(result.get("answer") or ""),
+        attraction_id=payload.attraction_id,
+        confidence=round(confidence, 4),
+        success=bool(result.get("sources")),
+        metadata={
+            "source_count": len(result.get("sources", [])),
+            "fallback": len(result.get("sources", [])) == 0,
+            "latency_ms": result.get("latency_ms"),
+            "mode": result.get("mode"),
+        },
+    )
+    return result
 
 
 @router.get("/routes/themes")
@@ -121,7 +156,7 @@ def crowd_snapshot() -> dict[str, object]:
 
 @router.post("/routes/recommend")
 def routes_recommend(payload: RouteRecommendRequest) -> dict[str, object]:
-    return recommend_route(
+    result = recommend_route(
         theme=payload.theme,
         time_budget_minutes=payload.time_budget_minutes,
         group_type=payload.group_type,
@@ -131,11 +166,80 @@ def routes_recommend(payload: RouteRecommendRequest) -> dict[str, object]:
         avoid_crowd=payload.avoid_crowd,
         crowd_tolerance=payload.crowd_tolerance,
     )
+    high_stops = [stop for stop in result.get("stops", []) if stop.get("crowd_level") == "high"]
+    record_interaction_event(
+        event_type="route_recommend",
+        channel=payload.channel,
+        attraction_id=payload.start_attraction_id,
+        route_id=str(result.get("id")),
+        share_code=(result.get("share") or {}).get("share_code"),
+        confidence=float(result.get("recommendation_score") or 0) / 100,
+        success=True,
+        metadata={
+            "theme": result.get("theme"),
+            "theme_label": result.get("theme_label"),
+            "score": result.get("recommendation_score"),
+            "avoid_crowd": payload.avoid_crowd,
+            "crowd_tolerance": payload.crowd_tolerance,
+            "high_crowd_stops": [stop.get("name") for stop in high_stops],
+            "stop_count": len(result.get("stops", [])),
+        },
+    )
+    if payload.avoid_crowd or high_stops:
+        record_interaction_event(
+            event_type="crowd_avoidance",
+            channel=payload.channel,
+            attraction_id=payload.start_attraction_id,
+            route_id=str(result.get("id")),
+            share_code=(result.get("share") or {}).get("share_code"),
+            confidence=float(result.get("recommendation_score") or 0) / 100,
+            success=True,
+            metadata={
+                "source": "mock_simulation",
+                "high_crowd_stops": [stop.get("name") for stop in high_stops],
+                "decision_trace": result.get("decision_trace", [])[:4],
+            },
+        )
+    return result
 
 
 @router.get("/routes/{route_id}/share")
 def route_share(route_id: str, code: str | None = Query(default=None)) -> dict[str, object]:
-    return get_route_share(route_id, code)
+    result = get_route_share(route_id, code)
+    record_interaction_event(
+        event_type="route_share_open",
+        channel="share",
+        route_id=route_id,
+        share_code=code,
+        success=True,
+        metadata={
+            "theme": result.get("theme"),
+            "theme_label": result.get("theme_label"),
+            "score": result.get("recommendation_score"),
+            "stop_count": len(result.get("stops", [])),
+        },
+    )
+    return result
+
+
+@router.post("/feedback")
+def feedback(payload: FeedbackRequest) -> dict[str, object]:
+    if payload.rating < 1 or payload.rating > 5:
+        raise ApiError(
+            code="INVALID_FEEDBACK_RATING",
+            message="反馈评分需要在 1 到 5 分之间。",
+            cause=f"Invalid rating: {payload.rating}",
+            fix="请在 rating 字段传入 1、2、3、4 或 5。",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    return record_feedback(
+        channel=payload.channel,
+        route_id=payload.route_id,
+        attraction_id=payload.attraction_id,
+        rating=payload.rating,
+        tags=payload.tags,
+        comment=payload.comment,
+    )
 
 
 def _parse_content_disposition(value: str) -> dict[str, str]:
@@ -210,9 +314,25 @@ async def vision_recognize(request: Request) -> dict[str, object]:
         )
     content = file_info.get("content", b"")
     file_size = len(content) if isinstance(content, bytes) else None
-    return recognize_image_mock(
+    result = recognize_image_mock(
         filename=str(file_info.get("filename") or ""),
         hint=str(fields.get("hint") or ""),
         text_hint=str(fields.get("text_hint") or ""),
         file_size=file_size,
     )
+    matched = result.get("matched_attraction")
+    record_interaction_event(
+        event_type="vision",
+        channel=str(fields.get("channel") or "mobile"),
+        attraction_id=matched.get("id") if isinstance(matched, dict) else None,
+        confidence=float(result.get("confidence") or 0),
+        success=matched is not None,
+        metadata={
+            "filename": file_info.get("filename"),
+            "mode": result.get("mode"),
+            "matched_attraction_name": matched.get("name") if isinstance(matched, dict) else None,
+            "latency_ms": result.get("latency_ms"),
+            "strategy": (result.get("metadata") or {}).get("strategy") if isinstance(result.get("metadata"), dict) else None,
+        },
+    )
+    return result

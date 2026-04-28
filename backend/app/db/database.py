@@ -61,6 +61,40 @@ CREATE TABLE IF NOT EXISTS behavior_summary (
   date_end TEXT,
   payload_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS interaction_events (
+  id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  question TEXT,
+  answer_preview TEXT,
+  attraction_id TEXT,
+  route_id TEXT,
+  share_code TEXT,
+  confidence REAL,
+  success INTEGER NOT NULL,
+  metadata_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_interaction_events_type_created
+  ON interaction_events(event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_interaction_events_route_id
+  ON interaction_events(route_id);
+
+CREATE TABLE IF NOT EXISTS feedback_events (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL,
+  route_id TEXT,
+  attraction_id TEXT,
+  rating INTEGER NOT NULL,
+  tags_json TEXT NOT NULL,
+  comment TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_events_created
+  ON feedback_events(created_at DESC);
 """
 
 
@@ -94,6 +128,8 @@ def initialize_database(
                 """
                 DROP TABLE IF EXISTS knowledge_chunks;
                 DROP TABLE IF EXISTS behavior_summary;
+                DROP TABLE IF EXISTS feedback_events;
+                DROP TABLE IF EXISTS interaction_events;
                 DROP TABLE IF EXISTS attractions;
                 """
             )
@@ -174,4 +210,6 @@ def initialize_database(
         "attractions": len(attractions),
         "knowledge_chunks": len(chunks),
         "behavior_summaries": 1,
+        "interaction_events": 0,
+        "feedback_events": 0,
     }

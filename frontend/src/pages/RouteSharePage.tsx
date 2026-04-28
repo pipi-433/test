@@ -1,7 +1,7 @@
-import { AlertTriangle, Check, Clock3, Copy, MapPinned, Route as RouteIcon } from "lucide-react";
+import { AlertTriangle, Check, Clock3, Copy, Heart, MapPinned, Route as RouteIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { ApiClientError, getRouteShare } from "../api/client";
+import { ApiClientError, getRouteShare, submitFeedback } from "../api/client";
 import type { CrowdLevel, RouteRecommendation } from "../api/client";
 import { Button } from "../components/Button";
 import { PageShell } from "../components/Shell";
@@ -14,6 +14,8 @@ function crowdLabel(level: CrowdLevel) {
 function crowdTone(level: CrowdLevel) {
   return level === "high" ? "warning" : level === "medium" ? "neutral" : "ok";
 }
+
+const feedbackTags = ["路线合理", "避开拥挤", "人多拥挤", "讲解清楚", "体验惊喜", "还想了解"];
 
 function errorMessage(code: string) {
   if (code === "CODE_MISSING") {
@@ -41,6 +43,12 @@ export function RouteSharePage() {
   const [loading, setLoading] = useState(true);
   const [errorCode, setErrorCode] = useState("");
   const [copiedStopId, setCopiedStopId] = useState("");
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackTagsSelected, setFeedbackTagsSelected] = useState<string[]>(["路线合理"]);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState("");
+  const [feedbackError, setFeedbackError] = useState("");
 
   useEffect(() => {
     if (!code) {
@@ -79,6 +87,36 @@ export function RouteSharePage() {
       window.setTimeout(() => setCopiedStopId(""), 1800);
     } catch {
       setCopiedStopId("");
+    }
+  }
+
+  function toggleFeedbackTag(tag: string) {
+    setFeedbackTagsSelected((current) =>
+      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag],
+    );
+  }
+
+  async function sendFeedback() {
+    if (!route) {
+      return;
+    }
+    setFeedbackLoading(true);
+    setFeedbackDone("");
+    setFeedbackError("");
+    try {
+      const result = await submitFeedback({
+        channel: "share",
+        route_id: route.id,
+        rating: feedbackRating,
+        tags: feedbackTagsSelected,
+        comment: feedbackComment || undefined,
+      });
+      setFeedbackDone(`反馈已记录：${result.id}`);
+      setFeedbackComment("");
+    } catch (cause) {
+      setFeedbackError(cause instanceof Error ? cause.message : "反馈提交失败，请稍后重试。");
+    } finally {
+      setFeedbackLoading(false);
     }
   }
 
@@ -173,6 +211,52 @@ export function RouteSharePage() {
             </div>
           </article>
         ))}
+      </section>
+
+      <section className="feedback-panel share-feedback" aria-label="路线反馈">
+        <div className="section-title-row">
+          <div>
+            <h2>这条路线有帮助吗？</h2>
+            <p>反馈只写入本地演示日志。</p>
+          </div>
+          <Heart aria-hidden="true" />
+        </div>
+        <div className="rating-row" role="group" aria-label="路线满意度评分">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              className={feedbackRating === value ? "rating-button rating-button--active" : "rating-button"}
+              key={value}
+              onClick={() => setFeedbackRating(value)}
+              type="button"
+            >
+              {value} 分
+            </button>
+          ))}
+        </div>
+        <div className="feedback-tag-grid" aria-label="路线反馈标签">
+          {feedbackTags.map((tag) => (
+            <button
+              className={feedbackTagsSelected.includes(tag) ? "feedback-tag feedback-tag--active" : "feedback-tag"}
+              key={tag}
+              onClick={() => toggleFeedbackTag(tag)}
+              type="button"
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+        <textarea
+          className="text-area"
+          onChange={(event) => setFeedbackComment(event.target.value)}
+          placeholder="可选：告诉我们哪里有帮助，哪里需要调整。"
+          rows={3}
+          value={feedbackComment}
+        />
+        <Button icon={<Heart size={18} />} loading={feedbackLoading} onClick={() => void sendFeedback()} type="button" variant="secondary">
+          提交路线反馈
+        </Button>
+        {feedbackError ? <p className="inline-alert">{feedbackError}</p> : null}
+        {feedbackDone ? <p className="success-note">{feedbackDone}</p> : null}
       </section>
     </PageShell>
   );
