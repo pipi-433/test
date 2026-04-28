@@ -1,7 +1,12 @@
 import os
 from functools import lru_cache
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from pydantic import BaseModel
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseModel):
@@ -12,6 +17,24 @@ class Settings(BaseModel):
     vlm_provider: str = "mock"
     tts_provider: str = "mock"
     database_url: str = "sqlite:///./data/app.db"
+
+    def sqlite_path(self) -> Path:
+        parsed = urlparse(self.database_url)
+        if parsed.scheme != "sqlite":
+            raise ValueError("Only sqlite DATABASE_URL is supported in mock/local mode.")
+
+        raw_path = unquote(parsed.path)
+        if raw_path.startswith("/") and len(raw_path) > 2 and raw_path[2] == ":":
+            path = Path(raw_path[1:])
+        elif raw_path.startswith("/"):
+            path = PROJECT_ROOT / raw_path.lstrip("/")
+        else:
+            path = PROJECT_ROOT / raw_path
+
+        resolved = path.resolve()
+        if not resolved.is_relative_to(PROJECT_ROOT.resolve()):
+            raise ValueError(f"Database path must stay inside workspace: {resolved}")
+        return resolved
 
 
 class ErrorResponse(BaseModel):

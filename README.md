@@ -70,6 +70,26 @@ python .\scripts\validate_processed_data.py
 - `data/processed/knowledge_chunks.json`
 - `data/processed/behavior_summary.json`
 
+## 数据库初始化
+
+Task 03 使用 SQLite 和 Python 标准库导入处理后的 JSON：
+
+```powershell
+python .\scripts\init_db.py
+python .\scripts\validate_api_data.py
+```
+
+默认数据库位置：
+
+- `data/app.db`
+
+基础 API：
+
+- `GET /api/attractions`
+- `GET /api/attractions/{id}`
+- `GET /api/knowledge/chunks?attraction_id={id}`
+- `GET /api/analytics/behavior-summary`
+
 ## 后续任务
 
-Task 03 将基于 `data/processed/` 中的 JSON 产物建立 SQLite 表和景点 API；原始资料包仍作为只读来源。
+Task 04 将在当前 SQLite 数据与 mock provider 基础上实现 RAG 问答；原始资料包仍作为只读来源。
