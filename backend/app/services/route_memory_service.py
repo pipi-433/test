@@ -109,9 +109,18 @@ def apply_intent_to_memory(
         intent.get("optional_attraction_ids") or [],
     )
     if operation == "remove_must_visit":
+        remove_ids = intent.get("avoid_attraction_ids") or []
         constraints["must_visit_attraction_ids"] = _remove_many(
             constraints.get("must_visit_attraction_ids", []),
-            intent.get("avoid_attraction_ids") or [],
+            remove_ids,
+        )
+        constraints["optional_attraction_ids"] = _remove_many(
+            constraints.get("optional_attraction_ids", []),
+            remove_ids,
+        )
+        constraints["avoid_attraction_ids"] = _merge_unique(
+            constraints.get("avoid_attraction_ids", []),
+            remove_ids,
         )
     else:
         constraints["avoid_attraction_ids"] = _merge_unique(

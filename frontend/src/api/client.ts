@@ -76,8 +76,31 @@ export type RouteStop = {
   crowd_note: string;
   constraint_type?: "must_visit" | "optional" | "recommended" | "alternative";
   constraint_reason?: string;
-  crowd_action?: "keep" | "delay" | "replace" | "avoid" | "keep_with_warning";
+  crowd_action?: "keep" | "delay" | "replace" | "avoid" | "skip" | "keep_with_warning";
   decision_reason?: string;
+};
+
+export type RouteConstraintConflict = {
+  code: string;
+  attraction_id?: string;
+  name?: string;
+  message: string;
+  options?: string[];
+};
+
+export type RouteConstraintSummary = {
+  priority: string[];
+  must_visit_attraction_ids: string[];
+  optional_attraction_ids: string[];
+  avoid_attraction_ids: string[];
+  invalid_attraction_ids: string[];
+  conflict_attraction_ids: string[];
+  start_context_only: boolean;
+  skipped_avoid_attraction_ids: string[];
+  optional_not_selected_attraction_ids: string[];
+  trimmed_attraction_ids: string[];
+  warning: string | null;
+  notes: string[];
 };
 
 export type RouteRecommendation = {
@@ -93,6 +116,8 @@ export type RouteRecommendation = {
     avoid_attraction_ids: string[];
     rules?: Record<string, unknown>;
   };
+  constraint_summary?: RouteConstraintSummary;
+  constraint_conflicts?: RouteConstraintConflict[];
   estimated_duration_minutes: number;
   time_budget_minutes: number;
   recommendation_score: number;

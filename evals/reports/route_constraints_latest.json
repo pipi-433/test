@@ -1,0 +1,154 @@
+{
+  "generated_at": "2026-04-29T04:32:35+00:00",
+  "mode": "mock",
+  "total": 12,
+  "passed": 12,
+  "failed": 0,
+  "accuracy": 1.0,
+  "results": [
+    {
+      "id": "must_high_lingshan",
+      "passed": true,
+      "crowd_action": "delay",
+      "constraint_type": "must_visit",
+      "description": "必去灵山大佛且灵山大佛高拥挤时仍保留并错峰提醒"
+    },
+    {
+      "id": "must_high_jiulong",
+      "passed": true,
+      "crowd_action": "delay",
+      "description": "必去九龙灌浴且避拥挤时仍保留并错峰提醒"
+    },
+    {
+      "id": "avoid_template_stop",
+      "passed": true,
+      "stop_ids": [
+        "lingshan-ls-001",
+        "lingshan-ls-009",
+        "lingshan-ls-013",
+        "nianhuawan-nh-005"
+      ],
+      "summary": {
+        "priority": [
+          "data_available",
+          "user_avoid_attraction",
+          "user_must_visit",
+          "time_budget",
+          "crowd_comfort",
+          "theme_preference",
+          "template_default"
+        ],
+        "must_visit_attraction_ids": [],
+        "optional_attraction_ids": [],
+        "avoid_attraction_ids": [
+          "lingshan-ls-006"
+        ],
+        "invalid_attraction_ids": [],
+        "conflict_attraction_ids": [],
+        "start_context_only": false,
+        "skipped_avoid_attraction_ids": [
+          "lingshan-ls-006"
+        ],
+        "optional_not_selected_attraction_ids": [],
+        "trimmed_attraction_ids": [],
+        "warning": null,
+        "notes": []
+      },
+      "description": "避开景点命中模板点时从路线移除"
+    },
+    {
+      "id": "optional_fangong",
+      "passed": true,
+      "selected": true,
+      "constraint_type": "optional",
+      "optional_not_selected": [],
+      "description": "可选梵宫优先入选或在摘要说明未入选"
+    },
+    {
+      "id": "must_avoid_conflict_conversation",
+      "passed": true,
+      "options": [
+        "保留为必去",
+        "取消必去并避开",
+        "重新规划不包含该点"
+      ],
+      "description": "同一景点必去又避开时 conversation 返回澄清"
+    },
+    {
+      "id": "many_must_short_budget",
+      "passed": true,
+      "stop_ids": [
+        "lingshan-ls-006",
+        "lingshan-ls-014",
+        "lingshan-ls-011",
+        "lingshan-ls-013"
+      ],
+      "warning": "必去点导致预计 183 分钟，超过 120 分钟预算；已保留必去点，建议现场再确认是否缩短。",
+      "description": "多个必去点且 120 分钟预算时保留必去并警告"
+    },
+    {
+      "id": "invalid_attraction_id",
+      "passed": true,
+      "stop_ids": [
+        "lingshan-ls-001",
+        "lingshan-ls-009",
+        "lingshan-ls-013",
+        "nianhuawan-nh-005",
+        "lingshan-ls-006"
+      ],
+      "invalid": [
+        "bad-attraction-id"
+      ],
+      "description": "不存在景点 id 不进入路线并写入摘要"
+    },
+    {
+      "id": "session_isolation",
+      "passed": true,
+      "first_must": [
+        "lingshan-ls-011"
+      ],
+      "second_must": [],
+      "description": "新 session 不继承旧 session 必去约束"
+    },
+    {
+      "id": "remove_must_same_session",
+      "passed": true,
+      "must_ids": [],
+      "avoid_ids": [
+        "lingshan-ls-011"
+      ],
+      "stop": null,
+      "description": "同 session 取消必去后移除必去约束"
+    },
+    {
+      "id": "start_in_avoid",
+      "passed": true,
+      "stop_ids": [
+        "lingshan-ls-003",
+        "lingshan-ls-004",
+        "lingshan-ls-010",
+        "lingshan-ls-006"
+      ],
+      "start_context_only": true,
+      "description": "起点在避开列表时只作上下文不作为停留点"
+    },
+    {
+      "id": "intent_direct_conflict",
+      "passed": true,
+      "intent": "clarification",
+      "options": [
+        "保留为必去",
+        "取消必去并避开",
+        "重新规划不包含该点"
+      ],
+      "description": "自然语言必须去但又不想去触发澄清"
+    },
+    {
+      "id": "normal_route_regression",
+      "passed": true,
+      "stop_count": 5,
+      "score": 84,
+      "description": "普通路线推荐保持可用"
+    }
+  ]
+}

@@ -17,7 +17,14 @@ from app.services.crowd_service import get_crowd_snapshot
 from app.services.qa_service import answer_question
 from app.services.route_intent_service import parse_route_intent
 from app.services.route_memory_service import apply_intent_to_memory, get_route_memory, update_memory_after_route
-from app.services.route_service import get_route_share, recommend_route, route_theme_options
+from app.services.route_service import (
+    CONSTRAINT_CLARIFICATION_OPTIONS,
+    detect_constraint_conflicts,
+    get_route_share,
+    normalize_route_constraints,
+    recommend_route,
+    route_theme_options,
+)
 from app.services.vision_service import recognize_image_mock
 
 router = APIRouter(prefix="/api", tags=["system"])
@@ -82,6 +89,42 @@ class FeedbackRequest(BaseModel):
     rating: int
     tags: list[str] = []
     comment: str | None = None
+
+
+def _merge_unique(current: list[str], incoming: list[str]) -> list[str]:
+    result = list(current)
+    for item in incoming:
+        if item and item not in result:
+            result.append(item)
+    return result
+
+
+def _remove_many(current: list[str], values: list[str]) -> list[str]:
+    remove = set(values)
+    return [item for item in current if item not in remove]
+
+
+def _preview_route_constraints(memory: dict[str, Any], intent: dict[str, Any]) -> dict[str, Any]:
+    constraints = memory.get("constraints", {})
+    must_visit = list(constraints.get("must_visit_attraction_ids", []))
+    optional = list(constraints.get("optional_attraction_ids", []))
+    avoid = list(constraints.get("avoid_attraction_ids", []))
+    operation = intent.get("operation") or "none"
+    if operation == "remove_must_visit":
+        remove_ids = intent.get("avoid_attraction_ids") or []
+        must_visit = _remove_many(must_visit, remove_ids)
+        optional = _remove_many(optional, remove_ids)
+        avoid = _merge_unique(avoid, remove_ids)
+    else:
+        must_visit = _merge_unique(must_visit, intent.get("must_visit_attraction_ids") or [])
+        optional = _merge_unique(optional, intent.get("optional_attraction_ids") or [])
+        avoid = _merge_unique(avoid, intent.get("avoid_attraction_ids") or [])
+    return normalize_route_constraints(
+        must_visit_attraction_ids=must_visit,
+        optional_attraction_ids=optional,
+        avoid_attraction_ids=avoid,
+        start_attraction_id=(memory.get("preferences") or {}).get("start_attraction_id"),
+    )
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -321,6 +364,43 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
             "confidence": intent.get("intent_confidence", 0),
             "needs_clarification": True,
             "clarification_options": intent.get("clarification_options", []),
+            "mode": "mock",
+        }
+
+    preview_constraints = _preview_route_constraints(memory, intent)
+    constraint_conflicts = detect_constraint_conflicts(preview_constraints)
+    if constraint_conflicts:
+        conflict_names = "、".join(str(item.get("name") or item.get("attraction_id")) for item in constraint_conflicts)
+        reply = f"{conflict_names} 同时被标记为必去和避开，我先不生成路线，避免把你的必去点误删。"
+        intent = {
+            **intent,
+            "needs_clarification": True,
+            "clarification_question": reply,
+            "clarification_options": CONSTRAINT_CLARIFICATION_OPTIONS,
+            "metadata": {
+                **(intent.get("metadata") or {}),
+                "constraint_conflicts": constraint_conflicts,
+            },
+        }
+        record_interaction_event(
+            event_type="clarification",
+            channel=payload.channel,
+            question=message,
+            answer_preview=reply,
+            attraction_id=payload.selected_attraction_id,
+            confidence=float(intent.get("intent_confidence") or 0),
+            success=True,
+            metadata={"constraint_conflicts": constraint_conflicts, "options": CONSTRAINT_CLARIFICATION_OPTIONS},
+        )
+        return {
+            "session_id": memory["session_id"],
+            "intent": intent,
+            "memory": memory,
+            "route": None,
+            "reply": reply,
+            "confidence": intent.get("intent_confidence", 0),
+            "needs_clarification": True,
+            "clarification_options": CONSTRAINT_CLARIFICATION_OPTIONS,
             "mode": "mock",
         }
 

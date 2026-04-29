@@ -56,9 +56,15 @@ const routeIntentKeywords = [
   "孩子",
   "太累",
   "人多",
+  "必去",
   "一定要去",
   "必须看",
+  "必须去",
   "不能错过",
+  "不想去",
+  "不去",
+  "跳过",
+  "取消",
   "缩短",
   "换一个",
   "少走",
@@ -99,15 +105,14 @@ function constraintLabel(value: string | undefined) {
 }
 
 function crowdActionLabel(value: string | undefined) {
-  return value === "delay"
-    ? "已错峰"
-    : value === "keep_with_warning"
-      ? "保留提醒"
-      : value === "replace"
-        ? "已替代"
-        : value === "avoid"
-          ? "已避开"
-          : "保留";
+  const labels: Record<string, string> = {
+    delay: "已错峰",
+    keep_with_warning: "保留提醒",
+    replace: "已替代",
+    avoid: "已避开",
+    skip: "已跳过",
+  };
+  return value ? labels[value] || "保留" : "保留";
 }
 
 export function MobileHomePage() {
@@ -676,6 +681,18 @@ export function MobileHomePage() {
                 <AlertTriangle aria-hidden="true" size={16} />
                 {routeResult.crowd_policy.caveat}
               </p>
+              {routeResult.constraint_summary?.warning ? (
+                <p className="constraint-warning">
+                  <ShieldCheck aria-hidden="true" size={16} />
+                  {routeResult.constraint_summary.warning}
+                </p>
+              ) : null}
+              {routeResult.constraint_conflicts?.length ? (
+                <p className="constraint-warning">
+                  <AlertTriangle aria-hidden="true" size={16} />
+                  {routeResult.constraint_conflicts[0].message}
+                </p>
+              ) : null}
             </div>
             <div className="decision-trace" aria-label="路线决策说明">
               <strong>决策说明</strong>

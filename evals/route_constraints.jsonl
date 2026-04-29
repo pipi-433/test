@@ -1,0 +1,12 @@
+{"id":"must_high_lingshan","description":"必去灵山大佛且灵山大佛高拥挤时仍保留并错峰提醒"}
+{"id":"must_high_jiulong","description":"必去九龙灌浴且避拥挤时仍保留并错峰提醒"}
+{"id":"avoid_template_stop","description":"避开景点命中模板点时从路线移除"}
+{"id":"optional_fangong","description":"可选梵宫优先入选或在摘要说明未入选"}
+{"id":"must_avoid_conflict_conversation","description":"同一景点必去又避开时 conversation 返回澄清"}
+{"id":"many_must_short_budget","description":"多个必去点且 120 分钟预算时保留必去并警告"}
+{"id":"invalid_attraction_id","description":"不存在景点 id 不进入路线并写入摘要"}
+{"id":"session_isolation","description":"新 session 不继承旧 session 必去约束"}
+{"id":"remove_must_same_session","description":"同 session 取消必去后移除必去约束"}
+{"id":"start_in_avoid","description":"起点在避开列表时只作上下文不作为停留点"}
+{"id":"intent_direct_conflict","description":"自然语言必须去但又不想去触发澄清"}
+{"id":"normal_route_regression","description":"普通路线推荐保持可用"}

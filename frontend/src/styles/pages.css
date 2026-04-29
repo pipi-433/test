@@ -484,7 +484,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.simulation-note {
+.simulation-note,
+.constraint-warning {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
@@ -492,6 +493,11 @@
   padding: var(--space-2);
   background: var(--color-accent-100);
   color: var(--color-warning);
+}
+
+.constraint-warning {
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
 }
 
 .decision-trace ul {

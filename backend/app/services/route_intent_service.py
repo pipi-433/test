@@ -31,6 +31,10 @@ OPERATION_KEYWORDS = {
     "start_here": ["从这里", "我在", "从"],
 }
 
+MUST_VISIT_KEYWORDS = ["必去", "一定要去", "必须看", "必须去", "不能错过"]
+REMOVE_MUST_VISIT_KEYWORDS = ["取消", "算了", "不去了", "别去了", "不用去", "不用去了", "不必去"]
+AVOID_ATTRACTION_KEYWORDS = ["避开", "不想去", "跳过", "已经去过", "不去", "别去"]
+
 TIME_WORDS = {
     "一": 1,
     "二": 2,
@@ -100,10 +104,10 @@ def _infer_style(message: str) -> str:
 
 
 def _infer_operation(message: str) -> str:
-    if _contains_any(message, ["一定要去", "必须看", "不能错过"]):
-        return "set_must_visit"
-    if _contains_any(message, ["算了不去", "不去了", "不用去"]):
+    if _contains_any(message, REMOVE_MUST_VISIT_KEYWORDS):
         return "remove_must_visit"
+    if _contains_any(message, MUST_VISIT_KEYWORDS):
+        return "set_must_visit"
     for operation, keywords in OPERATION_KEYWORDS.items():
         if _contains_any(message, keywords):
             return operation
@@ -119,6 +123,10 @@ def parse_route_intent(
 ) -> dict[str, Any]:
     text = " ".join(str(message or "").strip().split())
     matched_ids = _match_attractions(text)
+    has_must_phrase = _contains_any(text, MUST_VISIT_KEYWORDS)
+    has_remove_phrase = _contains_any(text, REMOVE_MUST_VISIT_KEYWORDS)
+    has_avoid_attraction_phrase = _contains_any(text, AVOID_ATTRACTION_KEYWORDS)
+    has_direct_conflict = bool(matched_ids and has_must_phrase and has_avoid_attraction_phrase and not has_remove_phrase)
     operation = _infer_operation(text)
     style = _infer_style(text)
     theme = _infer_theme(text)
@@ -156,10 +164,14 @@ def parse_route_intent(
         must_visit_ids = matched_ids
     elif operation == "remove_must_visit":
         avoid_ids = matched_ids
-    elif _contains_any(text, ["不想去", "跳过", "已经去过", "不去"]):
+    elif has_avoid_attraction_phrase:
         avoid_ids = matched_ids
     else:
         optional_ids = matched_ids if matched_ids and not theme else []
+
+    if has_direct_conflict:
+        must_visit_ids = matched_ids
+        avoid_ids = matched_ids
 
     route_keywords = [
         "路线",
@@ -173,8 +185,14 @@ def parse_route_intent(
         "孩子",
         "太累",
         "人多",
+        "不想去",
+        "不去",
+        "跳过",
+        "避开",
         "一定要去",
+        "必去",
         "必须看",
+        "必须去",
         "缩短",
         "换一个",
         "少走",
@@ -209,6 +227,7 @@ def parse_route_intent(
     confidence += 0.16 if time_budget else 0
     confidence += 0.16 if operation != "none" else 0
     confidence += 0.12 if matched_ids else 0
+    confidence += 0.14 if avoid_ids else 0
     confidence += 0.1 if group_type else 0
     confidence += 0.1 if avoid_crowd else 0
     confidence += 0.3 if style != "default" else 0
@@ -222,6 +241,11 @@ def parse_route_intent(
         needs_clarification = True
         clarification_question = "你想让我做景点问答，还是帮你重新规划路线？"
         clarification_options = ["帮我规划路线", "讲解当前景点", "避开拥挤重新安排"]
+        intent = "clarification"
+    elif has_direct_conflict:
+        needs_clarification = True
+        clarification_question = "这个景点同时被说成必去和不想去，我需要先确认。"
+        clarification_options = ["保留为必去", "取消必去并避开", "重新规划不包含该点"]
         intent = "clarification"
     elif operation == "set_must_visit" and not must_visit_ids:
         needs_clarification = True
@@ -250,5 +274,9 @@ def parse_route_intent(
         "selected_attraction_id": selected_attraction_id,
         "current_route_id": current_route_id,
         "mode": "mock_rule_parser",
-        "metadata": {"matched_attraction_ids": matched_ids, "memory_turn_count": (memory or {}).get("turn_count")},
+        "metadata": {
+            "matched_attraction_ids": matched_ids,
+            "conflict_attraction_ids": matched_ids if has_direct_conflict else [],
+            "memory_turn_count": (memory or {}).get("turn_count"),
+        },
     }
