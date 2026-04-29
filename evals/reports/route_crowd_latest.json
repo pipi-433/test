@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-29T09:42:44+00:00",
+  "generated_at": "2026-04-29T10:32:10+00:00",
   "mode": "mock",
   "snapshot_ok": true,
   "snapshot_count": 8,
@@ -7,7 +7,7 @@
   "passed": 5,
   "failed": 0,
   "accuracy": 1.0,
-  "avg_latency_ms": 21.5,
+  "avg_latency_ms": 20.25,
   "results": [
     {
       "id": "crowd-family-avoid",
@@ -31,7 +31,7 @@
         "高拥挤点：九龙灌浴；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 17
+      "latency_ms": 20
     },
     {
       "id": "crowd-blessing-core",
@@ -58,7 +58,7 @@
         "高拥挤点：九龙灌浴、灵山大佛；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 17
+      "latency_ms": 19
     },
     {
       "id": "crowd-nature-comfort",
@@ -78,7 +78,7 @@
         "当前候选路线没有 high 拥挤站点，整体舒适度较好。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 22
+      "latency_ms": 20
     },
     {
       "id": "crowd-photo-queue-ok",
@@ -101,7 +101,7 @@
         "高拥挤点：九龙灌浴；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 30
+      "latency_ms": 22
     }
   ]
 }

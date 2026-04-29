@@ -1,10 +1,11 @@
-{"id":"must_xiangyue_full_pool","description":"香月花街作为非核心五点必去点时必须进入路线"}
+{"id":"must_xiangyue_full_pool","description":"香月花街作为非核心模板必去点时必须进入路线"}
 {"id":"must_wudenghu_full_pool","description":"五灯湖作为必去点时必须进入路线"}
 {"id":"optional_fantian_flower_sea","description":"梵天花海作为可选点时应优先纳入或明确说明未纳入"}
 {"id":"avoid_jiulong_full_pool","description":"九龙灌浴作为避开点时不能进入路线"}
 {"id":"intent_xiangyue_must","description":"自然语言解析香月花街一定要去"}
 {"id":"intent_nianhuawan_wudeng_fantian","description":"自然语言匹配拈花湾五灯湖和梵天花海"}
 {"id":"non_template_selection_source","description":"模板外景点入选时标注 full_pool 或 must_visit 来源"}
+{"id":"many_must_visits_preserved","description":"多个必去景点超过默认站点上限时也必须全部保留"}
 {"id":"stops_have_profile_reason","description":"每个路线站点都有主题画像解释或主题分"}
 {"id":"classic_templates_regression","description":"原有五类经典模板路线仍可生成"}
 {"id":"conversation_xiangyue_must_avoid_jiulong","description":"自然语言同时设置香月花街必去和九龙灌浴避开"}

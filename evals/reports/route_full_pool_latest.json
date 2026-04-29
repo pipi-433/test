@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-29T09:44:16+00:00",
+  "generated_at": "2026-04-29T10:31:47+00:00",
   "mode": "mock",
   "attraction_count": 22,
-  "total": 10,
-  "passed": 10,
+  "total": 11,
+  "passed": 11,
   "failed": 0,
   "accuracy": 1.0,
   "results": [
@@ -59,7 +59,7 @@
         "nianhuawan-nh-003",
         "lingshan-ls-006"
       ],
-      "description": "香月花街作为非核心五点必去点时必须进入路线"
+      "description": "香月花街作为非核心模板必去点时必须进入路线"
     },
     {
       "id": "must_wudenghu_full_pool",
@@ -244,6 +244,23 @@
         "lingshan-ls-006"
       ],
       "description": "模板外景点入选时标注 full_pool 或 must_visit 来源"
+    },
+    {
+      "id": "many_must_visits_preserved",
+      "passed": true,
+      "missing": [],
+      "stop_ids": [
+        "nianhuawan-nh-003",
+        "nianhuawan-nh-005",
+        "nianhuawan-nh-002",
+        "lingshan-ls-012",
+        "lingshan-ls-013",
+        "lingshan-ls-014",
+        "lingshan-ls-015",
+        "lingshan-ls-011"
+      ],
+      "warning": "必去点导致预计 360 分钟，超过 120 分钟预算；已保留必去点，建议现场再确认是否缩短。",
+      "description": "多个必去景点超过默认站点上限时也必须全部保留"
     },
     {
       "id": "stops_have_profile_reason",

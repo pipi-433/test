@@ -699,7 +699,7 @@ def apply_route_constraints(
         if attraction_id not in selected_ids and attraction_id not in summary["optional_not_selected_attraction_ids"]:
             summary["optional_not_selected_attraction_ids"].append(attraction_id)
     constrained = _trim_for_time_budget(
-        stops=constrained[:7],
+        stops=constrained,
         budget=time_budget_minutes,
         summary=summary,
         trace=trace,

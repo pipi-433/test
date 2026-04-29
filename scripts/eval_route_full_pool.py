@@ -124,6 +124,31 @@ def check_non_template_selection_source() -> dict[str, Any]:
     )
 
 
+def check_many_must_visits_preserved() -> dict[str, Any]:
+    must_ids = [
+        "nianhuawan-nh-003",
+        "nianhuawan-nh-005",
+        "nianhuawan-nh-002",
+        "lingshan-ls-011",
+        "lingshan-ls-012",
+        "lingshan-ls-013",
+        "lingshan-ls-014",
+        "lingshan-ls-015",
+    ]
+    route = recommend_route(theme="family", time_budget_minutes=120, must_visit_attraction_ids=must_ids)
+    ids = stop_ids(route)
+    missing = [attraction_id for attraction_id in must_ids if attraction_id not in ids]
+    must_stops = [stop for stop in route.get("stops", []) if stop.get("attraction_id") in must_ids]
+    passed = not missing and all(stop.get("constraint_type") == "must_visit" for stop in must_stops)
+    return result(
+        "many_must_visits_preserved",
+        passed,
+        missing=missing,
+        stop_ids=ids,
+        warning=(route.get("constraint_summary") or {}).get("warning"),
+    )
+
+
 def check_stops_have_profile_reason() -> dict[str, Any]:
     route = recommend_route(theme="photo", time_budget_minutes=240, avoid_attraction_ids=["lingshan-ls-006"])
     missing = [
@@ -180,6 +205,7 @@ CHECKS: dict[str, Callable[[], dict[str, Any]]] = {
     "intent_xiangyue_must": check_intent_xiangyue_must,
     "intent_nianhuawan_wudeng_fantian": check_intent_nianhuawan_wudeng_fantian,
     "non_template_selection_source": check_non_template_selection_source,
+    "many_must_visits_preserved": check_many_must_visits_preserved,
     "stops_have_profile_reason": check_stops_have_profile_reason,
     "classic_templates_regression": check_classic_templates_regression,
     "conversation_xiangyue_must_avoid_jiulong": check_conversation_xiangyue_must_avoid_jiulong,
