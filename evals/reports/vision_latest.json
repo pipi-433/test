@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-04-29T04:32:28+00:00",
+  "generated_at": "2026-04-29T05:39:34+00:00",
   "mode": "mock",
   "total": 7,
   "passed": 7,
   "failed": 0,
   "accuracy": 1.0,
-  "avg_latency_ms": 2.43,
+  "avg_latency_ms": 1.86,
   "results": [
     {
       "id": "vision_001",
@@ -16,7 +16,7 @@
       "passed": true,
       "match_ok": true,
       "id_ok": true,
-      "latency_ms": 4,
+      "latency_ms": 3,
       "explanation": "mock 识景根据文件名/提示词命中 灵山大佛。匹配依据：alias:灵山大佛, alias:灵山大佛, alias:大佛, alias:lingshan dafo, alias:dafo。"
     },
     {
@@ -40,7 +40,7 @@
       "passed": true,
       "match_ok": true,
       "id_ok": true,
-      "latency_ms": 2,
+      "latency_ms": 1,
       "explanation": "mock 识景根据文件名/提示词命中 灵山梵宫。匹配依据：alias:梵宫, alias:fangong, compact_alias:fan gong。"
     },
     {
@@ -52,7 +52,7 @@
       "passed": true,
       "match_ok": true,
       "id_ok": true,
-      "latency_ms": 1,
+      "latency_ms": 2,
       "explanation": "mock 识景根据文件名/提示词命中 五印坛城。匹配依据：alias:五印坛城, alias:五印坛城, alias:坛城, alias:wuyin tancheng, alias:wuyin, alias:tancheng。"
     },
     {
@@ -64,7 +64,7 @@
       "passed": true,
       "match_ok": true,
       "id_ok": true,
-      "latency_ms": 3,
+      "latency_ms": 2,
       "explanation": "mock 识景根据文件名/提示词命中 香月花街。匹配依据：alias:香月花街, alias:香月花街, alias:花街, alias:xiangyue huajie, alias:xiangyue, alias:huajie。"
     },
     {
@@ -76,7 +76,7 @@
       "passed": true,
       "match_ok": true,
       "id_ok": true,
-      "latency_ms": 3,
+      "latency_ms": 2,
       "explanation": "mock 识景根据文件名/提示词命中 梵天花海。匹配依据：alias:梵天花海。"
     },
     {
@@ -88,7 +88,7 @@
       "passed": true,
       "match_ok": true,
       "id_ok": true,
-      "latency_ms": 2,
+      "latency_ms": 1,
       "explanation": "mock 识景没有从文件名或提示词中匹配到可靠景点。请换用包含景点名称、景点编号或更明确 hint 的样例继续演示。"
     }
   ]

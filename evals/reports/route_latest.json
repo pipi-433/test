@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-04-29T04:32:29+00:00",
+  "generated_at": "2026-04-29T05:39:34+00:00",
   "mode": "mock",
   "total": 6,
   "passed": 6,
   "failed": 0,
   "accuracy": 1.0,
-  "avg_latency_ms": 28.17,
+  "avg_latency_ms": 9.67,
   "results": [
     {
       "id": "route_001",
@@ -20,7 +20,7 @@
       "duration_ok": true,
       "share_ok": true,
       "missing_keywords": [],
-      "latency_ms": 30,
+      "latency_ms": 9,
       "route_preview": "灵山大照壁 > 百子戏弥勒 > 灵山梵宫 > 九龙灌浴"
     },
     {
@@ -36,7 +36,7 @@
       "duration_ok": true,
       "share_ok": true,
       "missing_keywords": [],
-      "latency_ms": 49,
+      "latency_ms": 9,
       "route_preview": "灵山大照壁 > 五明桥 > 祥符禅寺 > 佛教文化博览馆 > 五印坛城"
     },
     {
@@ -52,7 +52,7 @@
       "duration_ok": true,
       "share_ok": true,
       "missing_keywords": [],
-      "latency_ms": 33,
+      "latency_ms": 10,
       "route_preview": "菩提大道 > 五明桥 > 梵天花海 > 五灯湖 > 鹿鸣谷"
     },
     {
@@ -68,7 +68,7 @@
       "duration_ok": true,
       "share_ok": true,
       "missing_keywords": [],
-      "latency_ms": 20,
+      "latency_ms": 10,
       "route_preview": "佛足坛 > 五智门 > 祥符禅寺 > 九龙灌浴 > 灵山大佛"
     },
     {
@@ -84,7 +84,7 @@
       "duration_ok": true,
       "share_ok": true,
       "missing_keywords": [],
-      "latency_ms": 21,
+      "latency_ms": 12,
       "route_preview": "灵山大照壁 > 灵山梵宫 > 梵天花海 > 香月花街 > 九龙灌浴"
     },
     {
@@ -100,7 +100,7 @@
       "duration_ok": true,
       "share_ok": true,
       "missing_keywords": [],
-      "latency_ms": 16,
+      "latency_ms": 8,
       "route_preview": "灵山大照壁 > 百子戏弥勒 > 灵山梵宫 > 九龙灌浴"
     }
   ]

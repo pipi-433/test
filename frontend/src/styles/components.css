@@ -167,6 +167,7 @@
   place-items: center;
   overflow: hidden;
   min-height: 280px;
+  padding: var(--space-4);
   border: 1px solid var(--color-border);
   background:
     linear-gradient(180deg, rgb(255 255 255 / 92%), rgb(238 250 248 / 86%)),
@@ -181,6 +182,33 @@
   border: 1px solid rgb(194 139 44 / 38%);
   border-radius: 50%;
   background: rgb(255 255 255 / 42%);
+}
+
+.digital-human__aura,
+.digital-human__waves {
+  position: absolute;
+  pointer-events: none;
+}
+
+.digital-human__aura {
+  inset: var(--space-4);
+  opacity: 0.44;
+}
+
+.digital-human__aura span {
+  position: absolute;
+  inset: 16% 24%;
+  border: 1px solid rgb(19 151 141 / 20%);
+  border-radius: 50%;
+}
+
+.digital-human__aura span:nth-child(2) {
+  inset: 22% 18%;
+  border-color: rgb(194 139 44 / 22%);
+}
+
+.digital-human__aura span:nth-child(3) {
+  inset: 30% 30%;
 }
 
 .digital-human__figure {
@@ -257,6 +285,10 @@
   height: 8px;
   border-radius: 0 0 999px 999px;
   transform: translateX(-50%);
+  transition:
+    height var(--motion-fast) var(--ease-standard),
+    width var(--motion-fast) var(--ease-standard),
+    border var(--motion-fast) var(--ease-standard);
 }
 
 .digital-human--speaking .digital-human__mouth {
@@ -270,6 +302,43 @@
   height: 16px;
   background: transparent;
   border-bottom: 5px solid #263631;
+}
+
+.digital-human--comforting .digital-human__mouth {
+  width: 40px;
+  height: 14px;
+  background: transparent;
+  border-bottom: 4px solid #263631;
+}
+
+.digital-human--listening .digital-human__mouth {
+  width: 20px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.digital-human--thinking .digital-human__figure {
+  animation-duration: 2.2s;
+}
+
+.digital-human--thinking .digital-human__mouth {
+  width: 16px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.digital-human--error .digital-human__brow--left {
+  transform: rotate(10deg);
+}
+
+.digital-human--error .digital-human__brow--right {
+  transform: rotate(-10deg);
+}
+
+.digital-human--error .digital-human__mouth {
+  width: 26px;
+  height: 4px;
+  border-radius: 999px;
 }
 
 .digital-human__body {
@@ -291,10 +360,60 @@
   transform: rotate(-28deg);
 }
 
+.digital-human__hands {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  width: 54px;
+  height: 16px;
+  border: 3px solid rgb(255 255 255 / 72%);
+  border-top: 0;
+  border-radius: 0 0 999px 999px;
+  transform: translateX(-50%);
+}
+
+.digital-human__waves {
+  left: calc(50% + 72px);
+  top: calc(50% - 14px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--motion-base) var(--ease-standard);
+}
+
+.digital-human__waves span {
+  display: block;
+  width: 4px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--color-primary-600);
+  animation: sound-wave 720ms ease-in-out infinite;
+}
+
+.digital-human__waves span:nth-child(2) {
+  height: 28px;
+  animation-delay: 120ms;
+}
+
+.digital-human__waves span:nth-child(3) {
+  height: 20px;
+  animation-delay: 240ms;
+}
+
+.digital-human--listening .digital-human__waves,
+.digital-human--speaking .digital-human__waves {
+  opacity: 1;
+}
+
+.digital-human--speaking .digital-human__waves span {
+  background: var(--color-accent-600);
+}
+
 .digital-human__status {
   position: absolute;
   right: var(--space-4);
-  bottom: var(--space-4);
+  top: var(--space-4);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -306,6 +425,23 @@
   color: var(--color-ink-700);
   font-size: var(--font-sm);
   font-weight: 650;
+}
+
+.digital-human__caption {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  left: var(--space-4);
+  margin: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgb(255 255 255 / 90%);
+  color: var(--color-ink-700);
+  font-size: var(--font-sm);
+  font-weight: 650;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .metric-card,
@@ -452,6 +588,16 @@
   }
   50% {
     height: 22px;
+  }
+}
+
+@keyframes sound-wave {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1.08);
   }
 }
 

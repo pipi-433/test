@@ -6,6 +6,7 @@ import { getCrowdSnapshot, recommendRoute } from "../api/client";
 import type { CrowdSnapshotItem, RouteRecommendation } from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock } from "../components/DigitalHumanMock";
+import type { DigitalHumanState } from "../components/DigitalHumanMock";
 import { IconButton } from "../components/IconButton";
 import { PageShell } from "../components/Shell";
 import { RouteStep } from "../components/RouteStep";
@@ -25,6 +26,14 @@ export function KioskPage() {
   }, []);
 
   const shareUrl = routeResult ? `${window.location.origin}${routeResult.share.share_url}` : "";
+  const kioskHumanState: DigitalHumanState = routeLoading ? "thinking" : routeError ? "error" : routeResult ? "happy" : "welcome";
+  const kioskHumanCaption = routeLoading
+    ? "正在根据亲子轻松偏好和模拟拥挤度生成路线。"
+    : routeError
+      ? "路线生成遇到问题，终端仍可展示热门问题和重新尝试。"
+      : routeResult
+        ? `已生成${routeResult.title}，扫码可在手机继续查看。`
+        : "欢迎来到灵境导游终端，生成路线后可以扫码带走。";
 
   async function generateKioskRoute() {
     setRouteLoading(true);
@@ -61,7 +70,7 @@ export function KioskPage() {
 
       <section className="kiosk-grid">
         <div className="kiosk-avatar-panel">
-          <DigitalHumanMock state="welcome" className="kiosk-avatar" />
+          <DigitalHumanMock caption={kioskHumanCaption} state={kioskHumanState} className="kiosk-avatar" />
           <div className="kiosk-primary-actions" aria-label="终端主要操作">
             <Button size="kiosk" icon={<Mic size={26} />}>
               开始语音咨询

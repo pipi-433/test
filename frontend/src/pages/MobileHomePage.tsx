@@ -13,6 +13,8 @@ import {
   Route as RouteIcon,
   Send,
   ShieldCheck,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
 import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, sendRouteConversation, submitFeedback } from "../api/client";
@@ -23,6 +25,9 @@ import { IconButton } from "../components/IconButton";
 import { PageShell } from "../components/Shell";
 import { SpotCard } from "../components/SpotCard";
 import { StatusBadge } from "../components/StatusBadge";
+import { useDigitalHumanState } from "../hooks/useDigitalHumanState";
+import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
+import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis";
 
 const starterQuestions = ["灵山大佛适合怎么游览？", "九龙灌浴有什么看点？", "梵宫背后有什么文化故事？"];
 const routeThemes = [
@@ -115,6 +120,24 @@ function crowdActionLabel(value: string | undefined) {
   return value ? labels[value] || "保留" : "保留";
 }
 
+function speechExcerpt(value: string | undefined, limit = 420) {
+  const normalized = (value || "").replace(/\s+/g, " ").trim();
+  return normalized.length > limit ? `${normalized.slice(0, limit)}。后续内容请看页面文字。` : normalized;
+}
+
+function routeSpeechSummary(route: RouteRecommendation) {
+  const highStops = route.stops.filter((stop) => stop.crowd_level === "high").map((stop) => stop.name);
+  const crowdText = highStops.length ? `高拥挤点有${highStops.slice(0, 2).join("、")}，已在路线里提示错峰。` : "当前路线整体拥挤压力较低。";
+  return `${route.title}已生成，综合评分 ${route.recommendation_score} 分，预计 ${route.estimated_duration_minutes} 分钟。${crowdText} 当前拥挤度为模拟演示数据，不代表真实客流。`;
+}
+
+function visionSpeechSummary(result: VisionResponse) {
+  if (result.matched_attraction) {
+    return `识景完成，我识别到${result.matched_attraction.name}，置信度约 ${Math.round(result.confidence * 100)}%。你可以继续问我这个景点的看点或游览建议。`;
+  }
+  return "这张图暂时没有匹配到确定景点，我不会编造结果。你可以换一张样例图，或手动选择当前讲解景点。";
+}
+
 export function MobileHomePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const routePanelRef = useRef<HTMLElement | null>(null);
@@ -145,6 +168,9 @@ export function MobileHomePage() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackDone, setFeedbackDone] = useState("");
   const [error, setError] = useState("");
+  const { caption: humanCaption, resetHuman, setHumanState, state: humanState } = useDigitalHumanState();
+  const speech = useSpeechSynthesis();
+  const recognition = useSpeechRecognition();
 
   useEffect(() => {
     let mounted = true;
@@ -176,12 +202,86 @@ export function MobileHomePage() {
     [attractions, selectedId],
   );
 
-  const humanState: DigitalHumanState = qaLoading || visionLoading || routeLoading ? "thinking" : qaResult ? "speaking" : "welcome";
-
   function scrollAnswerIntoView(block: ScrollLogicalPosition = "start") {
     window.setTimeout(() => {
       answerPanelRef.current?.scrollIntoView({ behavior: "smooth", block });
     }, 0);
+  }
+
+  function speakWithHuman(
+    text: string,
+    options: { caption?: string; endState?: DigitalHumanState; maxChars?: number } = {},
+  ) {
+    const caption = options.caption || speechExcerpt(text, 96);
+    const didStart = speech.speak(text, {
+      maxChars: options.maxChars,
+      onEnd: () => {
+        if (options.endState) {
+          setHumanState(options.endState, caption);
+        } else {
+          resetHuman("播报结束。你可以继续用文本提问，也可以生成路线。");
+        }
+      },
+      onError: (message) => {
+        setHumanState("error", message);
+      },
+      onStart: () => {
+        setHumanState("speaking", caption);
+      },
+    });
+    if (!didStart) {
+      setHumanState("error", "当前浏览器不支持语音播报，文本内容仍可正常使用。");
+    }
+    return didStart;
+  }
+
+  function speakLatestAnswer() {
+    if (qaResult?.answer) {
+      speakWithHuman(qaResult.answer);
+      return;
+    }
+    if (routeResult) {
+      speakWithHuman(routeSpeechSummary(routeResult));
+      return;
+    }
+    if (visionResult) {
+      speakWithHuman(visionSpeechSummary(visionResult));
+    }
+  }
+
+  function stopSpeaking() {
+    speech.stop();
+    resetHuman("播报已停止，文本内容还在页面里。");
+  }
+
+  function toggleVoiceInput() {
+    if (recognition.listening) {
+      recognition.stopListening();
+      resetHuman("语音输入已停止。你可以检查文本后发送。");
+      return;
+    }
+    const started = recognition.startListening({
+      onEnd: () => {
+        setHumanState("welcome", "语音输入结束。请确认文本后发送。");
+      },
+      onError: (message) => {
+        setError(message);
+        setHumanState("error", message);
+      },
+      onResult: (text) => {
+        setQuestion(text);
+        setHumanState("welcome", "已把语音识别结果填入输入框，请确认后发送。");
+        composerInputRef.current?.focus();
+      },
+      onStart: () => {
+        setError("");
+        setHumanState("listening", "我正在听，请说出你想问的景点或路线需求。");
+      },
+    });
+    if (!started) {
+      setError("当前浏览器不支持语音输入，请使用文本提问。");
+      setHumanState("error", "当前浏览器不支持语音输入，请使用文本提问。");
+    }
   }
 
   async function submitQuestion(nextQuestion = question) {
@@ -195,6 +295,8 @@ export function MobileHomePage() {
     setQuestion(cleanQuestion);
     setQaResult(null);
     setClarificationOptions([]);
+    speech.stop();
+    setHumanState("thinking", "我正在检索本地资料，并判断是否需要规划路线。");
     const matchedAttraction = attractions.find((item) => cleanQuestion.includes(item.name));
     const queryAttractionId = matchedAttraction?.id || selectedId;
     if (matchedAttraction && matchedAttraction.id !== selectedId) {
@@ -222,14 +324,31 @@ export function MobileHomePage() {
           setMustVisitIds(result.memory.constraints.must_visit_attraction_ids || []);
           window.setTimeout(() => routePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
         }
+        if (result.needs_clarification) {
+          setHumanState("comforting", result.reply);
+          speakWithHuman(result.reply, { endState: "comforting", maxChars: 220 });
+        } else if (result.route) {
+          speakWithHuman(`${result.reply} ${routeSpeechSummary(result.route)}`, { maxChars: 360 });
+        } else {
+          speakWithHuman(result.reply, { maxChars: 260 });
+        }
         scrollAnswerIntoView("nearest");
         return;
       }
       const result = await askQuestion({ attractionId: queryAttractionId, question: cleanQuestion });
       setQaResult(result);
+      if (result.sources.length === 0) {
+        setHumanState("comforting", "本地资料没有明确命中，我会避免编造。");
+        speakWithHuman(result.answer, { endState: "comforting", maxChars: 300 });
+      } else {
+        speakWithHuman(result.answer, { maxChars: 420 });
+      }
       scrollAnswerIntoView("nearest");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "问答请求失败，请稍后重试。");
+      const message = cause instanceof Error ? cause.message : "问答请求失败，请稍后重试。";
+      setError(message);
+      setHumanState("error", message);
+      speakWithHuman(message, { endState: "error", maxChars: 120 });
       scrollAnswerIntoView("nearest");
     } finally {
       setQaLoading(false);
@@ -257,6 +376,8 @@ export function MobileHomePage() {
     }
     setVisionLoading(true);
     setError("");
+    speech.stop();
+    setHumanState("thinking", "我正在用 mock 识景规则分析图片文件和提示词。");
     try {
       const result = await recognizeImage({
         file,
@@ -267,8 +388,14 @@ export function MobileHomePage() {
       if (result.matched_attraction) {
         setSelectedId(result.matched_attraction.id);
       }
+      const nextState = result.matched_attraction ? "happy" : "comforting";
+      setHumanState(nextState, visionSpeechSummary(result));
+      speakWithHuman(visionSpeechSummary(result), { endState: nextState, maxChars: 240 });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "识景请求失败，请稍后重试。");
+      const message = cause instanceof Error ? cause.message : "识景请求失败，请稍后重试。";
+      setError(message);
+      setHumanState("error", message);
+      speakWithHuman(message, { endState: "error", maxChars: 120 });
     } finally {
       setVisionLoading(false);
     }
@@ -278,6 +405,8 @@ export function MobileHomePage() {
     setRouteLoading(true);
     setError("");
     setRouteTheme(nextTheme);
+    speech.stop();
+    setHumanState("thinking", "我正在根据主题、时间和模拟拥挤度规划路线。");
     try {
       const result = await recommendRoute({
         theme: nextTheme,
@@ -291,8 +420,13 @@ export function MobileHomePage() {
         mustVisitAttractionIds: mustVisitIds,
       });
       setRouteResult(result);
+      setHumanState("happy", routeSpeechSummary(result));
+      speakWithHuman(routeSpeechSummary(result), { endState: "happy", maxChars: 320 });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "路线推荐失败，请稍后重试。");
+      const message = cause instanceof Error ? cause.message : "路线推荐失败，请稍后重试。";
+      setError(message);
+      setHumanState("error", message);
+      speakWithHuman(message, { endState: "error", maxChars: 120 });
     } finally {
       setRouteLoading(false);
     }
@@ -332,8 +466,12 @@ export function MobileHomePage() {
       });
       setFeedbackDone(`反馈已记录：${result.id}`);
       setFeedbackComment("");
+      setHumanState("happy", "谢谢反馈，我会把这条本地演示记录交给后台洞察。");
+      speakWithHuman("谢谢你的反馈，我已经记录到本地演示日志里。", { endState: "happy", maxChars: 80 });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "反馈提交失败，请稍后重试。");
+      const message = cause instanceof Error ? cause.message : "反馈提交失败，请稍后重试。";
+      setError(message);
+      setHumanState("error", message);
     } finally {
       setFeedbackLoading(false);
     }
@@ -349,7 +487,7 @@ export function MobileHomePage() {
         <StatusBadge tone={error ? "warning" : "ok"}>{error ? "需要处理" : "mock 在线"}</StatusBadge>
       </header>
 
-      <DigitalHumanMock state={humanState} className="mobile-avatar" />
+      <DigitalHumanMock caption={humanCaption} state={humanState} className="mobile-avatar" />
 
       <section className="mobile-greeting" aria-labelledby="mobile-greeting-title">
         <span className="eyebrow">AI 导游待命</span>
@@ -389,10 +527,11 @@ export function MobileHomePage() {
               value={question}
             />
             <button
-              aria-label="语音输入稍后接入，当前文本优先"
-              className="composer-voice"
-              disabled
-              title="语音输入稍后接入，当前文本优先"
+              aria-label={recognition.listening ? "停止语音输入" : "开始语音输入"}
+              aria-pressed={recognition.listening}
+              className={`composer-voice ${recognition.listening ? "composer-voice--active" : ""}`}
+              onClick={toggleVoiceInput}
+              title={recognition.supported ? "语音识别会填入文本框，发送前可确认" : "当前浏览器不支持语音输入时会降级为文本"}
               type="button"
             >
               <Mic aria-hidden="true" size={18} />
@@ -410,8 +549,24 @@ export function MobileHomePage() {
             </Button>
           </div>
           <p className="composer-helper" id="composer-helper">
-            按 Enter 发送；语音入口当前为附属 mock，文本问答可直接演示。
+            按 Enter 发送；语音会先填入文本框，确认后再发送。
           </p>
+          <div className="speech-control-row" aria-label="数字人语音控制">
+            <Button
+              className="speech-control-button"
+              disabled={!qaResult && !routeResult && !visionResult}
+              icon={speech.speaking ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              onClick={speech.speaking ? stopSpeaking : speakLatestAnswer}
+              type="button"
+              variant={speech.speaking ? "quiet" : "secondary"}
+            >
+              {speech.speaking ? "停止播报" : "播报最新回答"}
+            </Button>
+            <span>
+              {speech.supported ? "TTS 使用浏览器 SpeechSynthesis" : "此浏览器不支持 TTS，文本可用"}
+              {recognition.listening ? " · 正在听取" : ""}
+            </span>
+          </div>
         </form>
 
         {error ? (
@@ -792,7 +947,7 @@ export function MobileHomePage() {
       </section>
 
       <nav className="mobile-actions" aria-label="游客主操作">
-        <IconButton disabled icon={Mic} label="语音稍后" />
+        <IconButton icon={Mic} label={recognition.listening ? "停止听取" : "语音"} onClick={toggleVoiceInput} />
         <IconButton icon={Camera} label="拍照" onClick={() => fileInputRef.current?.click()} />
         <IconButton icon={Map} label="路线" onClick={focusRoutePanel} />
         <IconButton icon={Navigation} label="终端" onClick={() => window.location.assign("/kiosk")} />

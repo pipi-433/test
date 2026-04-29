@@ -1,6 +1,6 @@
 # 灵境导游
 
-中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐、自然语言路线推荐、Route Memory Agent、模拟拥挤度分流、Kiosk 二维码路线带走和本地交互日志/反馈洞察闭环；默认无 API Key 可运行。
+中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐、自然语言路线推荐、Route Memory Agent、模拟拥挤度分流、Kiosk 二维码路线带走、本地交互日志/反馈洞察和数字人语音演示闭环；默认无 API Key 可运行。
 
 ## 本轮实现
 
@@ -12,6 +12,7 @@
 - 自然语言路线推荐：规则 parser 将“老人孩子、3 小时、别太挤、必去景点”等口语输入转为结构化约束，再由受控路线规划器生成路线。
 - Route Memory Agent：本地 mock 会话记忆保存偏好、必去点、避开点和上一条路线，支持缩短、少走路、避拥挤、多拍照、多历史等多轮重规划。
 - 路线约束规则矩阵：集中 `ROUTE_CONSTRAINT_RULES`，补齐必去/避开冲突、无效景点、短时长、多 session 隔离和取消必去等边界评测。
+- 数字人语音演示层：React/SVG/CSS 2D 数字人状态机，接入浏览器 SpeechSynthesis TTS、可选 SpeechRecognition 输入和文本降级。
 - Kiosk 路线带走：终端生成拥挤度感知路线，展示二维码、短码和手机打开链接，手机访问 `/route/:id/share?code=...` 查看同一条路线。
 - 交互日志与反馈：QA、识景、路线、二维码带走和游客反馈写入本地 SQLite，后台 `/admin` 读取 `/api/analytics/overview` 展示运营洞察。
 - DX 配置：`.env.example`、README、Task 02 目录预留。
@@ -260,6 +261,19 @@ Task 06.9 将路线约束集中到 `backend/app/services/route_service.py` 的 `
 
 后续接入真实 LLM/RAG 时，只能增强意图解析和讲解表达，不得绕过 `ROUTE_CONSTRAINT_RULES` 直接生成路线点位。
 
+### 数字人语音、TTS 与状态机
+
+Task 07 增加第一版可演示的 2D 数字人语音层，仍然保持 mock provider 模式，无需真实 TTS Key：
+
+- 数字人使用 React + SVG/CSS 实现，不引入 Live2D、PixiJS 或生产级 3D 资产。
+- 状态机覆盖 `welcome`、`listening`、`thinking`、`speaking`、`comforting`、`error` 和 `happy`。
+- 游客端 QA、识景、路线推荐、澄清追问、反馈成功和错误兜底会驱动数字人状态变化。
+- TTS 使用浏览器 `window.speechSynthesis`，优先选择 `zh-CN` 声音；新播报会先停止上一段，长文本会截断为演示摘要。
+- 语音输入使用浏览器 `SpeechRecognition` / `webkitSpeechRecognition`（如可用），识别结果只填入文本框，由游客确认后发送。
+- 浏览器不支持语音能力时，页面会提示“文本提问仍可用”，不影响 QA、路线、识景和反馈主流程。
+
+兼容边界：浏览器可能因系统语音包、权限、无头环境或自动播放策略限制 TTS/语音识别；本项目不接真实语音服务、不写真实 API Key，评审演示时优先使用文本主入口，语音作为附属能力。
+
 ### Kiosk 二维码带走
 
 Kiosk 页面 `/kiosk` 可点击“生成推荐路线”，后端会在当前进程内缓存完整路线，并返回 `share.share_code`、`share.share_url`、`qr_payload` 和过期时间。终端展示二维码、短码和手机打开链接。
@@ -309,4 +323,4 @@ Invoke-RestMethod http://127.0.0.1:8000/api/analytics/overview
 
 ## 后续任务
 
-Task 07 将在当前 mock QA、识景、路线和拥挤度分流基础上继续打磨拍照识景演示能力；原始资料包仍作为只读来源。
+后续可继续推进更高拟真度的数字人表现、真实 TTS provider、真实语音识别或更完整的多模态讲解，但这些能力仍应在 mock 模式稳定、无 API Key 可运行的前提下逐步接入。

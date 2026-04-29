@@ -133,7 +133,14 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-3);
   background: var(--color-surface-muted);
-  color: var(--color-ink-500);
+  color: var(--color-primary-700);
+  cursor: pointer;
+}
+
+.composer-voice--active {
+  border-color: var(--color-accent-500);
+  background: var(--color-accent-100);
+  color: var(--color-warning);
 }
 
 .composer-send {
@@ -146,6 +153,19 @@
   color: var(--color-ink-500);
   font-size: var(--font-sm);
   line-height: 1.5;
+}
+
+.speech-control-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--color-ink-500);
+  font-size: var(--font-sm);
+}
+
+.speech-control-button {
+  min-height: 44px;
 }
 
 .attraction-context {
