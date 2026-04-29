@@ -1,18 +1,18 @@
 {
-  "generated_at": "2026-04-29T08:40:28+00:00",
+  "generated_at": "2026-04-29T09:42:58+00:00",
   "mode": "mock",
   "total": 7,
   "passed": 7,
   "failed": 0,
   "accuracy": 1.0,
-  "route_id": "route-42551ef481",
-  "share_code": "LJ-DD451C",
+  "route_id": "route-019d9b2cf1",
+  "share_code": "LJ-63CD3B",
   "results": [
     {
       "id": "share-code-and-url-created",
       "passed": true,
-      "share_code": "LJ-DD451C",
-      "share_url": "/route/route-42551ef481/share?code=LJ-DD451C"
+      "share_code": "LJ-63CD3B",
+      "share_url": "/route/route-019d9b2cf1/share?code=LJ-63CD3B"
     },
     {
       "id": "valid-code-returns-full-route",
@@ -21,8 +21,8 @@
     {
       "id": "stops-count-stable",
       "passed": true,
-      "original": 6,
-      "shared": 6
+      "original": 5,
+      "shared": 5
     },
     {
       "id": "does-not-expose-session-id",

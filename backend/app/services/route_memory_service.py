@@ -93,7 +93,7 @@ def apply_intent_to_memory(
         preferences["interests"] = _merge_unique(preferences.get("interests", []), intent["interests"])
     if intent.get("avoid_crowd"):
         preferences["avoid_crowd"] = True
-    if intent.get("crowd_tolerance"):
+    if intent.get("avoid_crowd") and intent.get("crowd_tolerance"):
         preferences["crowd_tolerance"] = intent["crowd_tolerance"]
     if selected_attraction_id:
         preferences["start_attraction_id"] = selected_attraction_id
@@ -129,7 +129,7 @@ def apply_intent_to_memory(
         )
 
     if operation == "shorten":
-        preferences["time_budget_minutes"] = max(90, int(preferences.get("time_budget_minutes") or 240) - 60)
+        preferences["time_budget_minutes"] = max(90, int(preferences.get("time_budget_minutes") or 240) - 90)
         updated["last_reason"] = "用户要求缩短路线，已降低时间预算并保留必去点。"
     elif operation == "less_walking":
         preferences["intensity"] = "easy"

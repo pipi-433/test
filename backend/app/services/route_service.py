@@ -49,6 +49,26 @@ THEME_LABELS = {
     "photo": "拍照打卡",
 }
 
+CORE_LANDMARK_IDS = {
+    "lingshan-ls-001",
+    "lingshan-ls-006",
+    "lingshan-ls-010",
+    "lingshan-ls-011",
+    "lingshan-ls-013",
+    "lingshan-ls-014",
+    "nianhuawan-nh-002",
+    "nianhuawan-nh-003",
+    "nianhuawan-nh-005",
+}
+
+THEME_PROFILE_KEYWORDS = {
+    "family": ["亲子", "孩子", "儿童", "互动", "轻松", "弥勒", "广场", "演艺", "休闲"],
+    "history": ["历史", "文化", "典故", "博览", "寺", "柱", "塔", "坛城", "照壁", "佛教"],
+    "nature": ["自然", "花", "湖", "桥", "谷", "水", "大道", "休闲", "慢行", "漫步"],
+    "blessing": ["祈福", "朝圣", "拜佛", "佛", "禅寺", "坛", "门", "大佛", "香"],
+    "photo": ["拍照", "打卡", "夜游", "花街", "花海", "湖", "照壁", "塔", "广场", "出片"],
+}
+
 ROUTE_TEMPLATES: dict[str, dict[str, Any]] = {
     "family": {
         "title": "亲子轻松路线",
@@ -176,6 +196,7 @@ def _make_stop(
     walk_minutes: int,
     focus: str,
     reason: str,
+    selection_source: str = "template_seed",
 ) -> dict[str, Any]:
     return {
         "order": order,
@@ -193,6 +214,109 @@ def _make_stop(
         "constraint_reason": "来自主题路线模板的系统推荐点。",
         "crowd_action": "keep",
         "decision_reason": "符合当前路线主题与基础动线。",
+        "selection_source": selection_source,
+    }
+
+
+def _profile_text(attraction: dict[str, Any]) -> str:
+    values = [
+        attraction.get("name"),
+        attraction.get("scenic_area"),
+        attraction.get("category"),
+        attraction.get("summary"),
+        attraction.get("description"),
+        attraction.get("location"),
+        attraction.get("core_function"),
+        " ".join(str(tag) for tag in attraction.get("tags", [])),
+        " ".join(str(item) for item in attraction.get("visitor_tips", [])),
+        " ".join(str(item) for item in attraction.get("culture_points", [])),
+        " ".join(str(item) for item in attraction.get("history_points", [])),
+    ]
+    return " ".join(str(value or "") for value in values)
+
+
+def build_attraction_route_profile(attraction: dict[str, Any]) -> dict[str, Any]:
+    text = _profile_text(attraction)
+    category = str(attraction.get("category") or "")
+    tags = [str(tag) for tag in attraction.get("tags", [])]
+    attraction_id = str(attraction.get("id") or "")
+    name = str(attraction.get("name") or "")
+    scores: dict[str, int] = {}
+    for theme, keywords in THEME_PROFILE_KEYWORDS.items():
+        score = 32
+        score += sum(9 for keyword in keywords if keyword in text)
+        score += 12 if THEME_LABELS[theme][:2] in text else 0
+        if theme == "family" and any(tag in tags for tag in ["亲子友好", "演艺提醒", "休闲漫步"]):
+            score += 18
+        if theme == "history" and ("历史文化" in tags or "佛教文化" in tags or "博览" in name):
+            score += 18
+        if theme == "nature" and (category == "自然休闲" or any(tag in tags for tag in ["休闲漫步", "夜游"])):
+            score += 18
+        if theme == "blessing" and ("佛教文化" in tags or any(key in name for key in ["佛", "寺", "坛", "门"])):
+            score += 18
+        if theme == "photo" and any(tag in tags for tag in ["拍照打卡", "夜游"]):
+            score += 18
+        scores[f"{theme}_score"] = max(0, min(100, score))
+
+    is_core = attraction_id in CORE_LANDMARK_IDS
+    route_priority = 66 if is_core else 50
+    route_priority += 8 if any(tag in tags for tag in ["路线节点", "演艺提醒"]) else 0
+    route_priority += 8 if any(tag in tags for tag in ["拍照打卡", "历史文化"]) else 0
+    route_priority += 4 if attraction.get("scenic_area") == "拈花湾禅意小镇" else 0
+    default_stay = get_default_stay_minutes(attraction)
+    return {
+        **scores,
+        "route_priority": max(0, min(100, route_priority)),
+        "default_stay_minutes": default_stay,
+        "is_core_landmark": is_core,
+    }
+
+
+def score_attraction_for_theme(attraction: dict[str, Any], theme: str) -> int:
+    profile = build_attraction_route_profile(attraction)
+    return int(profile.get(f"{theme}_score", 45))
+
+
+def get_default_stay_minutes(attraction: dict[str, Any]) -> int:
+    name = str(attraction.get("name") or "")
+    category = str(attraction.get("category") or "")
+    tags = set(str(tag) for tag in attraction.get("tags", []))
+    if name in {"灵山梵宫", "五印坛城", "佛教文化博览馆"}:
+        return 40
+    if name in {"灵山大佛", "祥符禅寺", "九龙灌浴", "梵天花海", "五灯湖", "香月花街"}:
+        return 32
+    if "演艺提醒" in tags or category == "演艺互动":
+        return 28
+    if category == "自然休闲" or "休闲漫步" in tags:
+        return 24
+    if category == "禅意商业":
+        return 30
+    return 22
+
+
+def explain_profile_match(attraction: dict[str, Any], theme: str) -> str:
+    profile = build_attraction_route_profile(attraction)
+    tags = [str(tag) for tag in attraction.get("tags", [])]
+    tag_text = "、".join(tags[:3]) or str(attraction.get("category") or "景点")
+    return f"{attraction['name']} 与{THEME_LABELS[theme]}主题匹配 {profile.get(f'{theme}_score', 0)} 分，依据：{tag_text}。"
+
+
+def _with_route_profile(
+    stop: dict[str, Any],
+    *,
+    theme: str,
+    selection_source: str | None = None,
+    profile_match_reason: str | None = None,
+) -> dict[str, Any]:
+    attraction = get_attraction(stop["attraction_id"]) or stop
+    profile = build_attraction_route_profile(attraction)
+    source = selection_source or stop.get("selection_source") or "template_seed"
+    return {
+        **stop,
+        "selection_source": source,
+        "route_profile_scores": profile,
+        "theme_score": int(profile.get(f"{theme}_score", 0)),
+        "profile_match_reason": profile_match_reason or explain_profile_match(attraction, theme),
     }
 
 
@@ -216,13 +340,18 @@ def _select_template_stops(
             break
         total = proposed_total
         selected.append(
-            _make_stop(
-                order=len(selected) + 1,
-                attraction=attraction,
-                stay_minutes=stay,
-                walk_minutes=walk if selected else 0,
-                focus=focus,
-                reason=reason,
+            _with_route_profile(
+                _make_stop(
+                    order=len(selected) + 1,
+                    attraction=attraction,
+                    stay_minutes=stay,
+                    walk_minutes=walk if selected else 0,
+                    focus=focus,
+                    reason=reason,
+                    selection_source="template_seed",
+                ),
+                theme=theme,
+                selection_source="template_seed",
             )
         )
 
@@ -231,13 +360,18 @@ def _select_template_stops(
         if start and all(stop["attraction_id"] != start["id"] for stop in selected):
             selected.insert(
                 0,
-                _make_stop(
-                    order=1,
-                    attraction=start,
-                    stay_minutes=18,
-                    walk_minutes=0,
-                    focus="从当前景点出发",
-                    reason="根据你当前选择的景点，把它放在路线开头，方便现场继续游览。",
+                _with_route_profile(
+                    _make_stop(
+                        order=1,
+                        attraction=start,
+                        stay_minutes=max(18, min(get_default_stay_minutes(start), 28)),
+                        walk_minutes=0,
+                        focus="从当前景点出发",
+                        reason="根据你当前选择的景点，把它放在路线开头，方便现场继续游览。",
+                        selection_source="start_context",
+                    ),
+                    theme=theme,
+                    selection_source="start_context",
                 ),
             )
 
@@ -353,6 +487,8 @@ def _new_constraint_summary(constraints: dict[str, Any]) -> dict[str, Any]:
         "start_context_only": constraints["start_context_only"],
         "skipped_avoid_attraction_ids": [],
         "optional_not_selected_attraction_ids": [],
+        "full_pool_selected_attraction_ids": [],
+        "full_pool_not_selected_attraction_ids": [],
         "trimmed_attraction_ids": [],
         "warning": None,
         "notes": [],
@@ -399,6 +535,7 @@ def apply_route_constraints(
     stops: list[dict[str, Any]],
     constraints: dict[str, Any],
     time_budget_minutes: int,
+    theme: str = DEFAULT_THEME,
 ) -> tuple[list[dict[str, Any]], list[str], dict[str, Any], list[dict[str, Any]]]:
     attractions = _attraction_map()
     must_visit = constraints["must_visit_attraction_ids"]
@@ -437,9 +574,12 @@ def apply_route_constraints(
         constraint_type = "must_visit" if attraction_id in must_set else "optional" if attraction_id in optional_set else "recommended"
         if attraction_id in must_set and attraction_id in avoid_set:
             trace.append(f"{stop['name']} 同时命中必去和避开约束，本结果记录冲突；推荐前端应先让游客澄清。")
+        selection_source = "must_visit" if attraction_id in must_set else "optional_boost" if attraction_id in optional_set else stop.get("selection_source", "template_seed")
         constrained.append(
-            {
+            _with_route_profile(
+                {
                 **stop,
+                "selection_source": selection_source,
                 "constraint_type": constraint_type,
                 "constraint_reason": _constraint_reason(
                     constraint_type=constraint_type,
@@ -450,7 +590,10 @@ def apply_route_constraints(
                     attraction_name=attractions[attraction_id]["name"],
                     source="用户明确" if constraint_type != "recommended" else "路线模板",
                 ),
-            }
+                },
+                theme=theme,
+                selection_source=selection_source,
+            )
         )
 
     existing_ids = {stop["attraction_id"] for stop in constrained}
@@ -458,13 +601,18 @@ def apply_route_constraints(
         if attraction_id in existing_ids:
             continue
         attraction = attractions[attraction_id]
-        stop = _make_stop(
-            order=len(constrained) + 1,
-            attraction=attraction,
-            stay_minutes=35,
-            walk_minutes=12 if constrained else 0,
-            focus="必去景点讲解",
-            reason="用户明确提出一定要去，规划器按最高优先级保留。",
+        stop = _with_route_profile(
+            _make_stop(
+                order=len(constrained) + 1,
+                attraction=attraction,
+                stay_minutes=max(get_default_stay_minutes(attraction), 28),
+                walk_minutes=12 if constrained else 0,
+                focus="必去景点讲解",
+                reason="用户明确提出一定要去，规划器按最高优先级保留。",
+                selection_source="must_visit",
+            ),
+            theme=theme,
+            selection_source="must_visit",
         )
         stop.update(
             {
@@ -479,12 +627,12 @@ def apply_route_constraints(
         )
         constrained.append(stop)
         existing_ids.add(attraction_id)
-        trace.append(f"{attraction['name']} 不在原模板中，已按必去约束追加到路线。")
+        trace.append(f"{attraction['name']} 不在经典模板 seed 中，已从全量景点池按必去约束追加到路线。")
 
     for attraction_id in optional:
         if attraction_id in existing_ids:
             continue
-        if attraction_id in avoid_set or len(constrained) >= 6:
+        if attraction_id in avoid_set or len(constrained) >= 7:
             summary["optional_not_selected_attraction_ids"].append(attraction_id)
             if attraction_id in avoid_set:
                 trace.append(f"{attractions[attraction_id]['name']} 是可选点但也被标记为避开，未加入路线。")
@@ -492,13 +640,18 @@ def apply_route_constraints(
                 trace.append(f"{attractions[attraction_id]['name']} 是可选点，但当前站点数已满，未强制加入。")
             continue
         attraction = attractions[attraction_id]
-        stop = _make_stop(
-            order=len(constrained) + 1,
-            attraction=attraction,
-            stay_minutes=25,
-            walk_minutes=10 if constrained else 0,
-            focus="可选兴趣点",
-            reason="用户表达了兴趣，时间允许时作为补充站点。",
+        stop = _with_route_profile(
+            _make_stop(
+                order=len(constrained) + 1,
+                attraction=attraction,
+                stay_minutes=get_default_stay_minutes(attraction),
+                walk_minutes=10 if constrained else 0,
+                focus="可选兴趣点",
+                reason="用户表达了兴趣，时间允许时作为补充站点。",
+                selection_source="optional_boost",
+            ),
+            theme=theme,
+            selection_source="optional_boost",
         )
         stop.update(
             {
@@ -513,18 +666,23 @@ def apply_route_constraints(
         )
         constrained.append(stop)
         existing_ids.add(attraction_id)
-        trace.append(f"{attraction['name']} 已作为可选景点补充进路线。")
+        trace.append(f"{attraction['name']} 已从全量景点池作为可选景点补充进路线。")
 
     if not constrained:
         fallback = next((item for item in attractions.values() if item["id"] not in avoid_set), next(iter(attractions.values())))
         constrained.append(
-            _make_stop(
-                order=1,
-                attraction=fallback,
-                stay_minutes=20,
-                walk_minutes=0,
-                focus="兜底推荐",
-                reason="避开约束过滤了全部模板点，系统保留一个低风险入口点。",
+            _with_route_profile(
+                _make_stop(
+                    order=1,
+                    attraction=fallback,
+                    stay_minutes=get_default_stay_minutes(fallback),
+                    walk_minutes=0,
+                    focus="兜底推荐",
+                    reason="避开约束过滤了全部模板点，系统保留一个低风险入口点。",
+                    selection_source="full_pool",
+                ),
+                theme=theme,
+                selection_source="full_pool",
             )
         )
         constrained[0]["constraint_type"] = "alternative"
@@ -565,8 +723,124 @@ def _apply_constraint_rules(
         stops=stops,
         constraints=constraints,
         time_budget_minutes=480,
+        theme=DEFAULT_THEME,
     )
     return constrained, trace
+
+
+def _full_pool_candidate_score(
+    *,
+    attraction: dict[str, Any],
+    theme: str,
+    optional_set: set[str],
+    avoid_crowd: bool,
+    tolerance: str,
+) -> int:
+    profile = build_attraction_route_profile(attraction)
+    record = get_crowd_record(attraction["id"])
+    score = int(profile.get(f"{theme}_score", 0)) + int(profile.get("route_priority", 0)) // 2
+    if attraction["id"] in optional_set:
+        score += 32
+    if profile.get("is_core_landmark"):
+        score += 8
+    if avoid_crowd and record["crowd_level"] == "high":
+        score -= 28 if tolerance != "high" else 12
+    elif avoid_crowd and tolerance == "low" and record["crowd_level"] == "medium":
+        score -= 8
+    elif record["crowd_level"] == "low":
+        score += 8
+    return score
+
+
+def _add_full_pool_candidates(
+    *,
+    stops: list[dict[str, Any]],
+    constraints: dict[str, Any],
+    theme: str,
+    time_budget_minutes: int,
+    avoid_crowd: bool,
+    crowd_tolerance: str,
+    summary: dict[str, Any],
+    trace: list[str],
+) -> list[dict[str, Any]]:
+    attractions = _attraction_map()
+    existing_ids = {stop["attraction_id"] for stop in stops}
+    avoid_set = set(constraints["avoid_attraction_ids"])
+    optional_set = set(constraints["optional_attraction_ids"])
+    target_count = 3 if time_budget_minutes <= 120 else 5
+    max_count = 7
+    if len(stops) >= target_count and not optional_set.difference(existing_ids):
+        return stops
+
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    for attraction in attractions.values():
+        attraction_id = attraction["id"]
+        if attraction_id in existing_ids or attraction_id in avoid_set:
+            continue
+        score = _full_pool_candidate_score(
+            attraction=attraction,
+            theme=theme,
+            optional_set=optional_set,
+            avoid_crowd=avoid_crowd,
+            tolerance=crowd_tolerance,
+        )
+        candidates.append((score, attraction))
+
+    candidates.sort(key=lambda item: (item[0], item[1].get("scenic_area") == "拈花湾禅意小镇"), reverse=True)
+    for score, attraction in candidates:
+        if len(stops) >= max_count:
+            if attraction["id"] in optional_set:
+                summary["optional_not_selected_attraction_ids"].append(attraction["id"])
+                trace.append(f"{attraction['name']} 是可选点，但路线站点已达到上限，未纳入。")
+            else:
+                summary["full_pool_not_selected_attraction_ids"].append(attraction["id"])
+            continue
+        if len(stops) >= target_count and attraction["id"] not in optional_set and score < 102:
+            summary["full_pool_not_selected_attraction_ids"].append(attraction["id"])
+            continue
+        stay = get_default_stay_minutes(attraction)
+        projected = _estimated_minutes(stops) + stay + (10 if stops else 0)
+        if stops and projected > time_budget_minutes and attraction["id"] not in optional_set:
+            summary["full_pool_not_selected_attraction_ids"].append(attraction["id"])
+            continue
+        selection_source = "optional_boost" if attraction["id"] in optional_set else "full_pool"
+        constraint_type = "optional" if attraction["id"] in optional_set else "recommended"
+        stop = _with_route_profile(
+            _make_stop(
+                order=len(stops) + 1,
+                attraction=attraction,
+                stay_minutes=stay,
+                walk_minutes=10 if stops else 0,
+                focus="全量候选池推荐",
+                reason=explain_profile_match(attraction, theme),
+                selection_source=selection_source,
+            ),
+            theme=theme,
+            selection_source=selection_source,
+        )
+        stop.update(
+            {
+                "constraint_type": constraint_type,
+                "constraint_reason": (
+                    f"可选：{attraction['name']}由全量景点池和用户兴趣共同加权。"
+                    if constraint_type == "optional"
+                    else "推荐：经典模板之外的全量景点池补充点。"
+                ),
+                "decision_reason": (
+                    f"{attraction['name']} 来自全量景点候选池，主题分 {stop['theme_score']}，用于补足路线丰富度。"
+                    if constraint_type != "optional"
+                    else f"{attraction['name']} 是用户可选兴趣点，来自全量景点候选池，已优先纳入。"
+                ),
+            }
+        )
+        stops.append(stop)
+        existing_ids.add(attraction["id"])
+        summary["full_pool_selected_attraction_ids"].append(attraction["id"])
+        trace.append(
+            f"{attraction['name']} 来自全量景点池，selection_source={selection_source}，主题分 {stop['theme_score']}。"
+        )
+
+    return _reorder_stops(stops)
 
 
 def _safe_tolerance(value: str | None) -> str:
@@ -797,6 +1071,24 @@ def recommend_route(
         stops=stops,
         constraints=normalized_constraints,
         time_budget_minutes=budget,
+        theme=chosen_theme,
+    )
+    full_pool_trace: list[str] = []
+    stops = _add_full_pool_candidates(
+        stops=stops,
+        constraints=normalized_constraints,
+        theme=chosen_theme,
+        time_budget_minutes=budget,
+        avoid_crowd=avoid_crowd,
+        crowd_tolerance=tolerance,
+        summary=constraint_summary,
+        trace=full_pool_trace,
+    )
+    stops = _trim_for_time_budget(
+        stops=stops,
+        budget=budget,
+        summary=constraint_summary,
+        trace=full_pool_trace,
     )
     stops, crowd_trace = _apply_crowd_to_stops(
         stops=stops,
@@ -849,8 +1141,10 @@ def recommend_route(
     share = _share_payload(route_id, template["title"])
     decision_trace = [
         f"根据主题={THEME_LABELS[chosen_theme]}、时长={budget}分钟、同行={group_type or '未指定'}、体力={intensity or '未指定'}生成候选路线。",
+        "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         f"约束优先级：{' > '.join(ROUTE_CONSTRAINT_RULES['priority'])}。",
         *constraint_trace,
+        *full_pool_trace,
         f"拥挤策略：avoid_crowd={str(avoid_crowd).lower()}，crowd_tolerance={tolerance}，数据源={CROWD_SOURCE}。",
         *crowd_trace,
     ]

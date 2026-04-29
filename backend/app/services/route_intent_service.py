@@ -47,36 +47,136 @@ TIME_WORDS = {
     "全天": 8,
 }
 
-ATTRACTION_ALIASES = {
+BASE_ATTRACTION_ALIASES = {
     "大佛": "lingshan-ls-011",
     "灵山大佛": "lingshan-ls-011",
     "九龙": "lingshan-ls-006",
     "九龙灌浴": "lingshan-ls-006",
     "梵宫": "lingshan-ls-013",
     "灵山梵宫": "lingshan-ls-013",
+    "禅寺": "lingshan-ls-010",
     "祥符禅寺": "lingshan-ls-010",
+    "坛城": "lingshan-ls-014",
     "五印坛城": "lingshan-ls-014",
+    "花海": "nianhuawan-nh-002",
     "梵天花海": "nianhuawan-nh-002",
+    "花街": "nianhuawan-nh-003",
     "香月花街": "nianhuawan-nh-003",
     "五灯湖": "nianhuawan-nh-005",
 }
+
+CLAUSE_SEPARATORS = "，,。；;！!？?"
 
 
 def _contains_any(message: str, values: list[str]) -> bool:
     return any(value in message for value in values)
 
 
-def _match_attractions(message: str) -> list[str]:
+def _attraction_aliases() -> list[tuple[str, str]]:
     attractions = list_attractions()
-    ids_by_name = {item["name"]: item["id"] for item in attractions}
+    aliases: dict[str, str] = dict(BASE_ATTRACTION_ALIASES)
+    for item in attractions:
+        name = str(item.get("name") or "")
+        attraction_id = str(item.get("id") or "")
+        if not name or not attraction_id:
+            continue
+        aliases[name] = attraction_id
+        if name.startswith("灵山") and len(name) > 2:
+            aliases.setdefault(name[2:], attraction_id)
+        if name.startswith("拈花湾") and len(name) > 3:
+            aliases.setdefault(name[3:], attraction_id)
+    return sorted(aliases.items(), key=lambda item: len(item[0]), reverse=True)
+
+
+def _match_attraction_mentions(message: str) -> list[dict[str, Any]]:
+    mentions: list[dict[str, Any]] = []
+    seen_spans: set[tuple[int, int, str]] = set()
+    for alias, attraction_id in _attraction_aliases():
+        if not alias or len(alias) < 2:
+            continue
+        start = 0
+        while True:
+            index = message.find(alias, start)
+            if index < 0:
+                break
+            end = index + len(alias)
+            key = (index, end, attraction_id)
+            if key not in seen_spans:
+                mentions.append({"alias": alias, "attraction_id": attraction_id, "start": index, "end": end})
+                seen_spans.add(key)
+            start = end
+    mentions.sort(key=lambda item: (item["start"], -(item["end"] - item["start"])))
+    deduped: list[dict[str, Any]] = []
+    occupied: list[tuple[int, int]] = []
+    for mention in mentions:
+        span = (int(mention["start"]), int(mention["end"]))
+        if any(span[0] >= current[0] and span[1] <= current[1] for current in occupied):
+            continue
+        occupied.append(span)
+        deduped.append(mention)
+    return deduped
+
+
+def _match_attractions(message: str) -> list[str]:
     matches: list[str] = []
-    for alias, attraction_id in ATTRACTION_ALIASES.items():
-        if alias in message and attraction_id not in matches:
-            matches.append(attraction_id)
-    for name, attraction_id in ids_by_name.items():
-        if name in message and attraction_id not in matches:
+    for mention in _match_attraction_mentions(message):
+        attraction_id = mention["attraction_id"]
+        if attraction_id not in matches:
             matches.append(attraction_id)
     return matches
+
+
+def _context_for_mention(message: str, mention: dict[str, Any], radius: int = 12) -> str:
+    start = max(0, int(mention["start"]) - radius)
+    end = min(len(message), int(mention["end"]) + radius)
+    return message[start:end]
+
+
+def _clause_for_mention(message: str, mention: dict[str, Any]) -> str:
+    start = int(mention["start"])
+    end = int(mention["end"])
+    left = max(message.rfind(separator, 0, start) for separator in CLAUSE_SEPARATORS)
+    right_candidates = [
+        index
+        for separator in CLAUSE_SEPARATORS
+        for index in [message.find(separator, end)]
+        if index >= 0
+    ]
+    right = min(right_candidates) if right_candidates else len(message)
+    return message[left + 1 : right]
+
+
+def _classify_attraction_constraints(message: str) -> tuple[list[str], list[str], list[str], list[str]]:
+    must: list[str] = []
+    avoid: list[str] = []
+    optional: list[str] = []
+    conflicts: list[str] = []
+    for mention in _match_attraction_mentions(message):
+        attraction_id = mention["attraction_id"]
+        context = _clause_for_mention(message, mention)
+        is_remove = _contains_any(context, REMOVE_MUST_VISIT_KEYWORDS)
+        is_must = _contains_any(context, MUST_VISIT_KEYWORDS)
+        is_avoid = _contains_any(context, AVOID_ATTRACTION_KEYWORDS)
+        is_optional = _contains_any(context, ["想去", "想看", "看看", "感兴趣", "顺路", "可以去"])
+        if is_must and is_avoid and not is_remove:
+            if attraction_id not in conflicts:
+                conflicts.append(attraction_id)
+            if attraction_id not in must:
+                must.append(attraction_id)
+            if attraction_id not in avoid:
+                avoid.append(attraction_id)
+        elif is_remove or is_avoid:
+            if attraction_id not in avoid:
+                avoid.append(attraction_id)
+        elif is_must:
+            if attraction_id not in must:
+                must.append(attraction_id)
+        elif is_optional:
+            if attraction_id not in optional:
+                optional.append(attraction_id)
+        elif attraction_id not in optional:
+            optional.append(attraction_id)
+    return must, avoid, optional, conflicts
 
 
 def _parse_time_budget(message: str) -> int | None:
@@ -123,10 +223,11 @@ def parse_route_intent(
 ) -> dict[str, Any]:
     text = " ".join(str(message or "").strip().split())
     matched_ids = _match_attractions(text)
+    classified_must_ids, classified_avoid_ids, classified_optional_ids, classified_conflict_ids = _classify_attraction_constraints(text)
     has_must_phrase = _contains_any(text, MUST_VISIT_KEYWORDS)
     has_remove_phrase = _contains_any(text, REMOVE_MUST_VISIT_KEYWORDS)
     has_avoid_attraction_phrase = _contains_any(text, AVOID_ATTRACTION_KEYWORDS)
-    has_direct_conflict = bool(matched_ids and has_must_phrase and has_avoid_attraction_phrase and not has_remove_phrase)
+    has_direct_conflict = bool(classified_conflict_ids)
     operation = _infer_operation(text)
     style = _infer_style(text)
     theme = _infer_theme(text)
@@ -161,17 +262,18 @@ def parse_route_intent(
         interests.append("历史文化")
 
     if operation == "set_must_visit":
-        must_visit_ids = matched_ids
+        must_visit_ids = classified_must_ids or matched_ids
+        avoid_ids = classified_avoid_ids
     elif operation == "remove_must_visit":
-        avoid_ids = matched_ids
+        avoid_ids = classified_avoid_ids or matched_ids
     elif has_avoid_attraction_phrase:
-        avoid_ids = matched_ids
+        avoid_ids = classified_avoid_ids or matched_ids
     else:
-        optional_ids = matched_ids if matched_ids and not theme else []
+        optional_ids = classified_optional_ids or matched_ids
 
     if has_direct_conflict:
-        must_visit_ids = matched_ids
-        avoid_ids = matched_ids
+        must_visit_ids = classified_conflict_ids
+        avoid_ids = classified_conflict_ids
 
     route_keywords = [
         "路线",
@@ -217,7 +319,7 @@ def parse_route_intent(
         intent = "explanation_style"
     elif operation in {"shorten", "less_walking", "avoid_crowd", "more_photo", "more_history", "start_here"} or current_route_id:
         intent = "route_replan"
-    elif _contains_any(text, route_keywords) or theme or time_budget or must_visit_ids:
+    elif _contains_any(text, route_keywords) or theme or time_budget or must_visit_ids or optional_ids or avoid_ids:
         intent = "route_recommend"
     else:
         intent = "unknown"
@@ -276,7 +378,7 @@ def parse_route_intent(
         "mode": "mock_rule_parser",
         "metadata": {
             "matched_attraction_ids": matched_ids,
-            "conflict_attraction_ids": matched_ids if has_direct_conflict else [],
+            "conflict_attraction_ids": classified_conflict_ids if has_direct_conflict else [],
             "memory_turn_count": (memory or {}).get("turn_count"),
         },
     }

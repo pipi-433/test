@@ -348,11 +348,62 @@
   gap: var(--space-3);
 }
 
+.route-constraint-picker,
 .must-visit-picker {
   display: grid;
   gap: var(--space-2);
 }
 
+.route-constraint-picker {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  background: var(--color-surface-muted);
+}
+
+.route-constraint-picker__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.route-constraint-picker__header span:last-child,
+.constraint-selected-group small,
+.route-constraint-row span {
+  color: var(--color-ink-500);
+  font-size: var(--font-sm);
+}
+
+.route-constraint-search {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: 0 var(--space-3);
+  background: white;
+  color: var(--color-ink-900);
+  font: inherit;
+}
+
+.constraint-selected-groups,
+.route-constraint-results {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.constraint-selected-group {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.constraint-selected-group > span {
+  color: var(--color-ink-700);
+  font-size: var(--font-sm);
+  font-weight: 800;
+}
+
+.constraint-selected-chips,
 .must-visit-chip-row,
 .constraint-badge-row {
   display: flex;
@@ -360,6 +411,7 @@
   gap: var(--space-2);
 }
 
+.constraint-chip,
 .must-visit-chip {
   min-height: 44px;
   border: 1px solid var(--color-border);
@@ -371,10 +423,88 @@
   font-weight: 700;
 }
 
+.constraint-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.constraint-chip span {
+  color: var(--color-ink-500);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.constraint-chip--must {
+  border-color: var(--color-accent-500);
+  background: var(--color-accent-100);
+}
+
+.constraint-chip--optional {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+}
+
+.constraint-chip--avoid {
+  border-color: var(--color-warning);
+  background: #fff7ed;
+}
+
 .must-visit-chip--active {
   border-color: var(--color-accent-500);
   background: var(--color-accent-100);
   color: var(--color-accent-700);
+}
+
+.route-constraint-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.route-constraint-row strong {
+  display: block;
+  color: var(--color-ink-900);
+}
+
+.route-constraint-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.constraint-action {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: white;
+  color: var(--color-ink-700);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.constraint-action--active {
+  border-width: 2px;
+}
+
+.constraint-action--must.constraint-action--active {
+  border-color: var(--color-accent-500);
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+}
+
+.constraint-action--optional.constraint-action--active {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.constraint-action--avoid.constraint-action--active {
+  border-color: var(--color-warning);
+  background: #fff7ed;
+  color: var(--color-warning);
 }
 
 .route-theme-grid {
@@ -400,6 +530,9 @@
 }
 
 .route-theme:focus-visible,
+.route-constraint-search:focus-visible,
+.constraint-chip:focus-visible,
+.constraint-action:focus-visible,
 .must-visit-chip:focus-visible,
 .route-stop .quick-question:focus-visible,
 .crowd-switch:focus-within {
@@ -565,6 +698,12 @@
   padding-left: var(--space-2);
   color: var(--color-primary-700);
   font-weight: 650;
+}
+
+.profile-match-note {
+  border-left: 3px solid var(--color-accent-500);
+  padding-left: var(--space-2);
+  color: var(--color-ink-600);
 }
 
 .mobile-empty {

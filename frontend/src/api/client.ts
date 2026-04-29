@@ -78,6 +78,19 @@ export type RouteStop = {
   constraint_reason?: string;
   crowd_action?: "keep" | "delay" | "replace" | "avoid" | "skip" | "keep_with_warning";
   decision_reason?: string;
+  selection_source?: "must_visit" | "template_seed" | "full_pool" | "optional_boost" | "start_context" | string;
+  profile_match_reason?: string;
+  theme_score?: number;
+  route_profile_scores?: {
+    family_score?: number;
+    history_score?: number;
+    nature_score?: number;
+    blessing_score?: number;
+    photo_score?: number;
+    route_priority?: number;
+    default_stay_minutes?: number;
+    is_core_landmark?: boolean;
+  };
 };
 
 export type RouteConstraintConflict = {
@@ -98,6 +111,8 @@ export type RouteConstraintSummary = {
   start_context_only: boolean;
   skipped_avoid_attraction_ids: string[];
   optional_not_selected_attraction_ids: string[];
+  full_pool_selected_attraction_ids?: string[];
+  full_pool_not_selected_attraction_ids?: string[];
   trimmed_attraction_ids: string[];
   warning: string | null;
   notes: string[];

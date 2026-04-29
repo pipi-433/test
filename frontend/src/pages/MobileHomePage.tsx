@@ -7,7 +7,7 @@ import {
   FileImage,
   Heart,
   Layers,
-  Map,
+  Map as MapIcon,
   Mic,
   Navigation,
   Route as RouteIcon,
@@ -66,6 +66,9 @@ const routeIntentKeywords = [
   "必须看",
   "必须去",
   "不能错过",
+  "想去",
+  "想看",
+  "避开",
   "不想去",
   "不去",
   "跳过",
@@ -78,13 +81,7 @@ const routeIntentKeywords = [
   "三十秒",
   "讲深入",
 ];
-const mustVisitOptions = [
-  { id: "lingshan-ls-011", label: "灵山大佛" },
-  { id: "lingshan-ls-006", label: "九龙灌浴" },
-  { id: "lingshan-ls-013", label: "灵山梵宫" },
-  { id: "lingshan-ls-010", label: "祥符禅寺" },
-  { id: "lingshan-ls-014", label: "五印坛城" },
-];
+type RouteConstraintKind = "must" | "optional" | "avoid";
 
 function shortText(value: string | undefined, limit = 88) {
   if (!value) {
@@ -118,6 +115,21 @@ function crowdActionLabel(value: string | undefined) {
     skip: "已跳过",
   };
   return value ? labels[value] || "保留" : "保留";
+}
+
+function selectionSourceLabel(value: string | undefined) {
+  const labels: Record<string, string> = {
+    must_visit: "必去约束",
+    optional_boost: "可选加权",
+    template_seed: "经典 seed",
+    full_pool: "全量候选池",
+    start_context: "起点上下文",
+  };
+  return value ? labels[value] || value : "系统推荐";
+}
+
+function attractionSearchText(item: Attraction) {
+  return [item.name, item.scenic_area, item.category, ...(item.tags || [])].join(" ").toLowerCase();
 }
 
 function speechExcerpt(value: string | undefined, limit = 420) {
@@ -154,6 +166,9 @@ export function MobileHomePage() {
   const [avoidCrowd, setAvoidCrowd] = useState(true);
   const [crowdTolerance, setCrowdTolerance] = useState<CrowdLevel>("medium");
   const [mustVisitIds, setMustVisitIds] = useState<string[]>([]);
+  const [optionalAttractionIds, setOptionalAttractionIds] = useState<string[]>([]);
+  const [avoidAttractionIds, setAvoidAttractionIds] = useState<string[]>([]);
+  const [routeConstraintQuery, setRouteConstraintQuery] = useState("");
   const [routeResult, setRouteResult] = useState<RouteRecommendation | null>(null);
   const [routeSessionId, setRouteSessionId] = useState("");
   const [routeConversation, setRouteConversation] = useState<RouteConversationResponse | null>(null);
@@ -201,6 +216,22 @@ export function MobileHomePage() {
     () => attractions.find((item) => item.id === selectedId) || null,
     [attractions, selectedId],
   );
+
+  const attractionById = useMemo(() => new Map(attractions.map((item) => [item.id, item])), [attractions]);
+  const routeConstraintResults = useMemo(() => {
+    const query = routeConstraintQuery.trim().toLowerCase();
+    const scored = attractions.map((item) => {
+      const selected =
+        mustVisitIds.includes(item.id) || optionalAttractionIds.includes(item.id) || avoidAttractionIds.includes(item.id);
+      const matches = !query || attractionSearchText(item).includes(query);
+      return { item, matches, selected };
+    });
+    return scored
+      .filter(({ matches }) => matches)
+      .sort((a, b) => Number(b.selected) - Number(a.selected) || a.item.scenic_area.localeCompare(b.item.scenic_area))
+      .slice(0, query ? 10 : 8)
+      .map(({ item }) => item);
+  }, [attractions, avoidAttractionIds, mustVisitIds, optionalAttractionIds, routeConstraintQuery]);
 
   function scrollAnswerIntoView(block: ScrollLogicalPosition = "start") {
     window.setTimeout(() => {
@@ -322,6 +353,8 @@ export function MobileHomePage() {
           setAvoidCrowd(result.route.crowd_policy.avoid_crowd);
           setCrowdTolerance(result.route.crowd_policy.crowd_tolerance);
           setMustVisitIds(result.memory.constraints.must_visit_attraction_ids || []);
+          setOptionalAttractionIds(result.memory.constraints.optional_attraction_ids || []);
+          setAvoidAttractionIds(result.memory.constraints.avoid_attraction_ids || []);
           window.setTimeout(() => routePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
         }
         if (result.needs_clarification) {
@@ -418,6 +451,8 @@ export function MobileHomePage() {
         avoidCrowd,
         crowdTolerance,
         mustVisitAttractionIds: mustVisitIds,
+        optionalAttractionIds,
+        avoidAttractionIds,
       });
       setRouteResult(result);
       setHumanState("happy", routeSpeechSummary(result));
@@ -445,10 +480,40 @@ export function MobileHomePage() {
     );
   }
 
-  function toggleMustVisit(attractionId: string) {
-    setMustVisitIds((current) =>
-      current.includes(attractionId) ? current.filter((item) => item !== attractionId) : [...current, attractionId],
-    );
+  function addRouteConstraint(kind: RouteConstraintKind, attractionId: string) {
+    if (kind === "must") {
+      setMustVisitIds((current) => (current.includes(attractionId) ? current : [...current, attractionId]));
+      setOptionalAttractionIds((current) => current.filter((item) => item !== attractionId));
+      setAvoidAttractionIds((current) => current.filter((item) => item !== attractionId));
+      return;
+    }
+    if (kind === "optional") {
+      setOptionalAttractionIds((current) => (current.includes(attractionId) ? current : [...current, attractionId]));
+      setMustVisitIds((current) => current.filter((item) => item !== attractionId));
+      setAvoidAttractionIds((current) => current.filter((item) => item !== attractionId));
+      return;
+    }
+    setAvoidAttractionIds((current) => (current.includes(attractionId) ? current : [...current, attractionId]));
+    setMustVisitIds((current) => current.filter((item) => item !== attractionId));
+    setOptionalAttractionIds((current) => current.filter((item) => item !== attractionId));
+  }
+
+  function removeRouteConstraint(kind: RouteConstraintKind, attractionId: string) {
+    if (kind === "must") {
+      setMustVisitIds((current) => current.filter((item) => item !== attractionId));
+    } else if (kind === "optional") {
+      setOptionalAttractionIds((current) => current.filter((item) => item !== attractionId));
+    } else {
+      setAvoidAttractionIds((current) => current.filter((item) => item !== attractionId));
+    }
+  }
+
+  function selectedConstraintIds(kind: RouteConstraintKind) {
+    return kind === "must" ? mustVisitIds : kind === "optional" ? optionalAttractionIds : avoidAttractionIds;
+  }
+
+  function isConstraintSelected(kind: RouteConstraintKind, attractionId: string) {
+    return selectedConstraintIds(kind).includes(attractionId);
   }
 
   async function sendFeedback() {
@@ -783,19 +848,83 @@ export function MobileHomePage() {
               </option>
             ))}
           </select>
-          <div className="must-visit-picker" aria-label="必去景点约束">
-            <span className="field-label">必去景点</span>
-            <div className="must-visit-chip-row">
-              {mustVisitOptions.map((item) => (
-                <button
-                  className={mustVisitIds.includes(item.id) ? "must-visit-chip must-visit-chip--active" : "must-visit-chip"}
-                  key={item.id}
-                  onClick={() => toggleMustVisit(item.id)}
-                  type="button"
-                >
-                  {item.label}
-                </button>
+          <div className="route-constraint-picker" aria-label="全量景点路线约束">
+            <div className="route-constraint-picker__header">
+              <span className="field-label">全量景点约束</span>
+              <span>{attractions.length} 个已解析景点都可参与规划</span>
+            </div>
+            <label className="field-label" htmlFor="route-constraint-search">
+              搜索景点
+            </label>
+            <input
+              className="route-constraint-search"
+              id="route-constraint-search"
+              onChange={(event) => setRouteConstraintQuery(event.target.value)}
+              placeholder="搜香月花街、五灯湖、梵天花海..."
+              value={routeConstraintQuery}
+            />
+            <div className="constraint-selected-groups" aria-label="已选择的路线约束">
+              {[
+                { kind: "must" as const, label: "必去", ids: mustVisitIds },
+                { kind: "optional" as const, label: "可选", ids: optionalAttractionIds },
+                { kind: "avoid" as const, label: "避开", ids: avoidAttractionIds },
+              ].map((group) => (
+                <div className="constraint-selected-group" key={group.kind}>
+                  <span>{group.label}</span>
+                  {group.ids.length ? (
+                    <div className="constraint-selected-chips">
+                      {group.ids.map((id) => (
+                        <button
+                          className={`constraint-chip constraint-chip--${group.kind}`}
+                          key={`${group.kind}-${id}`}
+                          onClick={() => removeRouteConstraint(group.kind, id)}
+                          type="button"
+                        >
+                          {attractionById.get(id)?.name || id}
+                          <span>移除</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <small>未选择</small>
+                  )}
+                </div>
               ))}
+            </div>
+            <div className="route-constraint-results" aria-label="景点搜索结果">
+              {routeConstraintResults.map((item) => (
+                <div className="route-constraint-row" key={item.id}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>
+                      {item.scenic_area}
+                      {item.category ? ` · ${item.category}` : ""}
+                    </span>
+                  </div>
+                  <div className="route-constraint-actions">
+                    {[
+                      { kind: "must" as const, label: "必去" },
+                      { kind: "optional" as const, label: "可选" },
+                      { kind: "avoid" as const, label: "避开" },
+                    ].map((action) => (
+                      <button
+                        aria-pressed={isConstraintSelected(action.kind, item.id)}
+                        className={
+                          isConstraintSelected(action.kind, item.id)
+                            ? `constraint-action constraint-action--${action.kind} constraint-action--active`
+                            : `constraint-action constraint-action--${action.kind}`
+                        }
+                        key={`${item.id}-${action.kind}`}
+                        onClick={() => addRouteConstraint(action.kind, item.id)}
+                        type="button"
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {routeConstraintResults.length === 0 ? <p className="empty-state mobile-empty">没有匹配景点，请换一个关键词。</p> : null}
             </div>
           </div>
         </div>
@@ -867,6 +996,9 @@ export function MobileHomePage() {
                       <StatusBadge tone={stop.constraint_type === "must_visit" ? "ok" : "neutral"}>
                         {constraintLabel(stop.constraint_type)}
                       </StatusBadge>
+                      <StatusBadge tone={stop.selection_source === "full_pool" || stop.selection_source === "optional_boost" ? "ok" : "neutral"}>
+                        {selectionSourceLabel(stop.selection_source)}
+                      </StatusBadge>
                       <StatusBadge tone={stop.crowd_action === "delay" || stop.crowd_action === "keep_with_warning" ? "warning" : "neutral"}>
                         {crowdActionLabel(stop.crowd_action)}
                       </StatusBadge>
@@ -882,6 +1014,12 @@ export function MobileHomePage() {
                       <span>等待约 {stop.wait_minutes} 分钟</span>
                     </div>
                     <p>{stop.focus}：{stop.reason}</p>
+                    {stop.profile_match_reason ? (
+                      <p className="profile-match-note">
+                        {stop.profile_match_reason}
+                        {typeof stop.theme_score === "number" ? ` 主题分 ${stop.theme_score}` : ""}
+                      </p>
+                    ) : null}
                     {stop.constraint_reason ? <p className="constraint-note">{stop.constraint_reason}</p> : null}
                     <p className="crowd-note">{stop.crowd_note}</p>
                     <button className="quick-question" type="button" onClick={() => void submitQuestion(stop.narration_question)}>
@@ -949,7 +1087,7 @@ export function MobileHomePage() {
       <nav className="mobile-actions" aria-label="游客主操作">
         <IconButton icon={Mic} label={recognition.listening ? "停止听取" : "语音"} onClick={toggleVoiceInput} />
         <IconButton icon={Camera} label="拍照" onClick={() => fileInputRef.current?.click()} />
-        <IconButton icon={Map} label="路线" onClick={focusRoutePanel} />
+        <IconButton icon={MapIcon} label="路线" onClick={focusRoutePanel} />
         <IconButton icon={Navigation} label="终端" onClick={() => window.location.assign("/kiosk")} />
       </nav>
 

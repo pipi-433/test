@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-29T08:40:27+00:00",
+  "generated_at": "2026-04-29T09:42:44+00:00",
   "mode": "mock",
   "snapshot_ok": true,
   "snapshot_count": 8,
@@ -7,7 +7,7 @@
   "passed": 5,
   "failed": 0,
   "accuracy": 1.0,
-  "avg_latency_ms": 15.25,
+  "avg_latency_ms": 21.5,
   "results": [
     {
       "id": "crowd-family-avoid",
@@ -23,6 +23,7 @@
       ],
       "decision_trace": [
         "根据主题=亲子轻松、时长=240分钟、同行=family、体力=easy生成候选路线。",
+        "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         "约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。",
         "拥挤策略：avoid_crowd=true，crowd_tolerance=medium，数据源=mock_simulation。",
         "九龙灌浴 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。",
@@ -30,7 +31,7 @@
         "高拥挤点：九龙灌浴；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 12
+      "latency_ms": 17
     },
     {
       "id": "crowd-blessing-core",
@@ -47,6 +48,7 @@
       ],
       "decision_trace": [
         "根据主题=祈福朝圣、时长=240分钟、同行=family、体力=balanced生成候选路线。",
+        "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         "约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。",
         "拥挤策略：avoid_crowd=true，crowd_tolerance=low，数据源=mock_simulation。",
         "九龙灌浴 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。",
@@ -56,7 +58,7 @@
         "高拥挤点：九龙灌浴、灵山大佛；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 13
+      "latency_ms": 17
     },
     {
       "id": "crowd-nature-comfort",
@@ -70,12 +72,13 @@
       "high_stops": [],
       "decision_trace": [
         "根据主题=自然休闲、时长=240分钟、同行=friends、体力=easy生成候选路线。",
+        "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         "约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。",
         "拥挤策略：avoid_crowd=true，crowd_tolerance=low，数据源=mock_simulation。",
         "当前候选路线没有 high 拥挤站点，整体舒适度较好。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 17
+      "latency_ms": 22
     },
     {
       "id": "crowd-photo-queue-ok",
@@ -91,13 +94,14 @@
       ],
       "decision_trace": [
         "根据主题=拍照打卡、时长=300分钟、同行=friends、体力=balanced生成候选路线。",
+        "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         "约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。",
         "拥挤策略：avoid_crowd=false，crowd_tolerance=high，数据源=mock_simulation。",
         "九龙灌浴 是路线核心点但模拟拥挤度高，路线保留并提示错峰。",
         "高拥挤点：九龙灌浴；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 19
+      "latency_ms": 30
     }
   ]
 }
