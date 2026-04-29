@@ -12,7 +12,7 @@
 - 自然语言路线推荐：规则 parser 将“老人孩子、3 小时、别太挤、必去景点”等口语输入转为结构化约束，再由受控路线规划器生成路线。
 - Route Memory Agent：本地 mock 会话记忆保存偏好、必去点、避开点和上一条路线，支持缩短、少走路、避拥挤、多拍照、多历史等多轮重规划。
 - 路线约束规则矩阵：集中 `ROUTE_CONSTRAINT_RULES`，补齐必去/避开冲突、无效景点、短时长、多 session 隔离和取消必去等边界评测。
-- 数字人语音演示层：React/SVG/CSS 2D 数字人状态机，接入浏览器 SpeechSynthesis TTS、可选 SpeechRecognition 输入和文本降级。
+- 数字人语音演示层：GPT Image 辅助确定 2D 新中式导览员视觉方向，最终以 React/SVG/CSS 可控数字人落地，接入浏览器 SpeechSynthesis TTS、可选 SpeechRecognition 输入和文本降级。
 - Kiosk 路线带走：终端生成拥挤度感知路线，展示二维码、短码和手机打开链接，手机访问 `/route/:id/share?code=...` 查看同一条路线。
 - 交互日志与反馈：QA、识景、路线、二维码带走和游客反馈写入本地 SQLite，后台 `/admin` 读取 `/api/analytics/overview` 展示运营洞察。
 - DX 配置：`.env.example`、README、Task 02 目录预留。
@@ -263,10 +263,12 @@ Task 06.9 将路线约束集中到 `backend/app/services/route_service.py` 的 `
 
 ### 数字人语音、TTS 与状态机
 
-Task 07 增加第一版可演示的 2D 数字人语音层，仍然保持 mock provider 模式，无需真实 TTS Key：
+Task 07 增加第一版可演示的 2D 数字人语音层，Task 07.5 用 GPT Image 生成视觉参考并重设计为更扁平的新中式数字导览员。当前仍然保持 mock provider 模式，无需真实 TTS Key：
 
-- 数字人使用 React + SVG/CSS 实现，不引入 Live2D、PixiJS 或生产级 3D 资产。
+- GPT Image 仅用于确定“湖绿色导览服、铜金胸牌、温和可信、文化感”的视觉方向；最终前端不是静态 PNG，而是 React + SVG/CSS 可控组件。
+- 数字人使用扁平 2D 半身导览员插画实现，不引入 Live2D、PixiJS 或生产级 3D 资产。
 - 状态机覆盖 `welcome`、`listening`、`thinking`、`speaking`、`comforting`、`error` 和 `happy`。
+- speaking 状态包含多段嘴型切换、低调声波和字幕高亮；停止播报后恢复自然微笑。
 - 游客端 QA、识景、路线推荐、澄清追问、反馈成功和错误兜底会驱动数字人状态变化。
 - TTS 使用浏览器 `window.speechSynthesis`，优先选择 `zh-CN` 声音；新播报会先停止上一段，长文本会截断为演示摘要。
 - 语音输入使用浏览器 `SpeechRecognition` / `webkitSpeechRecognition`（如可用），识别结果只填入文本框，由游客确认后发送。

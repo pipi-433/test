@@ -169,216 +169,169 @@
   min-height: 280px;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 92%), rgb(238 250 248 / 86%)),
-    radial-gradient(circle at 50% 100%, rgb(19 151 141 / 18%), transparent 46%);
+  background: linear-gradient(180deg, #fbfffe 0%, #eef8f6 100%);
   border-radius: var(--radius-3);
+  box-shadow: var(--shadow-1);
 }
 
-.digital-human__halo {
+.digital-human::before {
+  content: "";
   position: absolute;
-  width: min(58%, 280px);
-  aspect-ratio: 1;
-  border: 1px solid rgb(194 139 44 / 38%);
-  border-radius: 50%;
-  background: rgb(255 255 255 / 42%);
+  inset: var(--space-4) var(--space-4) auto;
+  height: 42px;
+  border: 1px solid rgb(19 151 141 / 12%);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
 }
 
-.digital-human__aura,
-.digital-human__waves {
-  position: absolute;
-  pointer-events: none;
-}
-
-.digital-human__aura {
-  inset: var(--space-4);
-  opacity: 0.44;
-}
-
-.digital-human__aura span {
-  position: absolute;
-  inset: 16% 24%;
-  border: 1px solid rgb(19 151 141 / 20%);
-  border-radius: 50%;
-}
-
-.digital-human__aura span:nth-child(2) {
-  inset: 22% 18%;
-  border-color: rgb(194 139 44 / 22%);
-}
-
-.digital-human__aura span:nth-child(3) {
-  inset: 30% 30%;
-}
-
-.digital-human__figure {
+.digital-human__stage {
   position: relative;
   display: grid;
-  justify-items: center;
+  place-items: center;
+  width: min(58%, 180px);
+  max-height: 174px;
+  margin-top: var(--space-2);
+  margin-bottom: 42px;
   animation: breathe 3s var(--ease-standard) infinite;
 }
 
-.digital-human__head {
-  position: relative;
-  width: 116px;
-  height: 126px;
-  background: #f1d7bd;
-  border: 3px solid #6f4b32;
-  border-radius: 44% 44% 48% 48%;
-  box-shadow: inset 0 -12px 0 rgb(124 86 24 / 12%);
-}
-
-.digital-human__head::before {
-  content: "";
-  position: absolute;
-  inset: -16px 14px auto;
-  height: 34px;
-  background: #31423d;
-  border-radius: 999px 999px 16px 16px;
-}
-
-.digital-human__eye,
-.digital-human__brow,
-.digital-human__mouth {
-  position: absolute;
+.digital-human__portrait {
   display: block;
-  background: #263631;
+  width: 100%;
+  max-height: 174px;
+}
+
+.digital-human__backplate {
+  fill: #e0f3f0;
+  stroke: rgb(19 151 141 / 28%);
+  stroke-width: 2;
+}
+
+.digital-human__guide-shadow {
+  fill: rgb(20 59 56 / 14%);
+}
+
+.digital-human__coat {
+  fill: #147e78;
+  stroke: #123b38;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.digital-human__coat-left {
+  fill: #0f6c67;
+}
+
+.digital-human__coat-right {
+  fill: #168a82;
+}
+
+.digital-human__collar {
+  fill: #f8fbfa;
+  stroke: #b9892e;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.digital-human__trim,
+.digital-human__desk-light {
+  fill: none;
+  stroke: #c28b2c;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.digital-human__badge {
+  fill: #f7efe0;
+  stroke: #b9892e;
+  stroke-width: 1.5;
+}
+
+.digital-human__badge-text {
+  fill: #6b4a1d;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.digital-human__neck,
+.digital-human__ear,
+.digital-human__face {
+  fill: #f0cdb7;
+  stroke: #80553f;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.digital-human__hair-back,
+.digital-human__hair-front,
+.digital-human__side-hair {
+  fill: #203a36;
+  stroke: #1a2d2a;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.digital-human__brow,
+.digital-human__nose {
+  fill: none;
+  stroke: #263631;
+  stroke-linecap: round;
+  stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .digital-human__eye {
-  top: 54px;
-  width: 10px;
-  height: 14px;
-  border-radius: 50%;
+  fill: #263631;
+  transform-box: fill-box;
+  transform-origin: center;
   animation: blink 5s infinite;
 }
 
-.digital-human__eye--left {
-  left: 34px;
+.digital-human__pupil {
+  fill: #f8fbfa;
+  opacity: 0.82;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
-.digital-human__eye--right {
-  right: 34px;
+.digital-human__mouth-shape {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
-.digital-human__brow {
-  top: 42px;
-  width: 22px;
-  height: 3px;
-  border-radius: 999px;
+.digital-human__mouth-smile {
+  opacity: 1;
+  fill: none;
+  stroke: #263631;
+  stroke-linecap: round;
+  stroke-width: 4;
 }
 
-.digital-human__brow--left {
-  left: 28px;
-  transform: rotate(-8deg);
+.digital-human__mouth-small,
+.digital-human__mouth-open,
+.digital-human__mouth-wide {
+  fill: #263631;
 }
 
-.digital-human__brow--right {
-  right: 28px;
-  transform: rotate(8deg);
-}
-
-.digital-human__mouth {
-  left: 50%;
-  bottom: 28px;
-  width: 30px;
-  height: 8px;
-  border-radius: 0 0 999px 999px;
-  transform: translateX(-50%);
-  transition:
-    height var(--motion-fast) var(--ease-standard),
-    width var(--motion-fast) var(--ease-standard),
-    border var(--motion-fast) var(--ease-standard);
-}
-
-.digital-human--speaking .digital-human__mouth {
-  height: 20px;
-  border-radius: 999px;
-  animation: speak 520ms ease-in-out infinite;
-}
-
-.digital-human--happy .digital-human__mouth {
-  width: 38px;
-  height: 16px;
-  background: transparent;
-  border-bottom: 5px solid #263631;
-}
-
-.digital-human--comforting .digital-human__mouth {
-  width: 40px;
-  height: 14px;
-  background: transparent;
-  border-bottom: 4px solid #263631;
-}
-
-.digital-human--listening .digital-human__mouth {
-  width: 20px;
-  height: 8px;
-  border-radius: 999px;
-}
-
-.digital-human--thinking .digital-human__figure {
-  animation-duration: 2.2s;
-}
-
-.digital-human--thinking .digital-human__mouth {
-  width: 16px;
-  height: 10px;
-  border-radius: 999px;
-}
-
-.digital-human--error .digital-human__brow--left {
-  transform: rotate(10deg);
-}
-
-.digital-human--error .digital-human__brow--right {
-  transform: rotate(-10deg);
-}
-
-.digital-human--error .digital-human__mouth {
-  width: 26px;
-  height: 4px;
-  border-radius: 999px;
-}
-
-.digital-human__body {
-  position: relative;
-  width: 154px;
-  height: 116px;
-  margin-top: -4px;
-  background: var(--color-primary-700);
-  border: 3px solid #143b38;
-  border-radius: 58px 58px 18px 18px;
-  overflow: hidden;
-}
-
-.digital-human__sash {
-  position: absolute;
-  inset: 18px -20px auto 44px;
-  height: 18px;
-  background: var(--color-accent-500);
-  transform: rotate(-28deg);
-}
-
-.digital-human__hands {
-  position: absolute;
-  left: 50%;
-  bottom: 20px;
-  width: 54px;
-  height: 16px;
-  border: 3px solid rgb(255 255 255 / 72%);
-  border-top: 0;
-  border-radius: 0 0 999px 999px;
-  transform: translateX(-50%);
+.digital-human__hand {
+  fill: none;
+  stroke: #f7efe0;
+  stroke-linecap: round;
+  stroke-width: 8;
 }
 
 .digital-human__waves {
-  left: calc(50% + 72px);
-  top: calc(50% - 14px);
+  position: absolute;
+  left: calc(50% + 86px);
+  top: calc(50% - 26px);
   display: flex;
   align-items: center;
   gap: 4px;
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--motion-base) var(--ease-standard);
 }
 
@@ -408,6 +361,70 @@
 
 .digital-human--speaking .digital-human__waves span {
   background: var(--color-accent-600);
+}
+
+.digital-human--speaking .digital-human__mouth-smile {
+  animation: mouth-smile 720ms steps(1, end) infinite;
+}
+
+.digital-human--speaking .digital-human__mouth-small {
+  animation: mouth-small 720ms steps(1, end) infinite;
+}
+
+.digital-human--speaking .digital-human__mouth-open {
+  animation: mouth-open 720ms steps(1, end) infinite;
+}
+
+.digital-human--speaking .digital-human__mouth-wide {
+  animation: mouth-wide 720ms steps(1, end) infinite;
+}
+
+.digital-human--listening .digital-human__eye {
+  transform: translateY(-1px);
+}
+
+.digital-human--thinking .digital-human__stage {
+  animation-duration: 2.2s;
+}
+
+.digital-human--thinking .digital-human__pupil {
+  transform: translateY(2px);
+}
+
+.digital-human--thinking .digital-human__mouth-smile {
+  opacity: 0;
+}
+
+.digital-human--thinking .digital-human__mouth-small {
+  opacity: 1;
+}
+
+.digital-human--comforting .digital-human__mouth-smile,
+.digital-human--happy .digital-human__mouth-smile {
+  stroke-width: 4.5;
+  transform: translateY(1px) scaleX(1.12);
+}
+
+.digital-human--comforting .digital-human__backplate {
+  fill: #f4eee0;
+  stroke: rgb(194 139 44 / 28%);
+}
+
+.digital-human--error .digital-human__brow--left {
+  transform: translateY(2px) rotate(9deg);
+}
+
+.digital-human--error .digital-human__brow--right {
+  transform: translateY(2px) rotate(-9deg);
+}
+
+.digital-human--error .digital-human__mouth-smile {
+  opacity: 0;
+}
+
+.digital-human--error .digital-human__mouth-small {
+  opacity: 1;
+  transform: scaleX(1.6) scaleY(0.5);
 }
 
 .digital-human__status {
@@ -581,16 +598,6 @@
   }
 }
 
-@keyframes speak {
-  0%,
-  100% {
-    height: 10px;
-  }
-  50% {
-    height: 22px;
-  }
-}
-
 @keyframes sound-wave {
   0%,
   100% {
@@ -598,6 +605,52 @@
   }
   50% {
     transform: scaleY(1.08);
+  }
+}
+
+@keyframes mouth-smile {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  75% {
+    opacity: 1;
+  }
+}
+
+@keyframes mouth-small {
+  0%,
+  24% {
+    opacity: 1;
+  }
+  25%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes mouth-open {
+  0%,
+  49%,
+  100% {
+    opacity: 0;
+  }
+  50%,
+  74% {
+    opacity: 1;
+  }
+}
+
+@keyframes mouth-wide {
+  0%,
+  24%,
+  75%,
+  100% {
+    opacity: 0;
+  }
+  25%,
+  49% {
+    opacity: 1;
   }
 }
 

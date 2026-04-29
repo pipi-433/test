@@ -871,17 +871,23 @@
 
 .kiosk-avatar {
   min-height: 560px;
+  place-items: start center;
 }
 
-.kiosk-avatar .digital-human__head {
-  transform: scale(1.62);
-  transform-origin: bottom center;
+.kiosk-avatar .digital-human__stage {
+  width: min(72%, 500px);
+  max-height: 520px;
+  margin-top: 128px;
+  margin-bottom: 82px;
 }
 
-.kiosk-avatar .digital-human__body {
-  transform: scale(1.62);
-  transform-origin: top center;
-  margin-top: 34px;
+.kiosk-avatar .digital-human__portrait {
+  max-height: 520px;
+}
+
+.kiosk-avatar .digital-human__waves {
+  left: calc(50% + 160px);
+  top: calc(50% - 56px);
 }
 
 .kiosk-primary-actions {
