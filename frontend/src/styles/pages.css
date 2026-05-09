@@ -913,6 +913,12 @@
   font-weight: 650;
 }
 
+.share-notice .expires-at {
+  margin-top: var(--space-1);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
 .share-timeline {
   display: grid;
   gap: var(--space-3);

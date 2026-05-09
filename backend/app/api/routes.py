@@ -1,3 +1,4 @@
+import urllib.parse
 from typing import Any
 
 from fastapi import APIRouter, Query, Request, status
@@ -615,6 +616,17 @@ def _parse_content_disposition(value: str) -> dict[str, str]:
             continue
         key, raw = part.split("=", 1)
         result[key.strip().lower()] = raw.strip().strip('"')
+    # Support RFC 5987 filename*=UTF-8''... when filename= is missing
+    if "filename*" in result and "filename" not in result:
+        filename_star = result["filename*"]
+        # RFC 5987 format: charset'lang'value
+        if "'" in filename_star:
+            charset, _, encoded_value = filename_star.partition("'")
+            # Skip language tag if present (second ')
+            if "'" in encoded_value:
+                _, encoded_value = encoded_value.split("'", 1)
+            if charset.lower() == "utf-8":
+                result["filename"] = urllib.parse.unquote(encoded_value)
     return result
 
 
@@ -638,12 +650,22 @@ def _parse_multipart_form(content_type: str, body: bytes) -> dict[str, object]:
             continue
         if part.endswith(b"--"):
             part = part[:-2].strip()
-        if b"\r\n\r\n" not in part:
+        # Support both CRLF (\r\n\r\n) and LF-only (\n\n) header/body separator
+        header_sep = b"\r\n\r\n" if b"\r\n\r\n" in part else b"\n\n"
+        if header_sep not in part:
             continue
-        raw_headers, value = part.split(b"\r\n\r\n", 1)
-        value = value.rstrip(b"\r\n")
+        raw_headers, value = part.split(header_sep, 1)
+        # Strip trailing line endings from value (support both CRLF and LF)
+        if value.endswith(b"\r\n"):
+            value = value[:-2]
+        elif value.endswith(b"\n"):
+            value = value[:-1]
+        # Parse headers - support both CRLF and LF line endings
         headers = {}
-        for line in raw_headers.decode("utf-8", errors="ignore").split("\r\n"):
+        header_text = raw_headers.decode("utf-8", errors="ignore")
+        # Normalize line endings to \n then split
+        header_lines = header_text.replace("\r\n", "\n").split("\n")
+        for line in header_lines:
             if ":" not in line:
                 continue
             key, raw = line.split(":", 1)

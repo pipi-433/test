@@ -7,6 +7,26 @@ import { Button } from "../components/Button";
 import { PageShell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
 
+function formatExpiresAt(isoString: string | null | undefined): string {
+  if (!isoString) {
+    return "到期时间暂不可用";
+  }
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) {
+      return "到期时间暂不可用";
+    }
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  } catch {
+    return "到期时间暂不可用";
+  }
+}
+
 function crowdLabel(level: CrowdLevel) {
   return level === "high" ? "拥挤" : level === "medium" ? "适中" : "舒适";
 }
@@ -166,7 +186,10 @@ export function RouteSharePage() {
 
       <section className="share-notice">
         <AlertTriangle aria-hidden="true" size={18} />
-        <p>{route.crowd_policy.caveat} 分享码 {route.share.share_code}，默认 30 分钟有效。</p>
+        <div>
+          <p>{route.crowd_policy.caveat} 分享码 {route.share.share_code}，默认 30 分钟有效。</p>
+          <p className="expires-at">到期时间：{formatExpiresAt(route.share.expires_at)}</p>
+        </div>
       </section>
 
       <section className="decision-trace" aria-label="路线决策摘要">
