@@ -1,6 +1,6 @@
 # 灵境导游
 
-中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐、自然语言路线推荐、Route Memory Agent、模拟拥挤度分流、运营事件控制台、Kiosk 二维码路线带走、本地交互日志/反馈洞察和数字人语音演示闭环；默认无 API Key 可运行。
+中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐、自然语言路线推荐、Route Memory Agent、模拟拥挤度分流、运营事件控制台、知识缺口闭环、评测看板、Kiosk 二维码路线带走、本地交互日志/反馈洞察和数字人语音演示闭环；默认无 API Key 可运行。
 
 ## 本轮实现
 
@@ -14,6 +14,7 @@
 - 路线约束规则矩阵：集中 `ROUTE_CONSTRAINT_RULES`，补齐必去/避开冲突、无效景点、短时长、多 session 隔离和取消必去等边界评测。
 - 全量景点候选池：经典路线模板只作为 seed，全部 22 个已解析景点都可作为必去、可选、避开或主题补充点参与规划。
 - 运营事件控制台：后台可发布拥挤、临时关闭、演出提醒和推荐分流事件，路线规划会读取 active events 并在 `decision_trace` 中解释调整原因。
+- 评测看板：后台读取 `evals/reports/*_latest.json`，展示 QA、识景、路线、约束、知识缺口等本地评测通过率、失败数和失败样例摘要。
 - 数字人语音演示层：GPT Image 辅助确定 2D 新中式导览员视觉方向，最终以 React/SVG/CSS 可控数字人落地，接入浏览器 SpeechSynthesis TTS、可选 SpeechRecognition 输入和文本降级。
 - Kiosk 路线带走：终端生成拥挤度感知路线，展示二维码、短码和手机打开链接，手机访问 `/route/:id/share?code=...` 查看同一条路线。
 - 交互日志与反馈：QA、识景、路线、二维码带走和游客反馈写入本地 SQLite，后台 `/admin` 读取 `/api/analytics/overview` 展示运营洞察。
@@ -414,6 +415,31 @@ python .\scripts\eval_knowledge_gaps.py
 ```
 
 Analytics overview 轻量增加 `knowledge_gap_count`、`open_knowledge_gap_count`、`drafted_knowledge_gap_count`。这些数据来自本地演示日志和 SQLite，不代表真实景区全量运营数据。
+
+## 评测看板
+
+Task 06.14 增加后台评测看板。`/admin` 会调用 `GET /api/admin/evals/overview`，读取 `evals/reports/*_latest.json` 的最新结果，并聚合为比赛演示用的可信度证明。该接口只读取本地 report，不会重新运行 eval，也不接外部评测平台。
+
+看板覆盖：
+- QA 准确率、识景成功率、路线推荐通过率、拥挤分流通过率、路线分享通过率。
+- Analytics、Route Conversation、Route Constraints、Full Pool、Operation Events、Multipart Parser、Knowledge Gaps 等 report 状态。
+- 必去景点保留率、拥挤点错峰解释率、低置信澄清准确率、知识缺口闭环通过率等衍生指标；无法精确推断时返回 `null` 和 reason，不伪造数值。
+- 每个 report 的状态、样本数、失败数、平均延迟、更新时间和前 3 条失败样例摘要。
+
+评测看板 API：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/admin/evals/overview
+```
+
+验证命令：
+
+```powershell
+python .\scripts\eval_multipart_parser.py
+python .\scripts\eval_eval_reports.py
+```
+
+重要边界：评测看板读取的是本地 eval reports，用于比赛演示可信度证明；mock 模式和本地样例不代表生产 SLA，也不代表真实景区全量监控。
 
 ## 后续任务
 

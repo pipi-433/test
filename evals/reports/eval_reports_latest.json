@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-05-09T06:58:53+00:00",
+  "mode": "mock",
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "accuracy": 1.0,
+  "overview": {
+    "available_reports": 12,
+    "total_reports": 12,
+    "total_cases": 98,
+    "passed_cases": 98,
+    "failed_cases": 0,
+    "overall_accuracy": 1.0,
+    "latest_generated_at": "2026-05-09T06:58:15+00:00"
+  },
+  "results": [
+    {
+      "id": "overview-api-available",
+      "passed": true
+    },
+    {
+      "id": "reads-at-least-ten-reports",
+      "passed": true,
+      "available_reports": 12,
+      "total_reports": 12
+    },
+    {
+      "id": "overall-cases-summarized",
+      "passed": true,
+      "overall": {
+        "total_reports": 12,
+        "available_reports": 12,
+        "passing_reports": 12,
+        "total_cases": 98,
+        "passed_cases": 98,
+        "failed_cases": 0,
+        "overall_accuracy": 1.0,
+        "latest_generated_at": "2026-05-09T06:58:15+00:00"
+      }
+    },
+    {
+      "id": "failure-samples-list",
+      "passed": true
+    },
+    {
+      "id": "derived-metrics-present",
+      "passed": true,
+      "derived_metric_keys": [
+        "clarification_pass_rate",
+        "crowd_explanation_rate",
+        "knowledge_gap_workflow_rate",
+        "must_visit_preservation_rate"
+      ]
+    },
+    {
+      "id": "missing-report-tolerated",
+      "passed": true
+    },
+    {
+      "id": "no-secret-or-session-fields",
+      "passed": true
+    }
+  ]
+}

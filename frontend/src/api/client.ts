@@ -132,6 +132,61 @@ export type KnowledgeGapEvalResponse = {
   created: boolean;
 };
 
+export type EvalReportStatus = "pass" | "fail" | "missing";
+
+export type EvalFailureSample = {
+  id: string;
+  message: string;
+  expected?: unknown;
+  actual?: unknown;
+  mismatches?: unknown;
+  [key: string]: unknown;
+};
+
+export type EvalReportItem = {
+  id: string;
+  title: string;
+  status: EvalReportStatus;
+  total: number;
+  passed: number;
+  failed: number;
+  accuracy: number | null;
+  avg_latency_ms: number | null;
+  generated_at: string | null;
+  mode: string;
+  summary: string;
+  failure_samples: EvalFailureSample[];
+};
+
+export type EvalDerivedMetric = {
+  value: number | null;
+  passed: number | null;
+  total: number | null;
+  reason: string | null;
+};
+
+export type EvalReportsOverview = {
+  reports: EvalReportItem[];
+  overall: {
+    total_reports: number;
+    available_reports: number;
+    passing_reports: number;
+    total_cases: number;
+    passed_cases: number;
+    failed_cases: number;
+    overall_accuracy: number | null;
+    latest_generated_at: string | null;
+  };
+  derived_metrics: {
+    must_visit_preservation_rate: EvalDerivedMetric;
+    crowd_explanation_rate: EvalDerivedMetric;
+    clarification_pass_rate: EvalDerivedMetric;
+    knowledge_gap_workflow_rate: EvalDerivedMetric;
+  };
+  source_note: string;
+  mode: string;
+};
+
 export type RouteStop = {
   order: number;
   attraction_id: string;
@@ -484,6 +539,10 @@ export async function addKnowledgeGapToEval(gapId: string): Promise<KnowledgeGap
   return requestJson<KnowledgeGapEvalResponse>(`/api/admin/knowledge/gaps/${encodeURIComponent(gapId)}/add-eval`, {
     method: "POST",
   });
+}
+
+export async function getEvalReportsOverview(): Promise<EvalReportsOverview> {
+  return requestJson<EvalReportsOverview>("/api/admin/evals/overview");
 }
 
 export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {

@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = ROOT / "backend"
+REPORT_PATH = ROOT / "evals" / "reports" / "multipart_parser_latest.json"
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.api.routes import _parse_content_disposition, _parse_multipart_form
@@ -129,12 +131,15 @@ def main() -> int:
     results = check_content_disposition() + check_multipart_forms()
     passed = sum(1 for item in results if item["passed"])
     report = {
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "mode": "mock",
         "total": len(results),
         "passed": passed,
         "failed": len(results) - passed,
         "results": results,
     }
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["failed"] == 0 else 1
 

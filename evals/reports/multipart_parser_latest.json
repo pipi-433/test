@@ -1,0 +1,81 @@
+{
+  "generated_at": "2026-05-09T06:58:15+00:00",
+  "mode": "mock",
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "results": [
+    {
+      "id": "rfc5987_plain",
+      "passed": true,
+      "expected": "lingshan-ls-011.jpg",
+      "actual": "lingshan-ls-011.jpg"
+    },
+    {
+      "id": "rfc5987_percent_decoded",
+      "passed": true,
+      "expected": "lingshan dafo.jpg",
+      "actual": "lingshan dafo.jpg"
+    },
+    {
+      "id": "rfc5987_with_language",
+      "passed": true,
+      "expected": "lingshan dafo.jpg",
+      "actual": "lingshan dafo.jpg"
+    },
+    {
+      "id": "filename_takes_precedence",
+      "passed": true,
+      "expected": "legacy.jpg",
+      "actual": "legacy.jpg"
+    },
+    {
+      "id": "crlf_quoted_filename",
+      "passed": true,
+      "expected_filename": "lingshan-ls-011.jpg",
+      "actual_filename": "lingshan-ls-011.jpg",
+      "field_names": [
+        "channel",
+        "file",
+        "hint",
+        "text_hint"
+      ]
+    },
+    {
+      "id": "crlf_rfc5987_filename",
+      "passed": true,
+      "expected_filename": "lingshan dafo.jpg",
+      "actual_filename": "lingshan dafo.jpg",
+      "field_names": [
+        "channel",
+        "file",
+        "hint",
+        "text_hint"
+      ]
+    },
+    {
+      "id": "lf_only_quoted_filename",
+      "passed": true,
+      "expected_filename": "lingshan-ls-011.jpg",
+      "actual_filename": "lingshan-ls-011.jpg",
+      "field_names": [
+        "channel",
+        "file",
+        "hint",
+        "text_hint"
+      ]
+    },
+    {
+      "id": "lf_only_rfc5987_filename",
+      "passed": true,
+      "expected_filename": "lingshan dafo.jpg",
+      "actual_filename": "lingshan dafo.jpg",
+      "field_names": [
+        "channel",
+        "file",
+        "hint",
+        "text_hint"
+      ]
+    }
+  ]
+}

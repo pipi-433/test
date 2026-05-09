@@ -28,6 +28,7 @@ from app.services.knowledge_gap_service import (
     safe_record_knowledge_gap,
     update_knowledge_gap_status,
 )
+from app.services.eval_report_service import eval_reports_overview
 from app.services.qa_service import answer_question
 from app.services.route_intent_service import parse_route_intent
 from app.services.route_memory_service import apply_intent_to_memory, get_route_memory, update_memory_after_route
@@ -366,6 +367,11 @@ def admin_update_knowledge_gap(gap_id: str, payload: KnowledgeGapUpdateRequest) 
 @router.post("/admin/knowledge/gaps/{gap_id}/add-eval")
 def admin_add_knowledge_gap_to_eval(gap_id: str) -> dict[str, object]:
     return add_gap_to_eval(gap_id)
+
+
+@router.get("/admin/evals/overview")
+def admin_eval_reports_overview() -> dict[str, object]:
+    return eval_reports_overview()
 
 
 @router.post("/routes/recommend")

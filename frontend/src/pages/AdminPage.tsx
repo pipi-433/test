@@ -6,7 +6,9 @@ import {
   CalendarClock,
   ChartNoAxesCombined,
   CheckCircle2,
+  ClipboardCheck,
   Database,
+  FileWarning,
   FilePlus2,
   Gauge,
   Heart,
@@ -18,6 +20,8 @@ import {
   Search,
   Settings,
   Share2,
+  ShieldCheck,
+  Timer,
   ToggleLeft,
   ToggleRight,
   Users,
@@ -31,12 +35,17 @@ import {
   draftKnowledgeGapFaq,
   getAdminOperationEvents,
   getAnalyticsOverview,
+  getEvalReportsOverview,
   getKnowledgeGaps,
   updateKnowledgeGapStatus,
   updateOperationEvent,
 } from "../api/client";
 import type {
   AnalyticsOverview,
+  EvalDerivedMetric,
+  EvalReportItem,
+  EvalReportStatus,
+  EvalReportsOverview,
   KnowledgeGap,
   KnowledgeGapStatus,
   OperationEvent,
@@ -153,6 +162,46 @@ function gapStatusTone(status: KnowledgeGapStatus | string) {
   return status === "open" ? "warning" : status === "resolved" ? "ok" : "neutral";
 }
 
+function reportStatusLabel(status: EvalReportStatus) {
+  const labels: Record<EvalReportStatus, string> = {
+    fail: "失败",
+    missing: "缺失",
+    pass: "通过",
+  };
+  return labels[status];
+}
+
+function reportStatusTone(status: EvalReportStatus) {
+  return status === "pass" ? "ok" : status === "fail" ? "warning" : "neutral";
+}
+
+function formatRate(value?: number | null) {
+  if (value === null || value === undefined) {
+    return "暂无";
+  }
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatMaybeDate(value?: string | null) {
+  if (!value) {
+    return "未生成";
+  }
+  return new Date(value).toLocaleString("zh-CN", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit",
+  });
+}
+
+function derivedMetricText(metric: EvalDerivedMetric) {
+  if (metric.value === null) {
+    return metric.reason || "暂无可推导数据";
+  }
+  const countText = metric.total ? ` · ${metric.passed ?? 0}/${metric.total}` : "";
+  return `${formatRate(metric.value)}${countText}`;
+}
+
 function eventTimeWindow(event: OperationEvent) {
   const start = new Date(event.start_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   const end = new Date(event.end_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -162,6 +211,7 @@ function eventTimeWindow(event: OperationEvent) {
 export function AdminPage() {
   const [providers, setProviders] = useState<ProviderMap | null>(null);
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [evalOverview, setEvalOverview] = useState<EvalReportsOverview | null>(null);
   const [operationEvents, setOperationEvents] = useState<OperationEvent[]>([]);
   const [operationMessage, setOperationMessage] = useState("");
   const [operationLoading, setOperationLoading] = useState(false);
@@ -179,6 +229,9 @@ export function AdminPage() {
     getAnalyticsOverview()
       .then(setOverview)
       .catch(() => setOverview(null));
+    getEvalReportsOverview()
+      .then(setEvalOverview)
+      .catch(() => setEvalOverview(null));
     loadOperationEvents();
     loadKnowledgeGaps();
   }, []);
@@ -290,6 +343,15 @@ export function AdminPage() {
   const highCrowdItems = overview?.high_crowd_attractions || [];
   const filteredKnowledgeGaps =
     gapStatusFilter === "all" ? knowledgeGaps : knowledgeGaps.filter((gap) => gap.status === gapStatusFilter);
+  const evalReports = evalOverview?.reports || [];
+  const failureSamples = evalReports
+    .flatMap((report: EvalReportItem) =>
+      report.failure_samples.map((sample) => ({
+        reportTitle: report.title,
+        sample,
+      })),
+    )
+    .slice(0, 3);
   const gapCounts = knowledgeGaps.reduce<Record<KnowledgeGapStatus, number>>(
     (acc, gap) => {
       acc[gap.status] += 1;
@@ -367,6 +429,109 @@ export function AdminPage() {
         </section>
 
         <p className="admin-source-note">{overview?.source_note || "当前 analytics 为本地演示日志 + mock/公开样例数据。"}</p>
+
+        <section className="admin-panel eval-dashboard" aria-label="评测看板">
+          <div className="section-title-row">
+            <div>
+              <h2>评测看板 / 可信度证明</h2>
+              <p>
+                {evalOverview?.source_note ||
+                  "评测看板读取本地 eval reports，用于比赛演示可信度证明；mock 模式不代表生产 SLA。"}
+              </p>
+            </div>
+            <StatusBadge tone={evalOverview?.overall.failed_cases ? "warning" : "ok"}>
+              {formatRate(evalOverview?.overall.overall_accuracy)}
+            </StatusBadge>
+          </div>
+
+          <div className="eval-summary-grid" aria-label="评测总体摘要">
+            <div className="eval-summary-stat">
+              <ShieldCheck aria-hidden="true" />
+              <span>总通过率</span>
+              <strong>{formatRate(evalOverview?.overall.overall_accuracy)}</strong>
+            </div>
+            <div className="eval-summary-stat">
+              <ClipboardCheck aria-hidden="true" />
+              <span>样例通过</span>
+              <strong>
+                {evalOverview?.overall.passed_cases ?? 0}/{evalOverview?.overall.total_cases ?? 0}
+              </strong>
+            </div>
+            <div className="eval-summary-stat">
+              <FileWarning aria-hidden="true" />
+              <span>报告覆盖</span>
+              <strong>
+                {evalOverview?.overall.available_reports ?? 0}/{evalOverview?.overall.total_reports ?? 0}
+              </strong>
+            </div>
+            <div className="eval-summary-stat">
+              <Timer aria-hidden="true" />
+              <span>最新评测</span>
+              <strong>{formatMaybeDate(evalOverview?.overall.latest_generated_at)}</strong>
+            </div>
+          </div>
+
+          <div className="eval-derived-grid" aria-label="衍生可信指标">
+            <div className="eval-derived-item">
+              <span>必去景点保留率</span>
+              <strong>{evalOverview ? derivedMetricText(evalOverview.derived_metrics.must_visit_preservation_rate) : "暂无"}</strong>
+            </div>
+            <div className="eval-derived-item">
+              <span>拥挤点错峰解释率</span>
+              <strong>{evalOverview ? derivedMetricText(evalOverview.derived_metrics.crowd_explanation_rate) : "暂无"}</strong>
+            </div>
+            <div className="eval-derived-item">
+              <span>低置信澄清准确率</span>
+              <strong>{evalOverview ? derivedMetricText(evalOverview.derived_metrics.clarification_pass_rate) : "暂无"}</strong>
+            </div>
+            <div className="eval-derived-item">
+              <span>知识缺口闭环通过率</span>
+              <strong>{evalOverview ? derivedMetricText(evalOverview.derived_metrics.knowledge_gap_workflow_rate) : "暂无"}</strong>
+            </div>
+          </div>
+
+          <div className="eval-report-list" aria-label="评测报告列表">
+            {evalReports.length > 0 ? (
+              evalReports.map((report) => (
+                <article className="eval-report-row" key={report.id}>
+                  <div className="eval-report-main">
+                    <div className="eval-report-title">
+                      <strong>{report.title}</strong>
+                      <StatusBadge tone={reportStatusTone(report.status)}>{reportStatusLabel(report.status)}</StatusBadge>
+                    </div>
+                    <p>{report.summary}</p>
+                    <div className="eval-progress" aria-label={`${report.title} 通过率 ${formatRate(report.accuracy)}`}>
+                      <i style={{ width: `${Math.max(0, Math.min(100, Math.round((report.accuracy ?? 0) * 100)))}%` }} />
+                    </div>
+                  </div>
+                  <div className="eval-report-meta">
+                    <span>通过率 <strong>{formatRate(report.accuracy)}</strong></span>
+                    <span>样本 <strong>{report.passed}/{report.total}</strong></span>
+                    <span>失败 <strong>{report.failed}</strong></span>
+                    <span>延迟 <strong>{report.avg_latency_ms === null ? "-" : `${report.avg_latency_ms.toFixed(1)}ms`}</strong></span>
+                    <span>时间 <strong>{formatMaybeDate(report.generated_at)}</strong></span>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="empty-state">暂未读取到评测报告。运行 eval 脚本后这里会展示本地可信度证明。</p>
+            )}
+          </div>
+
+          <div className="eval-failure-list" aria-label="失败样例摘要">
+            <h3>失败样例摘要</h3>
+            {failureSamples.length > 0 ? (
+              failureSamples.map(({ reportTitle, sample }) => (
+                <article className="eval-failure-row" key={`${reportTitle}-${sample.id}`}>
+                  <strong>{reportTitle} · {sample.id}</strong>
+                  <p>{sample.message || "该样例未给出失败说明。"}</p>
+                </article>
+              ))
+            ) : (
+              <p className="empty-state">当前最新 report 没有失败样例。</p>
+            )}
+          </div>
+        </section>
 
         <section className="admin-panel operation-console" aria-label="运营事件控制台">
           <div className="section-title-row">
