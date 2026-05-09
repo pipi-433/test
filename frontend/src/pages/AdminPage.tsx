@@ -1,13 +1,17 @@
 import {
   Activity,
   AlertTriangle,
+  BookOpenCheck,
   Bot,
   CalendarClock,
   ChartNoAxesCombined,
+  CheckCircle2,
   Database,
+  FilePlus2,
   Gauge,
   Heart,
   HelpCircle,
+  ListChecks,
   MessageSquareText,
   Plus,
   Route,
@@ -17,11 +21,29 @@ import {
   ToggleLeft,
   ToggleRight,
   Users,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { createOperationEvent, getAdminOperationEvents, getAnalyticsOverview, updateOperationEvent } from "../api/client";
-import type { AnalyticsOverview, OperationEvent, OperationEventCreateRequest, OperationEventSeverity, OperationEventType } from "../api/client";
+import {
+  addKnowledgeGapToEval,
+  createOperationEvent,
+  draftKnowledgeGapFaq,
+  getAdminOperationEvents,
+  getAnalyticsOverview,
+  getKnowledgeGaps,
+  updateKnowledgeGapStatus,
+  updateOperationEvent,
+} from "../api/client";
+import type {
+  AnalyticsOverview,
+  KnowledgeGap,
+  KnowledgeGapStatus,
+  OperationEvent,
+  OperationEventCreateRequest,
+  OperationEventSeverity,
+  OperationEventType,
+} from "../api/client";
 import { Button } from "../components/Button";
 import { MetricCard } from "../components/MetricCard";
 import { PageShell } from "../components/Shell";
@@ -107,6 +129,30 @@ function severityTone(severity: OperationEventSeverity | string) {
   return severity === "critical" || severity === "warning" ? "warning" : "neutral";
 }
 
+function gapStatusLabel(status: KnowledgeGapStatus | string) {
+  const labels: Record<string, string> = {
+    open: "待处理",
+    drafted: "已草拟",
+    resolved: "已解决",
+    ignored: "已忽略",
+  };
+  return labels[status] || status;
+}
+
+function gapTriggerLabel(trigger: string) {
+  const labels: Record<string, string> = {
+    low_confidence: "低置信",
+    no_source: "无来源",
+    negative_feedback: "信息不准反馈",
+    manual: "手动记录",
+  };
+  return labels[trigger] || trigger;
+}
+
+function gapStatusTone(status: KnowledgeGapStatus | string) {
+  return status === "open" ? "warning" : status === "resolved" ? "ok" : "neutral";
+}
+
 function eventTimeWindow(event: OperationEvent) {
   const start = new Date(event.start_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   const end = new Date(event.end_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -120,6 +166,10 @@ export function AdminPage() {
   const [operationMessage, setOperationMessage] = useState("");
   const [operationLoading, setOperationLoading] = useState(false);
   const [operationBusyId, setOperationBusyId] = useState("");
+  const [knowledgeGaps, setKnowledgeGaps] = useState<KnowledgeGap[]>([]);
+  const [gapStatusFilter, setGapStatusFilter] = useState<KnowledgeGapStatus | "all">("all");
+  const [gapMessage, setGapMessage] = useState("");
+  const [gapBusyId, setGapBusyId] = useState("");
 
   useEffect(() => {
     fetch("/api/provider/status")
@@ -130,6 +180,7 @@ export function AdminPage() {
       .then(setOverview)
       .catch(() => setOverview(null));
     loadOperationEvents();
+    loadKnowledgeGaps();
   }, []);
 
   async function loadOperationEvents() {
@@ -177,6 +228,57 @@ export function AdminPage() {
     }
   }
 
+  async function loadKnowledgeGaps() {
+    try {
+      const payload = await getKnowledgeGaps();
+      setKnowledgeGaps(payload.items);
+    } catch {
+      setKnowledgeGaps([]);
+    }
+  }
+
+  async function handleDraftKnowledgeGap(gapId: string) {
+    setGapBusyId(gapId);
+    setGapMessage("");
+    try {
+      await draftKnowledgeGapFaq(gapId);
+      setGapMessage("FAQ 草稿已生成，发布前仍需管理员确认。");
+      await loadKnowledgeGaps();
+    } catch (cause) {
+      setGapMessage(cause instanceof Error ? cause.message : "FAQ 草稿生成失败。");
+    } finally {
+      setGapBusyId("");
+    }
+  }
+
+  async function handleAddKnowledgeGapToEval(gapId: string) {
+    setGapBusyId(gapId);
+    setGapMessage("");
+    try {
+      await addKnowledgeGapToEval(gapId);
+      setGapMessage("已加入知识缺口评测集，不会重复追加同一 gap。");
+      await loadKnowledgeGaps();
+    } catch (cause) {
+      setGapMessage(cause instanceof Error ? cause.message : "加入评测集失败。");
+    } finally {
+      setGapBusyId("");
+    }
+  }
+
+  async function handleUpdateKnowledgeGapStatus(gapId: string, status: KnowledgeGapStatus) {
+    setGapBusyId(gapId);
+    setGapMessage("");
+    try {
+      await updateKnowledgeGapStatus(gapId, status);
+      setGapMessage(`知识缺口已标记为${gapStatusLabel(status)}。`);
+      await loadKnowledgeGaps();
+    } catch (cause) {
+      setGapMessage(cause instanceof Error ? cause.message : "知识缺口状态更新失败。");
+    } finally {
+      setGapBusyId("");
+    }
+  }
+
   const providerEntries = providers
     ? Object.entries(providers).map(([name, value]) => [name, value.provider, value.status])
     : providerRows;
@@ -186,6 +288,15 @@ export function AdminPage() {
   const lowConfidence = overview?.low_confidence_questions || [];
   const recentEvents = overview?.recent_events || [];
   const highCrowdItems = overview?.high_crowd_attractions || [];
+  const filteredKnowledgeGaps =
+    gapStatusFilter === "all" ? knowledgeGaps : knowledgeGaps.filter((gap) => gap.status === gapStatusFilter);
+  const gapCounts = knowledgeGaps.reduce<Record<KnowledgeGapStatus, number>>(
+    (acc, gap) => {
+      acc[gap.status] += 1;
+      return acc;
+    },
+    { open: 0, drafted: 0, resolved: 0, ignored: 0 },
+  );
 
   return (
     <PageShell className="admin-page">
@@ -311,6 +422,103 @@ export function AdminPage() {
               ))
             ) : (
               <p className="empty-state">暂无运营事件。可用上方按钮发布拥挤、临时关闭、演出提醒或推荐分流事件。</p>
+            )}
+          </div>
+        </section>
+
+        <section className="admin-panel knowledge-gap-console" aria-label="知识缺口闭环">
+          <div className="section-title-row">
+            <div>
+              <h2>知识缺口闭环</h2>
+              <p>低置信、无来源和“信息不准”反馈会沉淀为待处理缺口；FAQ 草稿为规则生成，需管理员确认后发布。</p>
+            </div>
+            <StatusBadge tone="warning">{overview?.open_knowledge_gap_count ?? gapCounts.open} open</StatusBadge>
+          </div>
+
+          <div className="knowledge-gap-summary" aria-label="知识缺口状态统计">
+            <button
+              className={gapStatusFilter === "all" ? "knowledge-gap-filter knowledge-gap-filter--active" : "knowledge-gap-filter"}
+              onClick={() => setGapStatusFilter("all")}
+              type="button"
+            >
+              <ListChecks aria-hidden="true" size={17} />
+              全部 <strong>{knowledgeGaps.length}</strong>
+            </button>
+            {(["open", "drafted", "resolved", "ignored"] as KnowledgeGapStatus[]).map((status) => (
+              <button
+                className={gapStatusFilter === status ? "knowledge-gap-filter knowledge-gap-filter--active" : "knowledge-gap-filter"}
+                key={status}
+                onClick={() => setGapStatusFilter(status)}
+                type="button"
+              >
+                {status === "open" ? <HelpCircle aria-hidden="true" size={17} /> : null}
+                {status === "drafted" ? <BookOpenCheck aria-hidden="true" size={17} /> : null}
+                {status === "resolved" ? <CheckCircle2 aria-hidden="true" size={17} /> : null}
+                {status === "ignored" ? <XCircle aria-hidden="true" size={17} /> : null}
+                {gapStatusLabel(status)} <strong>{gapCounts[status]}</strong>
+              </button>
+            ))}
+          </div>
+
+          {gapMessage ? <p className="knowledge-gap-message">{gapMessage}</p> : null}
+
+          <div className="knowledge-gap-list" aria-label="知识缺口列表">
+            {filteredKnowledgeGaps.length > 0 ? (
+              filteredKnowledgeGaps.map((gap) => (
+                <article className="knowledge-gap-row" key={gap.id}>
+                  <div className="knowledge-gap-row__main">
+                    <div className="knowledge-gap-row__title">
+                      <strong>{gap.query}</strong>
+                      <StatusBadge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</StatusBadge>
+                      <StatusBadge tone="neutral">{gapTriggerLabel(gap.trigger_type)}</StatusBadge>
+                    </div>
+                    <p>{gap.suggested_faq ? gap.suggested_faq.replace(/[#*\n]/g, " ").slice(0, 150) : "暂无 FAQ 草稿。无可靠来源时需管理员补充资料，避免编造。"}</p>
+                    <span>
+                      confidence={gap.confidence ?? "-"} · {new Date(gap.created_at).toLocaleString("zh-CN")} · eval={gap.eval_case_id || "未加入"}
+                    </span>
+                  </div>
+                  <div className="knowledge-gap-actions">
+                    <Button
+                      disabled={gapBusyId === gap.id}
+                      icon={<BookOpenCheck size={15} />}
+                      onClick={() => void handleDraftKnowledgeGap(gap.id)}
+                      type="button"
+                      variant="secondary"
+                    >
+                      生成 FAQ
+                    </Button>
+                    <Button
+                      disabled={gapBusyId === gap.id}
+                      icon={<FilePlus2 size={15} />}
+                      onClick={() => void handleAddKnowledgeGapToEval(gap.id)}
+                      type="button"
+                      variant="secondary"
+                    >
+                      加入评测
+                    </Button>
+                    <Button
+                      disabled={gapBusyId === gap.id}
+                      icon={<CheckCircle2 size={15} />}
+                      onClick={() => void handleUpdateKnowledgeGapStatus(gap.id, "resolved")}
+                      type="button"
+                      variant="quiet"
+                    >
+                      已解决
+                    </Button>
+                    <Button
+                      disabled={gapBusyId === gap.id}
+                      icon={<XCircle size={15} />}
+                      onClick={() => void handleUpdateKnowledgeGapStatus(gap.id, "ignored")}
+                      type="button"
+                      variant="quiet"
+                    >
+                      忽略
+                    </Button>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="empty-state">当前没有该状态的知识缺口。游客端出现无来源问答或“信息不准”反馈后会自动进入这里。</p>
             )}
           </div>
         </section>

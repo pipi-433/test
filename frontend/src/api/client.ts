@@ -102,6 +102,36 @@ export type OperationEventsResponse = {
   source_note: string;
 };
 
+export type KnowledgeGapTrigger = "low_confidence" | "no_source" | "negative_feedback" | "manual";
+export type KnowledgeGapStatus = "open" | "drafted" | "resolved" | "ignored";
+
+export type KnowledgeGap = {
+  id: string;
+  query: string;
+  trigger_type: KnowledgeGapTrigger;
+  matched_sources: Source[];
+  confidence: number | null;
+  suggested_faq: string | null;
+  status: KnowledgeGapStatus;
+  eval_case_id: string | null;
+  created_at: string;
+  updated_at: string;
+  deduped?: boolean;
+};
+
+export type KnowledgeGapsResponse = {
+  items: KnowledgeGap[];
+  count: number;
+  mode: string;
+  source_note: string;
+};
+
+export type KnowledgeGapEvalResponse = {
+  gap: KnowledgeGap;
+  eval_case_id: string;
+  created: boolean;
+};
+
 export type RouteStop = {
   order: number;
   attraction_id: string;
@@ -315,6 +345,9 @@ export type AnalyticsOverview = {
   route_count: number;
   share_open_count: number;
   feedback_count: number;
+  knowledge_gap_count: number;
+  open_knowledge_gap_count: number;
+  drafted_knowledge_gap_count: number;
   average_rating: number | null;
   popular_questions: Array<{ question: string; count: number }>;
   low_confidence_questions: Array<{ question: string; answer_preview?: string; confidence?: number; created_at: string }>;
@@ -422,6 +455,34 @@ export async function updateOperationEvent(eventId: string, payload: OperationEv
   return requestJson<OperationEvent>(`/api/admin/operations/events/${encodeURIComponent(eventId)}`, {
     body: JSON.stringify(payload),
     method: "PATCH",
+  });
+}
+
+export async function getKnowledgeGaps(status?: KnowledgeGapStatus): Promise<KnowledgeGapsResponse> {
+  const params = new URLSearchParams();
+  if (status) {
+    params.set("status", status);
+  }
+  const query = params.toString();
+  return requestJson<KnowledgeGapsResponse>(`/api/admin/knowledge/gaps${query ? `?${query}` : ""}`);
+}
+
+export async function draftKnowledgeGapFaq(gapId: string): Promise<KnowledgeGap> {
+  return requestJson<KnowledgeGap>(`/api/admin/knowledge/gaps/${encodeURIComponent(gapId)}/draft-faq`, {
+    method: "POST",
+  });
+}
+
+export async function updateKnowledgeGapStatus(gapId: string, status: KnowledgeGapStatus): Promise<KnowledgeGap> {
+  return requestJson<KnowledgeGap>(`/api/admin/knowledge/gaps/${encodeURIComponent(gapId)}`, {
+    body: JSON.stringify({ status }),
+    method: "PATCH",
+  });
+}
+
+export async function addKnowledgeGapToEval(gapId: string): Promise<KnowledgeGapEvalResponse> {
+  return requestJson<KnowledgeGapEvalResponse>(`/api/admin/knowledge/gaps/${encodeURIComponent(gapId)}/add-eval`, {
+    method: "POST",
   });
 }
 

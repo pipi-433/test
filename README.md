@@ -395,6 +395,26 @@ Invoke-RestMethod http://127.0.0.1:8000/api/analytics/overview
 
 重要边界：当前 analytics 是本地演示日志 + mock/公开样例数据，不代表真实景区全量运营数据；不接真实埋点平台，不记录账号、手机号、身份证等个人身份信息。
 
+## 知识缺口闭环
+
+Task 06.13 增加本地知识缺口工作流。游客问答出现无来源、低置信，或反馈标签包含“信息不准”时，后端会把问题沉淀到 SQLite 表 `knowledge_gaps`，后台 `/admin` 可查看并处理这些缺口。
+
+后端能力：
+- `GET /api/admin/knowledge/gaps?status=open`：查看知识缺口列表。
+- `POST /api/admin/knowledge/gaps`：手动创建演示缺口。
+- `POST /api/admin/knowledge/gaps/{id}/draft-faq`：基于 query、触发类型和命中来源生成规则化 FAQ 草稿。
+- `PATCH /api/admin/knowledge/gaps/{id}`：更新 `open` / `drafted` / `resolved` / `ignored` 状态。
+- `POST /api/admin/knowledge/gaps/{id}/add-eval`：幂等写入 `evals/knowledge_gaps.jsonl`，为后续评测看板准备样例。
+
+FAQ 草稿当前为 mock/规则生成：如果没有可靠来源，会明确写“需管理员补充资料后发布”，不会编造资料包外事实。当前不会修改原始资料包，也不会重建向量索引。
+
+评测命令：
+```powershell
+python .\scripts\eval_knowledge_gaps.py
+```
+
+Analytics overview 轻量增加 `knowledge_gap_count`、`open_knowledge_gap_count`、`drafted_knowledge_gap_count`。这些数据来自本地演示日志和 SQLite，不代表真实景区全量运营数据。
+
 ## 后续任务
 
 后续可继续推进更高拟真度的数字人表现、真实 TTS provider、真实语音识别或更完整的多模态讲解，但这些能力仍应在 mock 模式稳定、无 API Key 可运行的前提下逐步接入。

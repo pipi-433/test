@@ -116,6 +116,24 @@ CREATE INDEX IF NOT EXISTS idx_operation_events_active_time
   ON operation_events(active, start_at, end_at);
 CREATE INDEX IF NOT EXISTS idx_operation_events_attraction
   ON operation_events(attraction_id);
+
+CREATE TABLE IF NOT EXISTS knowledge_gaps (
+  id TEXT PRIMARY KEY,
+  query TEXT NOT NULL,
+  trigger_type TEXT NOT NULL,
+  matched_sources_json TEXT NOT NULL,
+  confidence REAL,
+  suggested_faq TEXT,
+  status TEXT NOT NULL,
+  eval_case_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_status_created
+  ON knowledge_gaps(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_query_status
+  ON knowledge_gaps(query, status);
 """
 
 DEMO_OPERATION_EVENTS = [
@@ -235,6 +253,7 @@ def initialize_database(
                 DROP TABLE IF EXISTS feedback_events;
                 DROP TABLE IF EXISTS interaction_events;
                 DROP TABLE IF EXISTS operation_events;
+                DROP TABLE IF EXISTS knowledge_gaps;
                 DROP TABLE IF EXISTS attractions;
                 """
             )
@@ -320,4 +339,5 @@ def initialize_database(
         "interaction_events": 0,
         "feedback_events": 0,
         "operation_events": operation_events_count,
+        "knowledge_gaps": 0,
     }

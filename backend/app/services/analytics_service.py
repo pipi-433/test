@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.repositories import analytics_repository as repo
+from app.repositories import knowledge_gap_repository as gap_repo
 from app.services.crowd_service import get_crowd_snapshot
 
 
@@ -99,6 +100,7 @@ def analytics_overview() -> dict[str, Any]:
     route_count = repo.count_events("route_recommend")
     share_open_count = repo.count_events("route_share_open")
     feedback_count = repo.feedback_count()
+    knowledge_gap_count = gap_repo.count_knowledge_gaps()
     return {
         "service_count": qa_count + vision_count + route_count + share_open_count,
         "qa_count": qa_count,
@@ -106,6 +108,9 @@ def analytics_overview() -> dict[str, Any]:
         "route_count": route_count,
         "share_open_count": share_open_count,
         "feedback_count": feedback_count,
+        "knowledge_gap_count": knowledge_gap_count,
+        "open_knowledge_gap_count": gap_repo.count_knowledge_gaps("open"),
+        "drafted_knowledge_gap_count": gap_repo.count_knowledge_gaps("drafted"),
         "average_rating": repo.average_rating(),
         "popular_questions": repo.popular_questions(),
         "low_confidence_questions": repo.low_confidence_questions(),

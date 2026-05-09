@@ -2,7 +2,7 @@ import urllib.parse
 from typing import Any
 
 from fastapi import APIRouter, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.errors import ApiError
 from app.core.config import get_settings
@@ -19,6 +19,14 @@ from app.services.operation_service import (
     create_operation_event,
     list_operation_events,
     update_operation_event,
+)
+from app.services.knowledge_gap_service import (
+    add_gap_to_eval,
+    create_knowledge_gap,
+    generate_faq_draft,
+    list_knowledge_gaps,
+    safe_record_knowledge_gap,
+    update_knowledge_gap_status,
 )
 from app.services.qa_service import answer_question
 from app.services.route_intent_service import parse_route_intent
@@ -119,6 +127,19 @@ class OperationEventUpdateRequest(BaseModel):
     source: str | None = None
     created_by: str | None = None
     active: bool | None = None
+
+
+class KnowledgeGapCreateRequest(BaseModel):
+    query: str
+    trigger_type: str = "manual"
+    matched_sources: list[dict[str, Any]] = Field(default_factory=list)
+    confidence: float | None = None
+    suggested_faq: str | None = None
+    status: str = "open"
+
+
+class KnowledgeGapUpdateRequest(BaseModel):
+    status: str | None = None
 
 
 def _dump_model(payload: BaseModel, *, exclude_unset: bool = False) -> dict[str, Any]:
@@ -238,6 +259,21 @@ def qa(payload: QARequest) -> dict[str, object]:
             "mode": result.get("mode"),
         },
     )
+    sources = result.get("sources", [])
+    if not sources:
+        safe_record_knowledge_gap(
+            query=question,
+            trigger_type="no_source",
+            matched_sources=[],
+            confidence=confidence,
+        )
+    elif confidence < 0.35:
+        safe_record_knowledge_gap(
+            query=question,
+            trigger_type="low_confidence",
+            matched_sources=sources if isinstance(sources, list) else [],
+            confidence=confidence,
+        )
     return result
 
 
@@ -282,6 +318,54 @@ def admin_create_operation_event(payload: OperationEventCreateRequest) -> dict[s
 @router.patch("/admin/operations/events/{event_id}")
 def admin_update_operation_event(event_id: str, payload: OperationEventUpdateRequest) -> dict[str, object]:
     return update_operation_event(event_id, _dump_model(payload, exclude_unset=True))
+
+
+@router.get("/admin/knowledge/gaps")
+def admin_knowledge_gaps(status: str | None = Query(default=None)) -> dict[str, object]:
+    status_filter = status if isinstance(status, str) else None
+    items = list_knowledge_gaps(status_filter=status_filter)
+    return {
+        "items": items,
+        "count": len(items),
+        "mode": "mock",
+        "source_note": "知识缺口来自本地演示日志、低置信问答和游客反馈；FAQ 草稿为规则生成，需管理员确认后发布。",
+    }
+
+
+@router.post("/admin/knowledge/gaps", status_code=status.HTTP_201_CREATED)
+def admin_create_knowledge_gap(payload: KnowledgeGapCreateRequest) -> dict[str, object]:
+    return create_knowledge_gap(
+        query=payload.query,
+        trigger_type=payload.trigger_type,
+        matched_sources=payload.matched_sources,
+        confidence=payload.confidence,
+        suggested_faq=payload.suggested_faq,
+        status_value=payload.status,
+    )
+
+
+@router.post("/admin/knowledge/gaps/{gap_id}/draft-faq")
+def admin_draft_knowledge_gap_faq(gap_id: str) -> dict[str, object]:
+    return generate_faq_draft(gap_id)
+
+
+@router.patch("/admin/knowledge/gaps/{gap_id}")
+def admin_update_knowledge_gap(gap_id: str, payload: KnowledgeGapUpdateRequest) -> dict[str, object]:
+    updates = _dump_model(payload, exclude_unset=True)
+    if "status" in updates:
+        return update_knowledge_gap_status(gap_id, str(updates["status"]))
+    raise ApiError(
+        code="KNOWLEDGE_GAP_EMPTY_UPDATE",
+        message="没有可更新的知识缺口字段。",
+        cause=f"PATCH /api/admin/knowledge/gaps/{gap_id} received no supported fields.",
+        fix="当前接口支持更新 status 字段。",
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+    )
+
+
+@router.post("/admin/knowledge/gaps/{gap_id}/add-eval")
+def admin_add_knowledge_gap_to_eval(gap_id: str) -> dict[str, object]:
+    return add_gap_to_eval(gap_id)
 
 
 @router.post("/routes/recommend")
@@ -598,7 +682,7 @@ def feedback(payload: FeedbackRequest) -> dict[str, object]:
             fix="请在 rating 字段传入 1、2、3、4 或 5。",
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
-    return record_feedback(
+    result = record_feedback(
         channel=payload.channel,
         route_id=payload.route_id,
         attraction_id=payload.attraction_id,
@@ -606,6 +690,18 @@ def feedback(payload: FeedbackRequest) -> dict[str, object]:
         tags=payload.tags,
         comment=payload.comment,
     )
+    tag_text = " ".join(payload.tags or [])
+    if "信息不准" in tag_text or "不准" in tag_text or "incorrect" in tag_text.lower():
+        query = (payload.comment or "").strip()
+        if not query:
+            query = f"反馈提示信息不准：route={payload.route_id or '-'} attraction={payload.attraction_id or '-'}"
+        safe_record_knowledge_gap(
+            query=query,
+            trigger_type="negative_feedback",
+            matched_sources=[],
+            confidence=0.0,
+        )
+    return result
 
 
 def _parse_content_disposition(value: str) -> dict[str, str]:

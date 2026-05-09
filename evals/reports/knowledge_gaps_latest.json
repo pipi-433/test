@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-05-09T06:02:49+00:00",
+  "mode": "mock",
+  "total": 9,
+  "passed": 9,
+  "failed": 0,
+  "accuracy": 1.0,
+  "cleanup_deleted": 3,
+  "results": [
+    {
+      "id": "qa-no-source-gap-created",
+      "passed": true,
+      "gap_id": "kgap-bac5ba623488"
+    },
+    {
+      "id": "duplicate-query-deduped",
+      "passed": true,
+      "open_or_drafted_count": 1
+    },
+    {
+      "id": "draft-faq-updates-status",
+      "passed": true,
+      "status": "drafted"
+    },
+    {
+      "id": "add-eval-idempotent",
+      "passed": true,
+      "eval_case_id": "knowledge_gap_kgap-eval-stable",
+      "stable_case_count": 1
+    },
+    {
+      "id": "patch-status-resolved",
+      "passed": true,
+      "status": "resolved"
+    },
+    {
+      "id": "negative-feedback-gap-created",
+      "passed": true,
+      "gap_id": "kgap-d3485b769cf3"
+    },
+    {
+      "id": "patch-status-ignored",
+      "passed": true,
+      "status": "ignored"
+    },
+    {
+      "id": "admin-list-and-overview-fields",
+      "passed": true,
+      "count": 3
+    },
+    {
+      "id": "no-session-id",
+      "passed": true
+    }
+  ]
+}

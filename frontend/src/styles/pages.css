@@ -1494,6 +1494,102 @@
   outline-offset: 3px;
 }
 
+.knowledge-gap-console {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.knowledge-gap-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.knowledge-gap-filter {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-2);
+  background: white;
+  color: var(--color-ink-700);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.knowledge-gap-filter--active {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.knowledge-gap-message {
+  margin: 0;
+  border-left: 3px solid var(--color-primary-500);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  font-weight: 700;
+}
+
+.knowledge-gap-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.knowledge-gap-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.44fr);
+  align-items: start;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+}
+
+.knowledge-gap-row__main,
+.knowledge-gap-row__title {
+  min-width: 0;
+}
+
+.knowledge-gap-row__main {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.knowledge-gap-row__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.knowledge-gap-row__title strong,
+.knowledge-gap-row__main p,
+.knowledge-gap-row__main span {
+  overflow-wrap: anywhere;
+}
+
+.knowledge-gap-row__main p,
+.knowledge-gap-row__main span {
+  margin: 0;
+  color: var(--color-ink-600);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+
+.knowledge-gap-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
 .mock-chart {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -1698,6 +1794,8 @@
   .admin-content-grid,
   .admin-mini-grid,
   .metric-grid,
+  .knowledge-gap-row,
+  .knowledge-gap-summary,
   .operation-quick-actions,
   .operation-event-row {
     grid-template-columns: 1fr;
@@ -1746,6 +1844,7 @@
   .kiosk-tools,
   .kiosk-qr,
   .score-grid,
+  .knowledge-gap-actions,
   .tag-list,
   .mobile-input {
     grid-template-columns: 1fr;
