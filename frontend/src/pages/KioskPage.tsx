@@ -2,8 +2,8 @@ import { AlertTriangle, Camera, MapPinned, Mic, QrCode, Route, Sparkles } from "
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
-import { getCrowdSnapshot, recommendRoute } from "../api/client";
-import type { CrowdSnapshotItem, RouteRecommendation } from "../api/client";
+import { getCrowdSnapshot, getOperationEvents, recommendRoute } from "../api/client";
+import type { CrowdSnapshotItem, OperationEvent, RouteRecommendation } from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock } from "../components/DigitalHumanMock";
 import type { DigitalHumanState } from "../components/DigitalHumanMock";
@@ -15,6 +15,7 @@ import { quickQuestions, routeSteps } from "../data/mock";
 
 export function KioskPage() {
   const [crowdItems, setCrowdItems] = useState<CrowdSnapshotItem[]>([]);
+  const [operationEvents, setOperationEvents] = useState<OperationEvent[]>([]);
   const [routeResult, setRouteResult] = useState<RouteRecommendation | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState("");
@@ -23,6 +24,9 @@ export function KioskPage() {
     getCrowdSnapshot()
       .then((snapshot) => setCrowdItems(snapshot.items.filter((item) => item.crowd_level === "high")))
       .catch(() => setCrowdItems([]));
+    getOperationEvents()
+      .then((payload) => setOperationEvents(payload.items.slice(0, 4)))
+      .catch(() => setOperationEvents([]));
   }, []);
 
   const shareUrl = routeResult ? `${window.location.origin}${routeResult.share.share_url}` : "";
@@ -118,8 +122,23 @@ export function KioskPage() {
             </div>
             <p className="kiosk-crowd-note">
               <AlertTriangle aria-hidden="true" size={20} />
-              当前为模拟拥挤度/演示数据，不代表真实客流。
+              当前为模拟拥挤度/运营事件演示数据，不代表真实硬件客流。
             </p>
+            {operationEvents.length ? (
+              <div className="kiosk-operation-list" aria-label="当前运营提醒">
+                {operationEvents.map((event) => (
+                  <div className="kiosk-operation-row" key={event.id}>
+                    <strong>{event.attraction_name || event.attraction_id}</strong>
+                    <span>{event.message} · source={event.source}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {routeResult?.operation_policy?.active_event_count ? (
+              <p className="kiosk-operation-applied">
+                路线已考虑 {routeResult.operation_policy.active_event_count} 条运营事件，扫码后手机端可查看逐站影响说明。
+              </p>
+            ) : null}
             {crowdItems.slice(0, 2).map((item) => (
               <div className="kiosk-crowd-row" key={item.attraction_id}>
                 <strong>{item.name}</strong>

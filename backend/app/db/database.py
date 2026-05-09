@@ -95,7 +95,71 @@ CREATE TABLE IF NOT EXISTS feedback_events (
 
 CREATE INDEX IF NOT EXISTS idx_feedback_events_created
   ON feedback_events(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS operation_events (
+  id TEXT PRIMARY KEY,
+  attraction_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  message TEXT NOT NULL,
+  start_at TEXT NOT NULL,
+  end_at TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  active INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (attraction_id) REFERENCES attractions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_operation_events_active_time
+  ON operation_events(active, start_at, end_at);
+CREATE INDEX IF NOT EXISTS idx_operation_events_attraction
+  ON operation_events(attraction_id);
 """
+
+DEMO_OPERATION_EVENTS = [
+    {
+        "id": "op-demo-crowd-jiulong",
+        "attraction_id": "lingshan-ls-006",
+        "event_type": "crowd",
+        "severity": "warning",
+        "message": "九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。",
+        "source": "mock_simulation",
+        "created_by": "system-seed",
+        "active": 1,
+    },
+    {
+        "id": "op-demo-closed-manfeilong",
+        "attraction_id": "lingshan-ls-015",
+        "event_type": "closed",
+        "severity": "critical",
+        "message": "曼飞龙塔局部维护演示，非必去路线将自动避开该点。",
+        "source": "mock_simulation",
+        "created_by": "system-seed",
+        "active": 1,
+    },
+    {
+        "id": "op-demo-show-jiulong",
+        "attraction_id": "lingshan-ls-006",
+        "event_type": "show",
+        "severity": "info",
+        "message": "九龙灌浴演出即将开始，适合在附近游客提前就位。",
+        "source": "mock_simulation",
+        "created_by": "system-seed",
+        "active": 1,
+    },
+    {
+        "id": "op-demo-recommend-xiangyue",
+        "attraction_id": "nianhuawan-nh-003",
+        "event_type": "recommendation",
+        "severity": "info",
+        "message": "香月花街适合作为亲子与休闲游客的演示分流方向。",
+        "source": "mock_simulation",
+        "created_by": "system-seed",
+        "active": 1,
+    },
+]
 
 
 def connect() -> sqlite3.Connection:
@@ -109,6 +173,46 @@ def connect() -> sqlite3.Connection:
 
 def _dump(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def _seed_operation_events(conn: sqlite3.Connection) -> int:
+    now = "2026-05-08T00:00:00+00:00"
+    end = "2026-12-31T23:59:59+00:00"
+    rows = [
+        {
+            **event,
+            "start_at": now,
+            "end_at": end,
+            "created_at": now,
+            "updated_at": now,
+        }
+        for event in DEMO_OPERATION_EVENTS
+    ]
+    conn.executemany(
+        """
+        INSERT INTO operation_events (
+          id, attraction_id, event_type, severity, message, start_at, end_at,
+          source, created_by, active, created_at, updated_at
+        )
+        VALUES (
+          :id, :attraction_id, :event_type, :severity, :message, :start_at, :end_at,
+          :source, :created_by, :active, :created_at, :updated_at
+        )
+        ON CONFLICT(id) DO UPDATE SET
+          attraction_id = excluded.attraction_id,
+          event_type = excluded.event_type,
+          severity = excluded.severity,
+          message = excluded.message,
+          start_at = excluded.start_at,
+          end_at = excluded.end_at,
+          source = excluded.source,
+          created_by = excluded.created_by,
+          active = excluded.active,
+          updated_at = excluded.updated_at
+        """,
+        rows,
+    )
+    return len(rows)
 
 
 def initialize_database(
@@ -130,6 +234,7 @@ def initialize_database(
                 DROP TABLE IF EXISTS behavior_summary;
                 DROP TABLE IF EXISTS feedback_events;
                 DROP TABLE IF EXISTS interaction_events;
+                DROP TABLE IF EXISTS operation_events;
                 DROP TABLE IF EXISTS attractions;
                 """
             )
@@ -204,6 +309,8 @@ def initialize_database(
             ),
         )
 
+        operation_events_count = _seed_operation_events(conn)
+
         conn.commit()
 
     return {
@@ -212,4 +319,5 @@ def initialize_database(
         "behavior_summaries": 1,
         "interaction_events": 0,
         "feedback_events": 0,
+        "operation_events": operation_events_count,
     }

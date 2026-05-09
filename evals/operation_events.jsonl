@@ -1,0 +1,6 @@
+{"id":"public_active_events","description":"公共端返回当前有效运营事件"}
+{"id":"manual_crowd_affects_trace","description":"手动拥挤事件会进入路线决策说明"}
+{"id":"closed_non_must_avoided","description":"临时关闭事件命中非必去点时路线避开"}
+{"id":"closed_must_kept_warning","description":"临时关闭事件命中必去点时保留并提示"}
+{"id":"show_event_visible","description":"演出提醒会进入站点提示或决策说明"}
+{"id":"patch_deactivate_event","description":"停用事件后不再影响路线"}

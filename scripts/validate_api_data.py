@@ -35,6 +35,7 @@ def main() -> int:
         require(counts["attractions"] == 22, f"Expected 22 attractions, got {counts['attractions']}")
         require(counts["knowledge_chunks"] >= 132, f"Expected at least 132 chunks, got {counts['knowledge_chunks']}")
         require(counts["behavior_summary"] == 1, f"Expected 1 behavior summary, got {counts['behavior_summary']}")
+        require(counts["operation_events"] >= 4, f"Expected at least 4 demo operation events, got {counts['operation_events']}")
 
         attractions = list_attractions()
         require(len(attractions) == 22, "Attraction repository returned wrong count")

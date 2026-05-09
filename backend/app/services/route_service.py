@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -10,6 +11,7 @@ from fastapi import status
 from app.core.errors import ApiError
 from app.repositories.content_repository import get_attraction, list_attractions
 from app.services.crowd_service import CROWD_SOURCE, get_crowd_record
+from app.services.operation_service import get_active_operation_events
 
 
 DEFAULT_THEME = "family"
@@ -177,6 +179,87 @@ def _clean_ids(values: list[str] | None, attractions: dict[str, dict[str, Any]])
             cleaned.append(attraction_id)
             seen.add(attraction_id)
     return cleaned
+
+
+def _operation_events_by_attraction(events: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        attraction_id = str(event.get("attraction_id") or "")
+        if attraction_id:
+            grouped.setdefault(attraction_id, []).append(event)
+    return grouped
+
+
+def _event_public(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": event.get("id"),
+        "attraction_id": event.get("attraction_id"),
+        "attraction_name": event.get("attraction_name"),
+        "event_type": event.get("event_type"),
+        "severity": event.get("severity"),
+        "message": event.get("message"),
+        "start_at": event.get("start_at"),
+        "end_at": event.get("end_at"),
+        "source": event.get("source"),
+        "active": bool(event.get("active")),
+    }
+
+
+def _first_event(events: list[dict[str, Any]], event_type: str) -> dict[str, Any] | None:
+    return next((event for event in events if event.get("event_type") == event_type), None)
+
+
+def _extract_wait_minutes(message: str, fallback: int) -> int:
+    match = re.search(r"(\d{1,3})\s*分钟", message)
+    if not match:
+        return fallback
+    return max(0, min(120, int(match.group(1))))
+
+
+def _crowd_record_with_operation_events(record: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+    crowd_events = [event for event in events if event.get("event_type") == "crowd"]
+    if not crowd_events:
+        return record
+    severity_rank = {"info": 0, "warning": 1, "critical": 2}
+    event = sorted(crowd_events, key=lambda item: severity_rank.get(str(item.get("severity")), 0), reverse=True)[0]
+    severity = str(event.get("severity") or "warning")
+    if severity == "critical":
+        target_score, target_wait, target_level = 92, 40, "high"
+    elif severity == "warning":
+        target_score, target_wait, target_level = 78, 30, "high"
+    else:
+        target_score, target_wait, target_level = 55, 15, "medium"
+    wait_minutes = _extract_wait_minutes(str(event.get("message") or ""), max(record["wait_minutes"], target_wait))
+    score = max(int(record["crowd_score"]), target_score)
+    level = "high" if score >= 70 else target_level
+    return {
+        **record,
+        "crowd_level": level,
+        "crowd_score": score,
+        "wait_minutes": max(int(record["wait_minutes"]), wait_minutes),
+        "source": event.get("source") or "manual_admin",
+        "note": f"运营事件：{event.get('message')}（source={event.get('source')}）",
+    }
+
+
+def _operation_note(events: list[dict[str, Any]], *, is_must_visit: bool) -> str | None:
+    notes: list[str] = []
+    for event in events:
+        event_type = event.get("event_type")
+        source = event.get("source")
+        message = event.get("message")
+        if event_type == "closed":
+            if is_must_visit:
+                notes.append(f"临时关闭提醒：{message}；该点是必去约束，已保留并建议现场确认。source={source}")
+            else:
+                notes.append(f"临时关闭提醒：{message}；非必去路线应避开。source={source}")
+        elif event_type == "crowd":
+            notes.append(f"拥挤运营事件：{message}。source={source}")
+        elif event_type == "show":
+            notes.append(f"演出提醒：{message}。source={source}")
+        elif event_type == "recommendation":
+            notes.append(f"分流推荐：{message}。source={source}")
+    return " ".join(notes) if notes else None
 
 
 def _constraint_label(value: str) -> str:
@@ -735,6 +818,7 @@ def _full_pool_candidate_score(
     optional_set: set[str],
     avoid_crowd: bool,
     tolerance: str,
+    operation_events: list[dict[str, Any]] | None = None,
 ) -> int:
     profile = build_attraction_route_profile(attraction)
     record = get_crowd_record(attraction["id"])
@@ -749,6 +833,16 @@ def _full_pool_candidate_score(
         score -= 8
     elif record["crowd_level"] == "low":
         score += 8
+    for event in operation_events or []:
+        event_type = event.get("event_type")
+        if event_type == "closed":
+            score -= 200
+        elif event_type == "crowd" and avoid_crowd:
+            score -= 22 if event.get("severity") != "critical" else 36
+        elif event_type == "show":
+            score += 16
+        elif event_type == "recommendation":
+            score += 22
     return score
 
 
@@ -762,6 +856,7 @@ def _add_full_pool_candidates(
     crowd_tolerance: str,
     summary: dict[str, Any],
     trace: list[str],
+    operation_events_by_attraction: dict[str, list[dict[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
     attractions = _attraction_map()
     existing_ids = {stop["attraction_id"] for stop in stops}
@@ -783,6 +878,7 @@ def _add_full_pool_candidates(
             optional_set=optional_set,
             avoid_crowd=avoid_crowd,
             tolerance=crowd_tolerance,
+            operation_events=(operation_events_by_attraction or {}).get(attraction_id, []),
         )
         candidates.append((score, attraction))
 
@@ -889,6 +985,7 @@ def _apply_crowd_to_stops(
     stops: list[dict[str, Any]],
     avoid_crowd: bool,
     crowd_tolerance: str,
+    operation_events_by_attraction: dict[str, list[dict[str, Any]]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     enriched: list[dict[str, Any]] = []
     trace: list[str] = []
@@ -897,7 +994,8 @@ def _apply_crowd_to_stops(
     delayed: list[dict[str, Any]] = []
 
     for stop in stops:
-        record = get_crowd_record(stop["attraction_id"])
+        stop_events = (operation_events_by_attraction or {}).get(stop["attraction_id"], [])
+        record = _crowd_record_with_operation_events(get_crowd_record(stop["attraction_id"]), stop_events)
         is_must_visit = stop.get("constraint_type") == "must_visit"
         crowd_action = classify_crowd_action(
             stop=stop,
@@ -918,9 +1016,20 @@ def _apply_crowd_to_stops(
             "crowd_score": record["crowd_score"],
             "wait_minutes": record["wait_minutes"],
             "crowd_note": _crowd_note(record, avoid_crowd=avoid_crowd, tolerance=tolerance, adjusted=should_delay),
+            "crowd_source": record.get("source", CROWD_SOURCE),
             "crowd_action": crowd_action,
             "decision_reason": f"{stop.get('decision_reason', '')} {crowd_decision}".strip(),
         }
+        if _first_event(stop_events, "crowd"):
+            crowd_event = _first_event(stop_events, "crowd") or {}
+            adjusted_stop["crowd_note"] = (
+                f"{adjusted_stop['crowd_note']} 运营事件提示：{crowd_event.get('message')} "
+                f"source={crowd_event.get('source')}。"
+            )
+            trace.append(
+                f"{stop['name']} 因运营拥挤事件调整等待/拥挤评分，source={crowd_event.get('source')}，"
+                f"message={crowd_event.get('message')}。"
+            )
         if should_delay:
             adjusted_stop["stay_minutes"] = max(12, int(adjusted_stop["stay_minutes"]) - 8)
             delayed.append(adjusted_stop)
@@ -948,6 +1057,68 @@ def _apply_crowd_to_stops(
         if index == 1:
             stop["walk_minutes_from_previous"] = 0
     return adjusted, trace
+
+
+def _apply_operation_events_to_stops(
+    *,
+    stops: list[dict[str, Any]],
+    operation_events_by_attraction: dict[str, list[dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], list[str], list[dict[str, Any]]]:
+    trace: list[str] = []
+    affected_events: list[dict[str, Any]] = []
+    enriched: list[dict[str, Any]] = []
+    for stop in stops:
+        events = operation_events_by_attraction.get(stop["attraction_id"], [])
+        public_events = [_event_public(event) for event in events]
+        is_must_visit = stop.get("constraint_type") == "must_visit"
+        note = _operation_note(events, is_must_visit=is_must_visit)
+        next_stop = {
+            **stop,
+            "operation_events": public_events,
+            "operation_note": note,
+        }
+        if note:
+            next_stop["decision_reason"] = f"{next_stop.get('decision_reason', '')} 运营事件：{note}".strip()
+        for event in events:
+            event_type = event.get("event_type")
+            source = event.get("source")
+            message = event.get("message")
+            affected_events.append(_event_public(event))
+            if event_type == "closed" and is_must_visit:
+                trace.append(
+                    f"{stop['name']} 是必去点，但受临时关闭运营事件影响，source={source}；"
+                    "路线保留该点并提示现场确认，未静默删除。"
+                )
+                if "warning" not in str(next_stop.get("crowd_action")):
+                    next_stop["crowd_action"] = "keep_with_warning"
+            elif event_type == "show":
+                trace.append(f"{stop['name']} 命中演出提醒事件，source={source}，message={message}。")
+            elif event_type == "recommendation":
+                trace.append(f"{stop['name']} 命中运营推荐分流事件，source={source}，message={message}。")
+        enriched.append(next_stop)
+    return enriched, trace, affected_events
+
+
+def _build_operation_policy(
+    *,
+    active_events: list[dict[str, Any]],
+    affected_events: list[dict[str, Any]],
+    skipped_closed_ids: list[str],
+) -> dict[str, Any]:
+    sources = sorted({str(event.get("source")) for event in active_events if event.get("source")})
+    event_types: dict[str, int] = {}
+    for event in active_events:
+        event_type = str(event.get("event_type") or "unknown")
+        event_types[event_type] = event_types.get(event_type, 0) + 1
+    return {
+        "active_event_count": len(active_events),
+        "affected_event_count": len(affected_events),
+        "skipped_closed_attraction_ids": skipped_closed_ids,
+        "event_types": event_types,
+        "sources": sources,
+        "caveat": "运营事件来自 manual_admin / mock_simulation 演示配置，不代表真实闸机、摄像头、Wi-Fi、GPS 或 IoT 数据。",
+        "affected_events": affected_events[:8],
+    }
 
 
 def _score_route(
@@ -1056,6 +1227,26 @@ def recommend_route(
     budget = _safe_budget(time_budget_minutes)
     chosen_theme = _infer_theme(theme, group_type, interests)
     tolerance = _safe_tolerance(crowd_tolerance)
+    operation_events = get_active_operation_events()
+    operation_events_map = _operation_events_by_attraction(operation_events)
+    requested_must_set = set(_raw_ids(must_visit_attraction_ids))
+    closed_avoid_ids = sorted(
+        {
+            attraction_id
+            for attraction_id, events in operation_events_map.items()
+            if attraction_id not in requested_must_set and _first_event(events, "closed")
+        }
+    )
+    combined_avoid_ids = _raw_ids(avoid_attraction_ids) + [item for item in closed_avoid_ids if item not in _raw_ids(avoid_attraction_ids)]
+    operation_pre_trace: list[str] = []
+    attractions = _attraction_map()
+    for attraction_id in closed_avoid_ids:
+        event = _first_event(operation_events_map.get(attraction_id, []), "closed") or {}
+        name = (attractions.get(attraction_id) or {}).get("name") or attraction_id
+        operation_pre_trace.append(
+            f"{name} 因 active closed 运营事件从非必去候选路线中避开，"
+            f"source={event.get('source')}，message={event.get('message')}。"
+        )
     stops = _select_template_stops(
         theme=chosen_theme,
         time_budget_minutes=budget,
@@ -1064,7 +1255,7 @@ def recommend_route(
     normalized_constraints = normalize_route_constraints(
         must_visit_attraction_ids=must_visit_attraction_ids,
         optional_attraction_ids=optional_attraction_ids,
-        avoid_attraction_ids=avoid_attraction_ids,
+        avoid_attraction_ids=combined_avoid_ids,
         start_attraction_id=start_attraction_id,
     )
     stops, constraint_trace, constraint_summary, constraint_conflicts = apply_route_constraints(
@@ -1073,6 +1264,9 @@ def recommend_route(
         time_budget_minutes=budget,
         theme=chosen_theme,
     )
+    constraint_summary["operation_closed_avoid_attraction_ids"] = closed_avoid_ids
+    if closed_avoid_ids:
+        constraint_summary["notes"].append("active closed 运营事件低于用户必去约束，但高于普通模板推荐；非必去点已避开。")
     full_pool_trace: list[str] = []
     stops = _add_full_pool_candidates(
         stops=stops,
@@ -1083,6 +1277,7 @@ def recommend_route(
         crowd_tolerance=tolerance,
         summary=constraint_summary,
         trace=full_pool_trace,
+        operation_events_by_attraction=operation_events_map,
     )
     stops = _trim_for_time_budget(
         stops=stops,
@@ -1094,6 +1289,11 @@ def recommend_route(
         stops=stops,
         avoid_crowd=avoid_crowd,
         crowd_tolerance=tolerance,
+        operation_events_by_attraction=operation_events_map,
+    )
+    stops, operation_stop_trace, affected_operation_events = _apply_operation_events_to_stops(
+        stops=stops,
+        operation_events_by_attraction=operation_events_map,
     )
     estimated = _estimated_minutes(stops)
     template = ROUTE_TEMPLATES[chosen_theme]
@@ -1135,6 +1335,9 @@ def recommend_route(
         "must_visit_attraction_ids": normalized_constraints["must_visit_attraction_ids"],
         "optional_attraction_ids": normalized_constraints["optional_attraction_ids"],
         "avoid_attraction_ids": normalized_constraints["avoid_attraction_ids"],
+        "operation_event_keys": [
+            f"{event.get('id')}:{event.get('updated_at')}:{event.get('active')}" for event in operation_events
+        ],
         "stops": [stop["attraction_id"] for stop in stops],
     }
     route_id = _route_id(route_core)
@@ -1143,11 +1346,23 @@ def recommend_route(
         f"根据主题={THEME_LABELS[chosen_theme]}、时长={budget}分钟、同行={group_type or '未指定'}、体力={intensity or '未指定'}生成候选路线。",
         "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         f"约束优先级：{' > '.join(ROUTE_CONSTRAINT_RULES['priority'])}。",
+        *operation_pre_trace,
         *constraint_trace,
         *full_pool_trace,
         f"拥挤策略：avoid_crowd={str(avoid_crowd).lower()}，crowd_tolerance={tolerance}，数据源={CROWD_SOURCE}。",
         *crowd_trace,
+        *operation_stop_trace,
     ]
+    operation_policy = _build_operation_policy(
+        active_events=operation_events,
+        affected_events=affected_operation_events,
+        skipped_closed_ids=closed_avoid_ids,
+    )
+    if operation_events:
+        decision_trace.append(
+            "运营事件策略：active events 来自 manual_admin/mock_simulation；"
+            "closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。"
+        )
     if constraint_summary.get("warning"):
         decision_trace.append(f"约束提醒：{constraint_summary['warning']}")
     if high_stops:
@@ -1176,11 +1391,13 @@ def recommend_route(
         "recommendation_score": recommendation_score,
         "score_breakdown": score_breakdown,
         "decision_trace": decision_trace,
+        "operation_policy": operation_policy,
+        "operation_events_summary": operation_policy,
         "crowd_policy": {
             "avoid_crowd": avoid_crowd,
             "crowd_tolerance": tolerance,
             "source": CROWD_SOURCE,
-            "caveat": "当前为模拟拥挤度/演示数据，不代表真实客流。",
+            "caveat": "当前为模拟拥挤度/运营事件演示数据，不代表真实客流或真实硬件采集。",
         },
         "stops": stops,
         "assumptions": assumptions,

@@ -58,6 +58,50 @@ export type CrowdSnapshotResponse = {
   caveat: string;
 };
 
+export type OperationEventType = "crowd" | "closed" | "show" | "recommendation";
+export type OperationEventSeverity = "info" | "warning" | "critical";
+export type OperationEventSource = "manual_admin" | "mock_simulation";
+
+export type OperationEvent = {
+  id: string;
+  attraction_id: string;
+  attraction_name?: string;
+  scenic_area?: string;
+  event_type: OperationEventType;
+  severity: OperationEventSeverity;
+  message: string;
+  start_at: string;
+  end_at: string;
+  source: OperationEventSource;
+  created_by: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OperationEventCreateRequest = {
+  attraction_id: string;
+  event_type: OperationEventType;
+  severity: OperationEventSeverity;
+  message: string;
+  start_at?: string;
+  end_at?: string;
+  source?: OperationEventSource;
+  created_by?: string;
+  active?: boolean;
+};
+
+export type OperationEventUpdateRequest = Partial<OperationEventCreateRequest> & {
+  active?: boolean;
+};
+
+export type OperationEventsResponse = {
+  items: OperationEvent[];
+  count: number;
+  mode: string;
+  source_note: string;
+};
+
 export type RouteStop = {
   order: number;
   attraction_id: string;
@@ -74,6 +118,9 @@ export type RouteStop = {
   crowd_score: number;
   wait_minutes: number;
   crowd_note: string;
+  crowd_source?: string;
+  operation_events?: OperationEvent[];
+  operation_note?: string | null;
   constraint_type?: "must_visit" | "optional" | "recommended" | "alternative";
   constraint_reason?: string;
   crowd_action?: "keep" | "delay" | "replace" | "avoid" | "skip" | "keep_with_warning";
@@ -118,6 +165,16 @@ export type RouteConstraintSummary = {
   notes: string[];
 };
 
+export type RouteOperationPolicy = {
+  active_event_count: number;
+  affected_event_count: number;
+  skipped_closed_attraction_ids: string[];
+  event_types: Record<string, number>;
+  sources: string[];
+  caveat: string;
+  affected_events: OperationEvent[];
+};
+
 export type RouteRecommendation = {
   id: string;
   title: string;
@@ -144,6 +201,8 @@ export type RouteRecommendation = {
     stop_quality: number;
   };
   decision_trace: string[];
+  operation_policy?: RouteOperationPolicy;
+  operation_events_summary?: RouteOperationPolicy;
   crowd_policy: {
     avoid_crowd: boolean;
     crowd_tolerance: CrowdLevel;
@@ -336,6 +395,34 @@ export async function fetchAttractions(): Promise<Attraction[]> {
 
 export async function getCrowdSnapshot(): Promise<CrowdSnapshotResponse> {
   return requestJson<CrowdSnapshotResponse>("/api/crowd/snapshot");
+}
+
+export async function getOperationEvents(attractionId?: string): Promise<OperationEventsResponse> {
+  const params = new URLSearchParams();
+  if (attractionId) {
+    params.set("attraction_id", attractionId);
+  }
+  const query = params.toString();
+  return requestJson<OperationEventsResponse>(`/api/operations/events${query ? `?${query}` : ""}`);
+}
+
+export async function getAdminOperationEvents(activeOnly = false): Promise<OperationEventsResponse> {
+  const params = new URLSearchParams({ active_only: String(activeOnly) });
+  return requestJson<OperationEventsResponse>(`/api/admin/operations/events?${params.toString()}`);
+}
+
+export async function createOperationEvent(payload: OperationEventCreateRequest): Promise<OperationEvent> {
+  return requestJson<OperationEvent>("/api/admin/operations/events", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function updateOperationEvent(eventId: string, payload: OperationEventUpdateRequest): Promise<OperationEvent> {
+  return requestJson<OperationEvent>(`/api/admin/operations/events/${encodeURIComponent(eventId)}`, {
+    body: JSON.stringify(payload),
+    method: "PATCH",
+  });
 }
 
 export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {

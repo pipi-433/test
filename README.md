@@ -1,6 +1,6 @@
 # 灵境导游
 
-中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐、自然语言路线推荐、Route Memory Agent、模拟拥挤度分流、Kiosk 二维码路线带走、本地交互日志/反馈洞察和数字人语音演示闭环；默认无 API Key 可运行。
+中国软件杯 A5「景区导览服务 AI 数字人」项目。当前版本已完成游客端 QA、mock 识景、mock 路线推荐、自然语言路线推荐、Route Memory Agent、模拟拥挤度分流、运营事件控制台、Kiosk 二维码路线带走、本地交互日志/反馈洞察和数字人语音演示闭环；默认无 API Key 可运行。
 
 ## 本轮实现
 
@@ -13,6 +13,7 @@
 - Route Memory Agent：本地 mock 会话记忆保存偏好、必去点、避开点和上一条路线，支持缩短、少走路、避拥挤、多拍照、多历史等多轮重规划。
 - 路线约束规则矩阵：集中 `ROUTE_CONSTRAINT_RULES`，补齐必去/避开冲突、无效景点、短时长、多 session 隔离和取消必去等边界评测。
 - 全量景点候选池：经典路线模板只作为 seed，全部 22 个已解析景点都可作为必去、可选、避开或主题补充点参与规划。
+- 运营事件控制台：后台可发布拥挤、临时关闭、演出提醒和推荐分流事件，路线规划会读取 active events 并在 `decision_trace` 中解释调整原因。
 - 数字人语音演示层：GPT Image 辅助确定 2D 新中式导览员视觉方向，最终以 React/SVG/CSS 可控数字人落地，接入浏览器 SpeechSynthesis TTS、可选 SpeechRecognition 输入和文本降级。
 - Kiosk 路线带走：终端生成拥挤度感知路线，展示二维码、短码和手机打开链接，手机访问 `/route/:id/share?code=...` 查看同一条路线。
 - 交互日志与反馈：QA、识景、路线、二维码带走和游客反馈写入本地 SQLite，后台 `/admin` 读取 `/api/analytics/overview` 展示运营洞察。
@@ -154,6 +155,7 @@ python .\scripts\eval_crowd_routes.py
 python .\scripts\eval_route_share.py
 python .\scripts\eval_analytics.py
 python .\scripts\eval_route_constraints.py
+python .\scripts\eval_operation_events.py
 ```
 
 路线 API：
@@ -187,6 +189,7 @@ python .\scripts\eval_route_constraints.py
 - `crowd_score`: 0-100
 - `wait_minutes`
 - `crowd_note`
+- `operation_events` / `operation_note`：如该站受运营事件影响，会显示事件来源和处理说明。
 
 拥挤度快照示例：
 
@@ -283,6 +286,52 @@ python .\scripts\eval_route_full_pool.py
 ```
 
 当前仍是规则评分 + mock parser，不接真实 LLM、真实 GPS 或真实客流硬件。经典模板只是 seed，不是候选上限。
+
+### 运营事件控制台
+
+Task 06.12 将“mock 拥挤度分流”升级为“运营人员可配置事件 + 路线即时响应”。后台 `/admin` 提供运营事件控制台，可以快速创建并启停 4 类事件：
+
+- `crowd`：拥挤提醒，会覆盖或提高该景点等待时间、拥挤评分和站点提示。
+- `closed`：临时关闭。非必去点会被避开；如果是游客明确必去点，路线不会静默删除，而是在 stop 与 `decision_trace` 中提示确认。
+- `show`：演出提醒，会进入站点 `operation_note` 或决策说明。
+- `recommendation`：推荐分流，对相关景点做温和加权，但不会压过用户 `avoid_attraction_ids`。
+
+运营事件表为 SQLite 本地表 `operation_events`，字段包含 `attraction_id`、`event_type`、`severity`、`message`、`start_at`、`end_at`、`source`、`created_by` 和 `active`。`scripts/init_db.py` 会幂等 seed 若干 `mock_simulation` 演示事件；后台创建的事件来源为 `manual_admin`。
+
+API：
+
+- `GET /api/operations/events?attraction_id=...`
+- `GET /api/admin/operations/events?active_only=false`
+- `POST /api/admin/operations/events`
+- `PATCH /api/admin/operations/events/{id}`
+
+创建示例：
+
+```json
+{
+  "attraction_id": "lingshan-ls-013",
+  "event_type": "closed",
+  "severity": "critical",
+  "message": "灵山梵宫临时维护，非必去路线建议避开。",
+  "source": "manual_admin",
+  "created_by": "admin-console",
+  "active": true
+}
+```
+
+路线响应新增：
+
+- `operation_policy` / `operation_events_summary`
+- 每个 stop 的 `operation_events`、`operation_note`
+- `decision_trace` 中会写明 `manual_admin` 或 `mock_simulation` 来源。
+
+评测：
+
+```powershell
+python .\scripts\eval_operation_events.py
+```
+
+重要边界：运营事件是本地演示配置，不代表真实闸机、摄像头、Wi-Fi 探针、GPS 或 IoT 数据；后续若接真实硬件，也不能绕过用户明确必去/避开约束规则。
 
 ### 数字人语音、TTS 与状态机
 

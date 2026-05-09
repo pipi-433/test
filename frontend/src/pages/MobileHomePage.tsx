@@ -128,6 +128,15 @@ function selectionSourceLabel(value: string | undefined) {
   return value ? labels[value] || value : "系统推荐";
 }
 
+function operationImpactSummary(route: RouteRecommendation) {
+  const policy = route.operation_policy || route.operation_events_summary;
+  if (!policy || policy.active_event_count === 0) {
+    return "";
+  }
+  const affected = policy.affected_event_count > 0 ? `影响 ${policy.affected_event_count} 个站点` : "当前路线无直接受影响站点";
+  return `已读取 ${policy.active_event_count} 条运营事件，${affected}；来源 ${policy.sources.join(" / ") || "mock"}。`;
+}
+
 function attractionSearchText(item: Attraction) {
   return [item.name, item.scenic_area, item.category, ...(item.tags || [])].join(" ").toLowerCase();
 }
@@ -140,7 +149,8 @@ function speechExcerpt(value: string | undefined, limit = 420) {
 function routeSpeechSummary(route: RouteRecommendation) {
   const highStops = route.stops.filter((stop) => stop.crowd_level === "high").map((stop) => stop.name);
   const crowdText = highStops.length ? `高拥挤点有${highStops.slice(0, 2).join("、")}，已在路线里提示错峰。` : "当前路线整体拥挤压力较低。";
-  return `${route.title}已生成，综合评分 ${route.recommendation_score} 分，预计 ${route.estimated_duration_minutes} 分钟。${crowdText} 当前拥挤度为模拟演示数据，不代表真实客流。`;
+  const operationText = operationImpactSummary(route);
+  return `${route.title}已生成，综合评分 ${route.recommendation_score} 分，预计 ${route.estimated_duration_minutes} 分钟。${crowdText}${operationText ? operationText : ""} 当前拥挤度与运营事件为模拟演示数据，不代表真实客流。`;
 }
 
 function visionSpeechSummary(result: VisionResponse) {
@@ -977,6 +987,12 @@ export function MobileHomePage() {
                   {routeResult.constraint_conflicts[0].message}
                 </p>
               ) : null}
+              {operationImpactSummary(routeResult) ? (
+                <p className="operation-route-note">
+                  <AlertTriangle aria-hidden="true" size={16} />
+                  {operationImpactSummary(routeResult)} {(routeResult.operation_policy || routeResult.operation_events_summary)?.caveat}
+                </p>
+              ) : null}
             </div>
             <div className="decision-trace" aria-label="路线决策说明">
               <strong>决策说明</strong>
@@ -1021,6 +1037,7 @@ export function MobileHomePage() {
                       </p>
                     ) : null}
                     {stop.constraint_reason ? <p className="constraint-note">{stop.constraint_reason}</p> : null}
+                    {stop.operation_note ? <p className="operation-note">{stop.operation_note}</p> : null}
                     <p className="crowd-note">{stop.crowd_note}</p>
                     <button className="quick-question" type="button" onClick={() => void submitQuestion(stop.narration_question)}>
                       进入本站讲解

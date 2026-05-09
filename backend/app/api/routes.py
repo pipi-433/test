@@ -14,6 +14,11 @@ from app.services.content_service import (
     get_chunks,
 )
 from app.services.crowd_service import get_crowd_snapshot
+from app.services.operation_service import (
+    create_operation_event,
+    list_operation_events,
+    update_operation_event,
+)
 from app.services.qa_service import answer_question
 from app.services.route_intent_service import parse_route_intent
 from app.services.route_memory_service import apply_intent_to_memory, get_route_memory, update_memory_after_route
@@ -89,6 +94,34 @@ class FeedbackRequest(BaseModel):
     rating: int
     tags: list[str] = []
     comment: str | None = None
+
+
+class OperationEventCreateRequest(BaseModel):
+    attraction_id: str
+    event_type: str
+    severity: str = "info"
+    message: str
+    start_at: str | None = None
+    end_at: str | None = None
+    source: str = "manual_admin"
+    created_by: str = "admin"
+    active: bool = True
+
+
+class OperationEventUpdateRequest(BaseModel):
+    attraction_id: str | None = None
+    event_type: str | None = None
+    severity: str | None = None
+    message: str | None = None
+    start_at: str | None = None
+    end_at: str | None = None
+    source: str | None = None
+    created_by: str | None = None
+    active: bool | None = None
+
+
+def _dump_model(payload: BaseModel, *, exclude_unset: bool = False) -> dict[str, Any]:
+    return payload.model_dump(exclude_unset=exclude_unset)
 
 
 def _merge_unique(current: list[str], incoming: list[str]) -> list[str]:
@@ -218,6 +251,38 @@ def crowd_snapshot() -> dict[str, object]:
     return get_crowd_snapshot()
 
 
+@router.get("/operations/events")
+def operation_events(attraction_id: str | None = None) -> dict[str, object]:
+    items = list_operation_events(active_only=True, attraction_id=attraction_id)
+    return {
+        "items": items,
+        "count": len(items),
+        "mode": "mock",
+        "source_note": "运营事件来自 manual_admin / mock_simulation 演示配置，不代表真实硬件客流或实时设备数据。",
+    }
+
+
+@router.get("/admin/operations/events")
+def admin_operation_events(active_only: bool = Query(default=False)) -> dict[str, object]:
+    items = list_operation_events(active_only=active_only)
+    return {
+        "items": items,
+        "count": len(items),
+        "mode": "mock",
+        "source_note": "运营事件控制台为本地演示配置，事件来源仅 manual_admin / mock_simulation。",
+    }
+
+
+@router.post("/admin/operations/events", status_code=status.HTTP_201_CREATED)
+def admin_create_operation_event(payload: OperationEventCreateRequest) -> dict[str, object]:
+    return create_operation_event(_dump_model(payload))
+
+
+@router.patch("/admin/operations/events/{event_id}")
+def admin_update_operation_event(event_id: str, payload: OperationEventUpdateRequest) -> dict[str, object]:
+    return update_operation_event(event_id, _dump_model(payload, exclude_unset=True))
+
+
 @router.post("/routes/recommend")
 def routes_recommend(payload: RouteRecommendRequest) -> dict[str, object]:
     result = recommend_route(
@@ -252,6 +317,8 @@ def routes_recommend(payload: RouteRecommendRequest) -> dict[str, object]:
             "stop_count": len(result.get("stops", [])),
             "must_visit_attraction_ids": payload.must_visit_attraction_ids or [],
             "avoid_attraction_ids": payload.avoid_attraction_ids or [],
+            "operation_event_count": (result.get("operation_policy") or {}).get("active_event_count", 0),
+            "operation_sources": (result.get("operation_policy") or {}).get("sources", []),
         },
     )
     if payload.avoid_crowd or high_stops:

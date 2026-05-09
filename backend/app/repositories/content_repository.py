@@ -82,4 +82,5 @@ def table_counts() -> dict[str, int]:
             "attractions": conn.execute("SELECT COUNT(*) FROM attractions").fetchone()[0],
             "knowledge_chunks": conn.execute("SELECT COUNT(*) FROM knowledge_chunks").fetchone()[0],
             "behavior_summary": conn.execute("SELECT COUNT(*) FROM behavior_summary").fetchone()[0],
+            "operation_events": conn.execute("SELECT COUNT(*) FROM operation_events").fetchone()[0],
         }
