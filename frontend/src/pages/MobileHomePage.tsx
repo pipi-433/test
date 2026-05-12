@@ -111,6 +111,36 @@ function isRouteIntentQuestion(value: string) {
   return routeIntentKeywords.some((keyword) => value.includes(keyword));
 }
 
+const contextualAttractionMarkers = [
+  "\u8fd9\u4e2a\u666f\u70b9",
+  "\u8fd9\u4e2a\u5730\u65b9",
+  "\u8fd9\u91cc",
+  "\u5f53\u524d\u666f\u70b9",
+  "\u8be5\u666f\u70b9",
+  "\u5b83",
+];
+
+const genericGuideQuestionMarkers = [
+  "\u600e\u4e48\u6e38\u89c8",
+  "\u5982\u4f55\u6e38\u89c8",
+  "\u600e\u4e48\u73a9",
+  "\u4ecb\u7ecd",
+  "\u8bb2\u89e3",
+  "\u770b\u70b9",
+  "\u4eae\u70b9",
+  "\u9002\u5408",
+  "\u63a8\u8350",
+];
+
+function shouldUseSelectedAttractionContext(value: string) {
+  const compact = value.replace(/\s+/g, "");
+  const hasGuideMarker = genericGuideQuestionMarkers.some((marker) => compact.includes(marker));
+  if (!hasGuideMarker) {
+    return false;
+  }
+  return contextualAttractionMarkers.some((marker) => compact.includes(marker)) || compact.length <= 14;
+}
+
 function constraintLabel(value: string | undefined) {
   return value === "must_visit" ? "必去" : value === "optional" ? "可选" : value === "alternative" ? "替代" : "推荐";
 }
@@ -351,7 +381,9 @@ export function MobileHomePage() {
     speech.stop();
     setHumanState("thinking", "我正在检索本地资料，并判断是否需要规划路线。");
     const matchedAttraction = attractions.find((item) => cleanQuestion.includes(item.name));
-    const queryAttractionId = matchedAttraction?.id || selectedId;
+    const selectedContextId = shouldUseSelectedAttractionContext(cleanQuestion) ? selectedId : "";
+    const queryAttractionId = matchedAttraction?.id || selectedContextId || undefined;
+    const routeContextAttractionId = matchedAttraction?.id || selectedId || undefined;
     if (matchedAttraction && matchedAttraction.id !== selectedId) {
       setSelectedId(matchedAttraction.id);
     }
@@ -362,7 +394,7 @@ export function MobileHomePage() {
           message: cleanQuestion,
           sessionId: routeSessionId || undefined,
           currentRouteId: routeResult?.id,
-          selectedAttractionId: queryAttractionId,
+          selectedAttractionId: routeContextAttractionId,
         });
         setRouteConversation(result);
         setRouteSessionId(result.session_id);
