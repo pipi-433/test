@@ -1363,10 +1363,6 @@
   padding: var(--space-6);
 }
 
-.admin-section-anchor {
-  scroll-margin-top: var(--space-6);
-}
-
 .admin-topbar {
   display: flex;
   align-items: center;

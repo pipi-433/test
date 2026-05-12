@@ -108,13 +108,17 @@ const quickOperationEvents: Array<{
 ];
 
 const adminNavItems = [
-  { id: "admin-overview", label: "概览", Icon: ChartNoAxesCombined },
-  { id: "admin-evals", label: "评测看板", Icon: ClipboardCheck },
-  { id: "admin-operations", label: "运营事件", Icon: CalendarClock },
-  { id: "admin-knowledge-gaps", label: "知识缺口", Icon: Database },
-  { id: "admin-analytics", label: "运营分析", Icon: Gauge },
-  { id: "admin-system", label: "系统状态", Icon: Settings },
+  { id: "admin-overview", label: "概览", path: "/admin", Icon: ChartNoAxesCombined },
+  { id: "admin-evals", label: "评测看板", path: "/admin/evals", Icon: ClipboardCheck },
+  { id: "admin-operations", label: "运营事件", path: "/admin/operations", Icon: CalendarClock },
+  { id: "admin-knowledge-gaps", label: "知识缺口", path: "/admin/knowledge-gaps", Icon: Database },
+  { id: "admin-analytics", label: "运营分析", path: "/admin/analytics", Icon: Gauge },
+  { id: "admin-system", label: "系统状态", path: "/admin/system", Icon: Settings },
 ];
+
+function currentAdminSection(pathname: string) {
+  return adminNavItems.find((item) => item.path === pathname)?.id || "admin-overview";
+}
 
 function eventLabel(type: string) {
   const labels: Record<string, string> = {
@@ -220,7 +224,7 @@ export function AdminPage() {
   const [providers, setProviders] = useState<ProviderMap | null>(null);
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [evalOverview, setEvalOverview] = useState<EvalReportsOverview | null>(null);
-  const [activeAdminSection, setActiveAdminSection] = useState("admin-overview");
+  const activeAdminSection = currentAdminSection(window.location.pathname);
   const [operationEvents, setOperationEvents] = useState<OperationEvent[]>([]);
   const [operationMessage, setOperationMessage] = useState("");
   const [operationLoading, setOperationLoading] = useState(false);
@@ -229,13 +233,6 @@ export function AdminPage() {
   const [gapStatusFilter, setGapStatusFilter] = useState<KnowledgeGapStatus | "all">("all");
   const [gapMessage, setGapMessage] = useState("");
   const [gapBusyId, setGapBusyId] = useState("");
-
-  useEffect(() => {
-    const sectionId = window.location.hash.replace("#", "");
-    if (adminNavItems.some((item) => item.id === sectionId)) {
-      setActiveAdminSection(sectionId);
-    }
-  }, []);
 
   useEffect(() => {
     fetch("/api/provider/status")
@@ -375,12 +372,6 @@ export function AdminPage() {
     },
     { open: 0, drafted: 0, resolved: 0, ignored: 0 },
   );
-  function handleAdminNavClick(sectionId: string) {
-    setActiveAdminSection(sectionId);
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.history.replaceState(null, "", `#${sectionId}`);
-  }
-
   return (
     <PageShell className="admin-page">
       <aside className="admin-sidebar" aria-label="管理后台导航">
@@ -388,15 +379,11 @@ export function AdminPage() {
           <Bot aria-hidden="true" />
           <strong>灵境后台</strong>
         </div>
-        {adminNavItems.map(({ id, label, Icon }) => (
+        {adminNavItems.map(({ id, label, path, Icon }) => (
           <a
             className={activeAdminSection === id ? "admin-nav admin-nav--active" : "admin-nav"}
-            href={`#${id}`}
+            href={path}
             key={id}
-            onClick={(event) => {
-              event.preventDefault();
-              handleAdminNavClick(id);
-            }}
           >
             <Icon aria-hidden="true" />
             <span>{label}</span>
@@ -405,7 +392,7 @@ export function AdminPage() {
       </aside>
 
       <section className="admin-main">
-        <header className="admin-topbar admin-section-anchor" id="admin-overview">
+        <header className="admin-topbar">
           <div>
             <span className="eyebrow">运营概览</span>
             <h1>景区导览服务状态</h1>
@@ -420,39 +407,44 @@ export function AdminPage() {
           </div>
         </header>
 
-        <section className="metric-grid" aria-label="核心指标">
-          <MetricCard icon={<Users />} label="服务事件" trend="本地日志" value={String(overview?.service_count ?? 0)} />
-          <MetricCard icon={<Heart />} label="平均满意度" trend={`${overview?.feedback_count ?? 0} 条反馈`} value={overview?.average_rating?.toFixed(2) || "-"} />
-          <MetricCard icon={<Share2 />} label="路线带走" trend="share open" value={String(overview?.share_open_count ?? 0)} />
-          <MetricCard icon={<AlertTriangle />} label="避峰分流" trend="mock crowd" value={String(overview?.crowd_avoidance_count ?? 0)} />
-        </section>
+        {activeAdminSection === "admin-overview" ? (
+          <>
+            <section className="metric-grid" aria-label="核心指标">
+              <MetricCard icon={<Users />} label="服务事件" trend="本地日志" value={String(overview?.service_count ?? 0)} />
+              <MetricCard icon={<Heart />} label="平均满意度" trend={`${overview?.feedback_count ?? 0} 条反馈`} value={overview?.average_rating?.toFixed(2) || "-"} />
+              <MetricCard icon={<Share2 />} label="路线带走" trend="share open" value={String(overview?.share_open_count ?? 0)} />
+              <MetricCard icon={<AlertTriangle />} label="避峰分流" trend="mock crowd" value={String(overview?.crowd_avoidance_count ?? 0)} />
+            </section>
 
-        <section className="admin-mini-grid" aria-label="服务拆解">
-          <div className="admin-mini-stat">
-            <MessageSquareText aria-hidden="true" />
-            <span>问答</span>
-            <strong>{overview?.qa_count ?? 0}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <Database aria-hidden="true" />
-            <span>识景</span>
-            <strong>{overview?.vision_count ?? 0}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <Route aria-hidden="true" />
-            <span>路线</span>
-            <strong>{overview?.route_count ?? 0}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <Heart aria-hidden="true" />
-            <span>反馈</span>
-            <strong>{overview?.feedback_count ?? 0}</strong>
-          </div>
-        </section>
+            <section className="admin-mini-grid" aria-label="服务拆解">
+              <div className="admin-mini-stat">
+                <MessageSquareText aria-hidden="true" />
+                <span>问答</span>
+                <strong>{overview?.qa_count ?? 0}</strong>
+              </div>
+              <div className="admin-mini-stat">
+                <Database aria-hidden="true" />
+                <span>识景</span>
+                <strong>{overview?.vision_count ?? 0}</strong>
+              </div>
+              <div className="admin-mini-stat">
+                <Route aria-hidden="true" />
+                <span>路线</span>
+                <strong>{overview?.route_count ?? 0}</strong>
+              </div>
+              <div className="admin-mini-stat">
+                <Heart aria-hidden="true" />
+                <span>反馈</span>
+                <strong>{overview?.feedback_count ?? 0}</strong>
+              </div>
+            </section>
 
-        <p className="admin-source-note">{overview?.source_note || "当前 analytics 为本地演示日志 + mock/公开样例数据。"}</p>
+            <p className="admin-source-note">{overview?.source_note || "当前 analytics 为本地演示日志 + mock/公开样例数据。"}</p>
+          </>
+        ) : null}
 
-        <section className="admin-panel eval-dashboard admin-section-anchor" id="admin-evals" aria-label="评测看板">
+        {activeAdminSection === "admin-evals" ? (
+        <section className="admin-panel eval-dashboard" aria-label="评测看板">
           <div className="section-title-row">
             <div>
               <h2>评测看板 / 可信度证明</h2>
@@ -554,8 +546,10 @@ export function AdminPage() {
             )}
           </div>
         </section>
+        ) : null}
 
-        <section className="admin-panel operation-console admin-section-anchor" id="admin-operations" aria-label="运营事件控制台">
+        {activeAdminSection === "admin-operations" ? (
+        <section className="admin-panel operation-console" aria-label="运营事件控制台">
           <div className="section-title-row">
             <div>
               <h2>运营事件控制台</h2>
@@ -612,8 +606,10 @@ export function AdminPage() {
             )}
           </div>
         </section>
+        ) : null}
 
-        <section className="admin-panel knowledge-gap-console admin-section-anchor" id="admin-knowledge-gaps" aria-label="知识缺口闭环">
+        {activeAdminSection === "admin-knowledge-gaps" ? (
+        <section className="admin-panel knowledge-gap-console" aria-label="知识缺口闭环">
           <div className="section-title-row">
             <div>
               <h2>知识缺口闭环</h2>
@@ -709,8 +705,10 @@ export function AdminPage() {
             )}
           </div>
         </section>
+        ) : null}
 
-        <section className="admin-content-grid admin-section-anchor" id="admin-analytics">
+        {activeAdminSection === "admin-analytics" ? (
+        <section className="admin-content-grid">
           <article className="admin-panel admin-panel--wide">
             <div className="section-title-row">
               <div>
@@ -734,19 +732,6 @@ export function AdminPage() {
             ) : (
               <p className="empty-state">还没有路线推荐日志。游客端或 Kiosk 生成路线后会出现分布。</p>
             )}
-          </article>
-
-          <article className="admin-panel admin-section-anchor" id="admin-system">
-            <h2>Provider 状态</h2>
-            <div className="provider-list">
-              {providerEntries.map(([name, provider, status]) => (
-                <div className="provider-row" key={name}>
-                  <span>{name}</span>
-                  <strong>{provider}</strong>
-                  <StatusBadge tone={status === "ok" ? "ok" : "warning"}>{status}</StatusBadge>
-                </div>
-              ))}
-            </div>
           </article>
 
           <article className="admin-panel">
@@ -866,6 +851,51 @@ export function AdminPage() {
             </div>
           </article>
         </section>
+        ) : null}
+
+        {activeAdminSection === "admin-system" ? (
+          <section className="admin-content-grid">
+            <article className="admin-panel">
+              <h2>Provider 状态</h2>
+              <div className="provider-list">
+                {providerEntries.map(([name, provider, status]) => (
+                  <div className="provider-row" key={name}>
+                    <span>{name}</span>
+                    <strong>{provider}</strong>
+                    <StatusBadge tone={status === "ok" ? "ok" : "warning"}>{status}</StatusBadge>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="admin-panel admin-panel--wide">
+              <div className="section-title-row">
+                <div>
+                  <h2>最近事件</h2>
+                  <p>不包含 session_id 或个人身份字段</p>
+                </div>
+              </div>
+              <div className="event-list">
+                {recentEvents.length > 0 ? (
+                  recentEvents.map((item) => (
+                    <div className="event-row" key={item.id}>
+                      <StatusBadge tone={item.success ? "ok" : "warning"}>{eventLabel(item.event_type)}</StatusBadge>
+                      <div>
+                        <strong>
+                          {item.question ||
+                            String(item.metadata.theme_label || item.metadata.matched_attraction_name || item.route_id || item.id)}
+                        </strong>
+                        <span>{item.channel} · {item.created_at}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="empty-state">暂无交互事件。完成一次问答、识景、路线或反馈后会更新。</p>
+                )}
+              </div>
+            </article>
+          </section>
+        ) : null}
       </section>
     </PageShell>
   );
