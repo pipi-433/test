@@ -38,13 +38,9 @@ ROUTE_STRONG_WORDS = [
     "全天",
     "几小时",
     "小时",
-    "老人",
-    "孩子",
-    "亲子",
     "别太挤",
     "避开人多",
     "不排队",
-    "少走",
     "太累",
     "缩短",
     "换一个",
@@ -81,7 +77,37 @@ OUT_OF_SCOPE_TERMS = [
     "外卖",
 ]
 
-SCENIC_AREA_TERMS = ["灵山胜境", "灵山", "拈花湾", "无锡灵山", "拈花湾禅意小镇"]
+SCENIC_AREA_ALIASES = {
+    "灵山胜境": "灵山胜境",
+    "无锡灵山": "灵山胜境",
+    "灵山": "灵山胜境",
+    "拈花湾禅意小镇": "拈花湾",
+    "拈花湾": "拈花湾",
+}
+
+SCENIC_AREA_TERMS = list(SCENIC_AREA_ALIASES)
+
+INTEREST_KEYWORDS = {
+    "history": ["历史", "文化", "典故", "故事", "人文"],
+    "photo": ["拍照", "打卡", "出片", "摄影", "好看"],
+    "family": ["亲子", "孩子", "小朋友", "儿童", "一家人"],
+    "elderly": ["老人", "长辈", "爸妈", "少走", "轻松", "不累", "太累", "不想走", "腿脚"],
+    "nature": ["自然", "花海", "湖", "风景", "景色", "太湖"],
+    "blessing": ["祈福", "拜佛", "禅意", "朝圣", "佛", "许愿"],
+    "show": ["演出", "表演", "吉祥颂", "九龙灌浴", "提醒"],
+}
+
+GROUP_KEYWORDS = {
+    "family": ["亲子", "孩子", "小朋友", "儿童", "一家人"],
+    "elderly": ["老人", "长辈", "爸妈", "少走", "轻松", "不累", "太累", "不想走", "腿脚"],
+    "friends": ["朋友", "同学", "同伴", "情侣"],
+}
+
+RECOMMENDATION_WORDS = ["推荐", "适合", "哪里", "哪些", "有什么点", "有什么景点", "好玩的", "值得去"]
+COMPARE_WORDS = ["哪个", "哪一个", "对比", "比较", "更适合", "区别", "还是"]
+CROWD_STATUS_WORDS = ["人多", "拥挤", "排队", "客流", "等待", "现在人", "哪里比较挤"]
+OPERATION_STATUS_WORDS = ["临时关闭", "关闭", "维护", "别去", "演出提醒", "表演提醒", "今天哪里别去", "有什么演出"]
+SCENIC_INTRO_WORDS = ["介绍景区", "景区介绍", "景区有什么", "有什么好玩的", "介绍一下景区"]
 
 BASE_ATTRACTION_ALIASES = {
     "大佛": "lingshan-ls-011",
@@ -108,6 +134,69 @@ def _compact(text: str) -> str:
 
 def _contains_any(text: str, values: list[str]) -> bool:
     return any(value and value in text for value in values)
+
+
+def _extract_time_budget(text: str) -> int | None:
+    match = re.search(r"(\d+)\s*(?:个)?小时", text)
+    if match:
+        return max(30, min(int(match.group(1)) * 60, 720))
+    cn_hours = {"一小时": 60, "二小时": 120, "两小时": 120, "三小时": 180, "四小时": 240}
+    for word, minutes in cn_hours.items():
+        if word in text:
+            return minutes
+    if "半天" in text:
+        return 240
+    if "全天" in text:
+        return 480
+    return None
+
+
+def _has_time_budget(text: str) -> bool:
+    return _extract_time_budget(text) is not None
+
+
+def _scenic_area_matches(text: str) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for alias, area in sorted(SCENIC_AREA_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
+        if alias == "灵山" and any(name in text for name in ["灵山大佛", "灵山梵宫"]):
+            continue
+        if alias in text and area not in seen:
+            seen.add(area)
+            matches.append({"type": "scenic_area", "id": area, "name": area, "matched_text": alias})
+    return matches
+
+
+def _slots(
+    *,
+    scenic_area: str | None = None,
+    interests: list[str] | None = None,
+    group_type: str | None = None,
+    time_budget_minutes: int | None = None,
+    compare_targets: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        "scenic_area": scenic_area,
+        "interests": interests or [],
+        "group_type": group_type,
+        "time_budget_minutes": time_budget_minutes,
+        "compare_targets": compare_targets or [],
+    }
+
+
+def _extract_interests(text: str) -> list[str]:
+    interests: list[str] = []
+    for interest, keywords in INTEREST_KEYWORDS.items():
+        if _contains_any(text, keywords):
+            interests.append(interest)
+    return interests
+
+
+def _extract_group_type(text: str) -> str | None:
+    for group_type, keywords in GROUP_KEYWORDS.items():
+        if _contains_any(text, keywords):
+            return group_type
+    return None
 
 
 def _attraction_maps() -> tuple[dict[str, dict[str, Any]], dict[str, set[str]]]:
@@ -176,10 +265,6 @@ def _match_attraction_entities(message: str) -> tuple[list[dict[str, Any]], list
     return deduped, sorted(set(ambiguous))
 
 
-def _has_time_budget(text: str) -> bool:
-    return bool(re.search(r"\d+\s*(?:个)?小时", text)) or _contains_any(text, ["一小时", "二小时", "两小时", "三小时", "四小时", "半天", "全天"])
-
-
 def _is_short_route_phrase(text: str) -> bool:
     normalized = re.sub(r"[，。！？；、,.!?;:：\s]+", "", text)
     return normalized in {"路线", "规划路线", "帮我安排", "帮我安排一下", "安排一下"}
@@ -196,11 +281,25 @@ def _fallback_options() -> list[str]:
     return ["灵山大佛有什么看点？", "九龙灌浴适合怎么游览？", "帮我规划一条半天路线"]
 
 
+def _handler_for(domain: str, should_retrieve: bool, should_route: bool, needs_clarification: bool) -> str:
+    if needs_clarification or domain == "unclear":
+        return "clarification"
+    if domain == "out_of_scope":
+        return "out_of_scope"
+    if should_route:
+        return "route_planner"
+    if should_retrieve:
+        return "qa_rag"
+    return "out_of_scope"
+
+
 def _result(
     *,
     domain: str,
     intent: str,
     entities: list[dict[str, Any]] | None = None,
+    slots: dict[str, Any] | None = None,
+    handler: str | None = None,
     confidence: float,
     should_retrieve: bool,
     should_route: bool,
@@ -209,13 +308,16 @@ def _result(
     clarification_options: list[str] | None = None,
     reasons: list[str] | None = None,
 ) -> dict[str, Any]:
+    clean_slots = slots or _slots()
     return {
         "domain": domain,
         "intent": intent,
         "entities": entities or [],
+        "slots": clean_slots,
         "confidence": round(max(0.0, min(confidence, 1.0)), 4),
         "should_retrieve": should_retrieve,
         "should_route": should_route,
+        "handler": handler or _handler_for(domain, should_retrieve, should_route, needs_clarification),
         "needs_clarification": needs_clarification,
         "clarification_question": clarification_question,
         "clarification_options": clarification_options or [],
@@ -239,6 +341,18 @@ def build_gate_answer(understanding: dict[str, Any]) -> str:
     )
 
 
+def _compare_targets(entities: list[dict[str, Any]], scenic_matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    targets: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in [*entities, *scenic_matches]:
+        key = (str(item.get("type")), str(item.get("id")))
+        if key in seen:
+            continue
+        seen.add(key)
+        targets.append(item)
+    return targets
+
+
 def understand_query(
     message: str,
     selected_attraction_id: str | None = None,
@@ -259,15 +373,33 @@ def understand_query(
         )
 
     entities, ambiguous_aliases = _match_attraction_entities(text)
+    scenic_matches = _scenic_area_matches(text)
     explicit_entity_ids = {item["id"] for item in entities}
     selected_attraction = get_attraction(selected_attraction_id) if selected_attraction_id else None
+    interests = _extract_interests(text)
+    group_type = _extract_group_type(text)
+    time_budget = _extract_time_budget(text)
+    compare_targets = _compare_targets(entities, scenic_matches)
+    scenic_area = scenic_matches[0]["id"] if len(scenic_matches) == 1 else None
+    base_slots = _slots(
+        scenic_area=scenic_area,
+        interests=interests,
+        group_type=group_type,
+        time_budget_minutes=time_budget,
+        compare_targets=compare_targets,
+    )
     has_entity = bool(entities)
-    has_scenic_area = _contains_any(text, SCENIC_AREA_TERMS)
+    has_scenic_area = bool(scenic_matches)
     has_guide_intent = _contains_any(text, GUIDE_INTENT_WORDS)
-    has_route_strong = _contains_any(text, ROUTE_STRONG_WORDS) or _has_time_budget(text)
+    has_route_strong = _contains_any(text, ROUTE_STRONG_WORDS) or time_budget is not None
     has_route_constraint = _contains_any(text, ROUTE_CONSTRAINT_WORDS)
     has_style = _contains_any(text, STYLE_WORDS)
     has_out_of_scope = _contains_any(text, OUT_OF_SCOPE_TERMS)
+    has_recommendation = bool(interests) and _contains_any(text, RECOMMENDATION_WORDS)
+    has_compare = _contains_any(text, COMPARE_WORDS)
+    has_crowd_status = _contains_any(text, CROWD_STATUS_WORDS)
+    has_operation_status = _contains_any(text, OPERATION_STATUS_WORDS)
+    has_scenic_intro_general = _contains_any(text, SCENIC_INTRO_WORDS)
     is_generic_context = _is_generic_context_question(text)
 
     if ambiguous_aliases:
@@ -275,6 +407,7 @@ def understand_query(
             domain="unclear",
             intent="unknown",
             entities=entities,
+            slots=base_slots,
             confidence=0.46,
             should_retrieve=False,
             should_route=False,
@@ -294,16 +427,129 @@ def understand_query(
             }
         ]
         has_entity = True
+        compare_targets = _compare_targets(entities, scenic_matches)
+        base_slots = {**base_slots, "compare_targets": compare_targets}
 
     if has_out_of_scope and not has_entity and not has_scenic_area:
         return _result(
             domain="out_of_scope",
             intent="unknown",
             entities=entities,
+            slots=base_slots,
             confidence=0.94,
             should_retrieve=False,
             should_route=False,
+            handler="out_of_scope",
             reasons=["out_of_scope_term_without_scenic_entity", "guide_words_are_not_entities" if has_guide_intent else "non_scenic_query"],
+        )
+
+    if (has_crowd_status or has_operation_status) and not (has_route_strong or has_route_constraint):
+        return _result(
+            domain="operations",
+            intent="operation_status" if has_operation_status else "crowd_status",
+            entities=entities,
+            slots=base_slots,
+            confidence=0.84,
+            should_retrieve=False,
+            should_route=False,
+            handler="crowd_status",
+            reasons=["operation_status_signal" if has_operation_status else "crowd_status_signal"],
+        )
+
+    if has_compare:
+        if len(compare_targets) >= 2:
+            return _result(
+                domain="recommendation",
+                intent="attraction_compare",
+                entities=entities,
+                slots={**base_slots, "compare_targets": compare_targets},
+                confidence=0.84,
+                should_retrieve=False,
+                should_route=False,
+                handler="comparison",
+                reasons=["compare_targets_present", "comparison_intent"],
+            )
+        return _result(
+            domain="unclear",
+            intent="attraction_compare",
+            entities=entities,
+            slots=base_slots,
+            confidence=0.45,
+            should_retrieve=False,
+            should_route=False,
+            handler="clarification",
+            needs_clarification=True,
+            clarification_question="你想比较哪两个景点或景区？",
+            clarification_options=["灵山胜境和拈花湾哪个适合拍照？", "灵山大佛和九龙灌浴哪个更适合孩子？"],
+            reasons=["comparison_without_enough_targets"],
+        )
+
+    if "两个都介绍" in text and (has_scenic_intro_general or "介绍" in text):
+        return _result(
+            domain="scenic_guide",
+            intent="scenic_area_intro",
+            entities=[],
+            slots={**base_slots, "scenic_area": None},
+            confidence=0.78,
+            should_retrieve=False,
+            should_route=False,
+            handler="scenic_area_intro",
+            reasons=["scenic_area_intro_all"],
+        )
+
+    if has_scenic_intro_general and not has_scenic_area:
+        return _result(
+            domain="unclear",
+            intent="scenic_area_intro",
+            entities=[],
+            slots=base_slots,
+            confidence=0.56,
+            should_retrieve=False,
+            should_route=False,
+            handler="clarification",
+            needs_clarification=True,
+            clarification_question="你想先了解哪个景区？",
+            clarification_options=["介绍灵山胜境", "介绍拈花湾", "两个都介绍"],
+            reasons=["scenic_area_intro_needs_scope"],
+        )
+
+    if has_scenic_area and ("介绍" in text or has_scenic_intro_general) and not has_entity:
+        return _result(
+            domain="scenic_guide",
+            intent="scenic_area_intro",
+            entities=[],
+            slots=base_slots,
+            confidence=0.82,
+            should_retrieve=False,
+            should_route=False,
+            handler="scenic_area_intro",
+            reasons=["scenic_area_intro"],
+        )
+
+    if has_recommendation and not has_entity and not has_route_strong:
+        return _result(
+            domain="recommendation",
+            intent="interest_recommendation",
+            entities=entities,
+            slots=base_slots,
+            confidence=0.82,
+            should_retrieve=False,
+            should_route=False,
+            handler="interest_recommendation",
+            reasons=["interest_recommendation", "guide_words_are_slots_not_entities"],
+        )
+
+    if group_type and not has_entity and _contains_any(text, ["哪里适合", "有什么点", "推荐", "适合"]) and not time_budget:
+        return _result(
+            domain="recommendation",
+            intent="interest_recommendation",
+            entities=entities,
+            slots=base_slots,
+            confidence=0.78,
+            should_retrieve=False,
+            should_route=False,
+            handler="interest_recommendation",
+            reasons=["group_recommendation_without_route_budget"],
         )
 
     if _is_short_route_phrase(text):
@@ -311,6 +557,7 @@ def understand_query(
             domain="unclear",
             intent="route_request",
             entities=entities,
+            slots=base_slots,
             confidence=0.45,
             should_retrieve=False,
             should_route=False,
@@ -325,6 +572,7 @@ def understand_query(
             domain="unclear",
             intent="attraction_intro",
             entities=[],
+            slots=base_slots,
             confidence=0.42,
             should_retrieve=False,
             should_route=False,
@@ -339,6 +587,7 @@ def understand_query(
             domain="unclear",
             intent="route_request",
             entities=[],
+            slots=base_slots,
             confidence=0.5,
             should_retrieve=False,
             should_route=False,
@@ -349,37 +598,57 @@ def understand_query(
         )
 
     route_by_constraints = has_route_constraint and (has_entity or has_scenic_area)
-    route_by_group_time = has_route_strong and (_has_time_budget(text) or _contains_any(text, ["老人", "孩子", "亲子", "半天", "全天", "路线", "规划", "安排"]))
+    route_by_group_time = has_route_strong and (
+        time_budget is not None or _contains_any(text, ["半天", "全天", "路线", "规划", "安排", "别太挤", "避开人多"])
+    )
     route_by_replan = bool(current_route_id) and _contains_any(text, ["太累", "缩短", "换一个", "人太多", "少走", "重新安排", "重规划"])
     if route_by_constraints or route_by_group_time or route_by_replan:
         return _result(
             domain="route_planning",
             intent="route_replan" if route_by_replan else "route_request",
             entities=entities,
-            confidence=0.86 if (has_entity or _has_time_budget(text)) else 0.74,
+            slots=base_slots,
+            confidence=0.86 if (has_entity or time_budget is not None) else 0.74,
             should_retrieve=False,
             should_route=True,
+            handler="route_planner",
             reasons=[
                 "route_constraint" if route_by_constraints else "route_preference",
                 "attraction_entity_present" if has_entity else "route_without_entity_allowed",
             ],
         )
 
-    if has_entity or has_scenic_area:
+    if has_entity:
         return _result(
             domain="scenic_guide",
             intent="attraction_intro" if has_guide_intent or has_style else "fact_qa",
             entities=entities,
-            confidence=0.9 if has_entity else 0.72,
+            slots=base_slots,
+            confidence=0.9,
             should_retrieve=True,
             should_route=False,
-            reasons=["scenic_entity_present" if has_entity else "scenic_area_present"],
+            handler="qa_rag",
+            reasons=["scenic_entity_present"],
+        )
+
+    if has_scenic_area and has_guide_intent:
+        return _result(
+            domain="scenic_guide",
+            intent="scenic_area_intro",
+            entities=[],
+            slots=base_slots,
+            confidence=0.72,
+            should_retrieve=False,
+            should_route=False,
+            handler="scenic_area_intro",
+            reasons=["scenic_area_present"],
         )
 
     if has_style:
         return _result(
             domain="unclear",
             intent="attraction_intro",
+            slots=base_slots,
             confidence=0.48,
             should_retrieve=False,
             should_route=False,
@@ -393,17 +662,21 @@ def understand_query(
         return _result(
             domain="out_of_scope",
             intent="unknown",
+            slots=base_slots,
             confidence=0.82,
             should_retrieve=False,
             should_route=False,
+            handler="out_of_scope",
             reasons=["guide_intent_without_scenic_entity", "guide_words_are_not_entities"],
         )
 
     return _result(
         domain="out_of_scope",
         intent="unknown",
+        slots=base_slots,
         confidence=0.72,
         should_retrieve=False,
         should_route=False,
+        handler="out_of_scope",
         reasons=["no_scenic_entity_or_route_signal"],
     )

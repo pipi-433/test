@@ -15,3 +15,6 @@
 {"id":"qa_015","category":"不存在景点误触发拦截","question":"不存在怎么游览？","expected_keywords":["不在本地景区知识库范围内","不编造"],"must_not_include":["灵山大佛","九龙灌浴","可以这样理解"],"expect_sources":false}
 {"id":"qa_016","category":"非景区介绍拦截","question":"介绍海底两万里","expected_keywords":["不在本地景区知识库范围内","不编造"],"must_not_include":["灵山大佛","九龙灌浴","可以这样理解"],"expect_sources":false}
 {"id":"qa_017","category":"非景区电影导览拦截","question":"这个电影适合怎么游览？","expected_keywords":["不在本地景区知识库范围内","不编造"],"must_not_include":["灵山大佛","九龙灌浴","可以这样理解"],"expect_sources":false}
+{"id":"qa_018","category":"自然语言兴趣推荐","question":"我对历史感兴趣，有什么景点推荐？","expected_keywords":["推荐","历史文化"],"must_not_include":["不在本地景区知识库范围内"],"expect_sources":false}
+{"id":"qa_019","category":"景区总览澄清","question":"介绍景区","expected_keywords":["你想先了解哪个景区"],"must_not_include":["不在本地景区知识库范围内"],"expect_sources":false}
+{"id":"qa_020","category":"拥挤运营入口","question":"现在人多吗？","expected_keywords":["模拟拥挤度","不代表真实硬件客流"],"must_not_include":["不在本地景区知识库范围内"],"expect_sources":false}

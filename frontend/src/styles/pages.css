@@ -182,6 +182,7 @@
 }
 
 .mobile-control-panel,
+.capability-panel,
 .clarification-panel,
 .source-panel,
 .vision-panel,
@@ -314,6 +315,79 @@
 
 .clarification-panel strong {
   color: var(--color-warning);
+}
+
+.capability-panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  background: white;
+}
+
+.capability-panel h2 {
+  margin: 0;
+  font-size: var(--font-lg);
+}
+
+.capability-panel p {
+  margin: 0;
+  color: var(--color-ink-700);
+  overflow-wrap: anywhere;
+}
+
+.capability-list,
+.recommendation-list,
+.status-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.capability-list-item,
+.recommendation-item,
+.status-list-item {
+  display: grid;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  background: var(--color-surface-muted);
+  color: var(--color-ink-700);
+}
+
+.capability-list-item {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.capability-list-item svg {
+  color: var(--color-primary-600);
+  margin-top: 2px;
+}
+
+.recommendation-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.recommendation-item strong,
+.status-list-item strong {
+  color: var(--color-ink-900);
+}
+
+.recommendation-item span,
+.recommendation-item small,
+.status-list-item span {
+  color: var(--color-ink-500);
+  font-size: var(--font-sm);
+}
+
+.recommendation-item p {
+  margin-top: var(--space-1);
+}
+
+.status-list-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 .mobile-spot-summary {

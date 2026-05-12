@@ -22,6 +22,7 @@ class ReportDefinition:
 REPORT_DEFINITIONS = [
     ReportDefinition("qa", "RAG 问答", "qa_latest.json", "本地知识库问答、来源约束和低置信兜底评测。"),
     ReportDefinition("query_understanding", "问题结构门控", "query_understanding_latest.json", "景区问答、路线规划、资料外兜底和澄清追问的本地规则门控。"),
+    ReportDefinition("query_capability", "自然语言能力矩阵", "query_capability_latest.json", "景区总览、兴趣推荐、对比、拥挤运营和资料外边界分流。"),
     ReportDefinition("vision", "识景识别", "vision_latest.json", "mock 多模态识景样例成功率。"),
     ReportDefinition("route", "路线推荐", "route_latest.json", "路线模板、站点顺序和分享基础能力。"),
     ReportDefinition("route_crowd", "拥挤分流", "route_crowd_latest.json", "拥挤点降权、错峰解释和 crowd 信息覆盖。"),

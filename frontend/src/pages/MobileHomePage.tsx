@@ -123,10 +123,22 @@ function understandingLabel(value: QueryUnderstandingResult | undefined) {
   const labels: Record<string, string> = {
     scenic_guide: "景区问答",
     route_planning: "路线规划",
+    recommendation: "推荐/对比",
+    operations: "拥挤运营",
     out_of_scope: "资料外",
     unclear: "需要澄清",
   };
-  return labels[value.domain] || value.domain;
+  const handlerLabels: Record<string, string> = {
+    qa_rag: "本地 RAG",
+    scenic_area_intro: "景区总览",
+    interest_recommendation: "兴趣推荐",
+    comparison: "景点对比",
+    crowd_status: "拥挤运营",
+    route_planner: "路线规划",
+    clarification: "澄清",
+    out_of_scope: "资料外",
+  };
+  return handlerLabels[value.handler || ""] || labels[value.domain] || value.domain;
 }
 
 function understandingTone(value: QueryUnderstandingResult | undefined) {
@@ -173,6 +185,10 @@ function operationImpactSummary(route: RouteRecommendation) {
 
 function attractionSearchText(item: Attraction) {
   return [item.name, item.scenic_area, item.category, ...(item.tags || [])].join(" ").toLowerCase();
+}
+
+function crowdStatusTone(level: CrowdLevel) {
+  return level === "high" ? "warning" : level === "medium" ? "neutral" : "ok";
 }
 
 function speechExcerpt(value: string | undefined, limit = 420) {
@@ -430,7 +446,10 @@ export function MobileHomePage() {
       const result = await askQuestion({ attractionId: understanding.should_retrieve ? queryAttractionId : undefined, question: cleanQuestion });
       setQaResult(result);
       setClarificationOptions(result.understanding?.clarification_options || []);
-      if (result.sources.length === 0) {
+      if (["scenic_area_intro", "recommendation", "comparison", "crowd_status"].includes(result.type || "")) {
+        setHumanState("happy", "已按问题类型生成结构化导览结果。");
+        speakWithHuman(result.answer, { maxChars: 360 });
+      } else if (result.sources.length === 0) {
         setHumanState(
           "comforting",
           result.understanding?.domain === "out_of_scope"
@@ -778,7 +797,7 @@ export function MobileHomePage() {
         <div className="chat-row chat-row--guide">
           <strong>灵境</strong>
           {qaLoading ? (
-            <p>正在检索本地知识库...</p>
+            <p>正在理解问题并分流到合适能力...</p>
           ) : qaResult ? (
             <p>{qaResult.answer}</p>
           ) : (
@@ -786,6 +805,119 @@ export function MobileHomePage() {
           )}
         </div>
       </section>
+
+      {qaResult?.scenic_area_intro ? (
+        <section className="capability-panel" aria-label="景区总览">
+          <div className="section-title-row">
+            <h2>{qaResult.scenic_area_intro.title}</h2>
+            <StatusBadge tone="neutral">{qaResult.scenic_area_intro.source}</StatusBadge>
+          </div>
+          <p>{qaResult.scenic_area_intro.summary}</p>
+          <div className="capability-list">
+            {qaResult.scenic_area_intro.highlights.slice(0, 5).map((item) => (
+              <div className="capability-list-item" key={item}>
+                <CheckCircle2 aria-hidden="true" size={16} />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+          <p className="simulation-note">
+            <ShieldCheck aria-hidden="true" size={16} />
+            {qaResult.scenic_area_intro.disclaimer}
+          </p>
+          <div className="quick-question-row" aria-label="景区总览建议问题">
+            {qaResult.scenic_area_intro.suggested_questions.slice(0, 4).map((item) => (
+              <button className="quick-question" key={item} onClick={() => void submitQuestion(item)} type="button">
+                {item}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {qaResult?.recommendations?.length ? (
+        <section className="capability-panel" aria-label="兴趣推荐">
+          <div className="section-title-row">
+            <h2>兴趣推荐</h2>
+            <StatusBadge tone="ok">{qaResult.recommendations.length} 个候选</StatusBadge>
+          </div>
+          <div className="recommendation-list">
+            {qaResult.recommendations.map((item) => (
+              <article className="recommendation-item" key={item.attraction_id}>
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>
+                    {item.scenic_area} · 规则分 {item.score}
+                  </span>
+                  <p>{item.reason}</p>
+                  <small>{item.matched_interests.join(" / ") || "本地资料匹配"}</small>
+                </div>
+                <Button icon={<Send size={16} />} onClick={() => void submitQuestion(item.suggested_question)} type="button" variant="secondary">
+                  一键问
+                </Button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {qaResult?.comparison ? (
+        <section className="capability-panel" aria-label="景点景区对比">
+          <div className="section-title-row">
+            <h2>对比建议</h2>
+            <StatusBadge tone="neutral">{qaResult.comparison.dimensions.join(" / ") || "综合"}</StatusBadge>
+          </div>
+          <p>{qaResult.comparison.recommendation}</p>
+          <div className="capability-list">
+            {qaResult.comparison.reasons.map((item) => (
+              <div className="capability-list-item" key={item}>
+                <MapIcon aria-hidden="true" size={16} />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+          <div className="quick-question-row" aria-label="对比后续问题">
+            {qaResult.comparison.suggested_next_questions.slice(0, 3).map((item) => (
+              <button className="quick-question" key={item} onClick={() => void submitQuestion(item)} type="button">
+                {item}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {qaResult?.crowd_status ? (
+        <section className="capability-panel" aria-label="拥挤与运营状态">
+          <div className="section-title-row">
+            <h2>拥挤与运营状态</h2>
+            <StatusBadge tone="warning">演示数据</StatusBadge>
+          </div>
+          <p className="simulation-note">
+            <AlertTriangle aria-hidden="true" size={16} />
+            {qaResult.crowd_status.source_note}
+          </p>
+          <div className="status-list">
+            {qaResult.crowd_status.items.map((item) => (
+              <div className="status-list-item" key={item.attraction_id}>
+                <strong>{item.name}</strong>
+                <StatusBadge tone={crowdStatusTone(item.crowd_level)}>
+                  {crowdLabel(item.crowd_level)} · {item.crowd_score}
+                </StatusBadge>
+                <span>等待约 {item.wait_minutes} 分钟 · {item.source}</span>
+              </div>
+            ))}
+            {qaResult.crowd_status.operation_events.map((event) => (
+              <div className="status-list-item" key={event.id}>
+                <strong>{event.attraction_name || event.attraction_id}</strong>
+                <StatusBadge tone={event.severity === "critical" ? "warning" : "neutral"}>{event.event_type}</StatusBadge>
+                <span>
+                  {event.message} · {event.source}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {qaResult && qaResult.sources.length > 0 ? (
         <section className="source-panel" aria-label="回答来源">

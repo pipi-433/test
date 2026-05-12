@@ -1,0 +1,709 @@
+{
+  "generated_at": "2026-05-12T09:58:44+00:00",
+  "mode": "mock",
+  "total": 35,
+  "passed": 35,
+  "failed": 0,
+  "accuracy": 1.0,
+  "results": [
+    {
+      "id": "intro-lingshan",
+      "category": "景区总览",
+      "message": "介绍灵山胜境",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "scenic_area_intro",
+      "handler": "scenic_area_intro",
+      "type": "scenic_area_intro",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "scenic_area_intro",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "intro-nianhuawan",
+      "category": "景区总览",
+      "message": "介绍拈花湾",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "scenic_area_intro",
+      "handler": "scenic_area_intro",
+      "type": "scenic_area_intro",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "scenic_area_intro",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "intro-generic-clarify",
+      "category": "景区总览",
+      "message": "介绍景区",
+      "passed": true,
+      "domain": "unclear",
+      "intent": "scenic_area_intro",
+      "handler": "clarification",
+      "type": "clarification",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "intro-fun-clarify",
+      "category": "景区总览",
+      "message": "景区有什么好玩的",
+      "passed": true,
+      "domain": "unclear",
+      "intent": "scenic_area_intro",
+      "handler": "clarification",
+      "type": "clarification",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "intro-both",
+      "category": "景区总览",
+      "message": "介绍景区，两个都介绍",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "scenic_area_intro",
+      "handler": "scenic_area_intro",
+      "type": "scenic_area_intro",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "scenic_area_intro",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "recommend-history",
+      "category": "兴趣推荐",
+      "message": "我对历史感兴趣，有什么景点推荐？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "interest_recommendation",
+      "handler": "interest_recommendation",
+      "type": "recommendation",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "recommendations",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "recommend-photo",
+      "category": "兴趣推荐",
+      "message": "喜欢拍照，有哪些地方适合？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "interest_recommendation",
+      "handler": "interest_recommendation",
+      "type": "recommendation",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "recommendations",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "recommend-family",
+      "category": "兴趣推荐",
+      "message": "带老人孩子，哪里适合？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "interest_recommendation",
+      "handler": "interest_recommendation",
+      "type": "recommendation",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "recommendations",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "recommend-nature",
+      "category": "兴趣推荐",
+      "message": "想看自然风景推荐什么？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "interest_recommendation",
+      "handler": "interest_recommendation",
+      "type": "recommendation",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "recommendations",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "recommend-blessing",
+      "category": "兴趣推荐",
+      "message": "想祈福拜佛推荐哪里？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "interest_recommendation",
+      "handler": "interest_recommendation",
+      "type": "recommendation",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "recommendations",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "recommend-easy",
+      "category": "兴趣推荐",
+      "message": "不想走太累，有什么点适合？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "interest_recommendation",
+      "handler": "interest_recommendation",
+      "type": "recommendation",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "recommendations",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "recommend-show",
+      "category": "兴趣推荐",
+      "message": "想看演出表演推荐什么？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "interest_recommendation",
+      "handler": "interest_recommendation",
+      "type": "recommendation",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "recommendations",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "compare-area-photo",
+      "category": "对比",
+      "message": "灵山和拈花湾哪个适合拍照？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "attraction_compare",
+      "handler": "comparison",
+      "type": "comparison",
+      "source_count": 0,
+      "payload_keys": [
+        "comparison",
+        "latency_ms",
+        "mode",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "compare-attraction-family",
+      "category": "对比",
+      "message": "灵山大佛和九龙灌浴哪个更适合孩子？",
+      "passed": true,
+      "domain": "recommendation",
+      "intent": "attraction_compare",
+      "handler": "comparison",
+      "type": "comparison",
+      "source_count": 0,
+      "payload_keys": [
+        "comparison",
+        "latency_ms",
+        "mode",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "compare-clarify",
+      "category": "对比",
+      "message": "哪个更适合拍照？",
+      "passed": true,
+      "domain": "unclear",
+      "intent": "attraction_compare",
+      "handler": "clarification",
+      "type": "clarification",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "ops-crowd-now",
+      "category": "拥挤运营",
+      "message": "现在人多吗？",
+      "passed": true,
+      "domain": "operations",
+      "intent": "crowd_status",
+      "handler": "crowd_status",
+      "type": "crowd_status",
+      "source_count": 0,
+      "payload_keys": [
+        "crowd_status",
+        "latency_ms",
+        "mode",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "ops-crowd-list",
+      "category": "拥挤运营",
+      "message": "哪些地方比较拥挤？",
+      "passed": true,
+      "domain": "operations",
+      "intent": "crowd_status",
+      "handler": "crowd_status",
+      "type": "crowd_status",
+      "source_count": 0,
+      "payload_keys": [
+        "crowd_status",
+        "latency_ms",
+        "mode",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "ops-avoid-today",
+      "category": "拥挤运营",
+      "message": "今天哪里别去？",
+      "passed": true,
+      "domain": "operations",
+      "intent": "operation_status",
+      "handler": "crowd_status",
+      "type": "crowd_status",
+      "source_count": 0,
+      "payload_keys": [
+        "crowd_status",
+        "latency_ms",
+        "mode",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "ops-closed",
+      "category": "拥挤运营",
+      "message": "有临时关闭吗？",
+      "passed": true,
+      "domain": "operations",
+      "intent": "operation_status",
+      "handler": "crowd_status",
+      "type": "crowd_status",
+      "source_count": 0,
+      "payload_keys": [
+        "crowd_status",
+        "latency_ms",
+        "mode",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "ops-show",
+      "category": "拥挤运营",
+      "message": "有什么演出提醒？",
+      "passed": true,
+      "domain": "operations",
+      "intent": "operation_status",
+      "handler": "crowd_status",
+      "type": "crowd_status",
+      "source_count": 0,
+      "payload_keys": [
+        "crowd_status",
+        "latency_ms",
+        "mode",
+        "sources",
+        "suggested_questions",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "rag-dafo",
+      "category": "RAG",
+      "message": "灵山大佛适合怎么游览？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "handler": "qa_rag",
+      "type": "qa",
+      "source_count": 5,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "rag-jiulong",
+      "category": "RAG",
+      "message": "九龙灌浴有什么看点？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "handler": "qa_rag",
+      "type": "qa",
+      "source_count": 5,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "rag-fangong",
+      "category": "RAG",
+      "message": "灵山梵宫背后有什么文化故事？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "handler": "qa_rag",
+      "type": "qa",
+      "source_count": 5,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-generic",
+      "category": "路线",
+      "message": "帮我规划一条路线",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_request",
+      "handler": "route_planner",
+      "type": "route",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-family-time",
+      "category": "路线",
+      "message": "带老人孩子，3小时，灵山大佛一定要去",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_request",
+      "handler": "route_planner",
+      "type": "route",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-crowd-halfday",
+      "category": "路线",
+      "message": "避开人多，安排半天路线",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_request",
+      "handler": "route_planner",
+      "type": "route",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-nianhuawan",
+      "category": "路线",
+      "message": "我想去拈花湾五灯湖和梵天花海",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_request",
+      "handler": "route_planner",
+      "type": "route",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-book",
+      "category": "资料外",
+      "message": "海底两万里",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "handler": "out_of_scope",
+      "type": "out_of_scope",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-sky",
+      "category": "资料外",
+      "message": "天上适合怎么游览？",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "handler": "out_of_scope",
+      "type": "out_of_scope",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-not-real",
+      "category": "资料外",
+      "message": "不存在怎么游览？",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "handler": "out_of_scope",
+      "type": "out_of_scope",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-movie",
+      "category": "资料外",
+      "message": "这个电影适合怎么游览？",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "handler": "out_of_scope",
+      "type": "out_of_scope",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-code",
+      "category": "资料外",
+      "message": "帮我写代码",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "handler": "out_of_scope",
+      "type": "out_of_scope",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-stock",
+      "category": "资料外",
+      "message": "今天股票怎么样",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "handler": "out_of_scope",
+      "type": "out_of_scope",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "clarify-pronoun",
+      "category": "澄清",
+      "message": "这个景点怎么游览？",
+      "passed": true,
+      "domain": "unclear",
+      "intent": "attraction_intro",
+      "handler": "clarification",
+      "type": "clarification",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "selected-oos-blocked",
+      "category": "资料外",
+      "message": "海底两万里",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "handler": "out_of_scope",
+      "type": "out_of_scope",
+      "source_count": 0,
+      "payload_keys": [
+        "latency_ms",
+        "mode",
+        "sources",
+        "type",
+        "understanding"
+      ],
+      "mismatches": []
+    }
+  ]
+}

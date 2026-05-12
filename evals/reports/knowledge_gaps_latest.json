@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-12T05:29:33+00:00",
+  "generated_at": "2026-05-12T10:04:47+00:00",
   "mode": "mock",
   "total": 9,
   "passed": 9,
@@ -10,7 +10,7 @@
     {
       "id": "qa-no-source-gap-created",
       "passed": true,
-      "gap_id": "kgap-b77d65ba2788"
+      "gap_id": "kgap-85bf1c4181f5"
     },
     {
       "id": "duplicate-query-deduped",
@@ -36,7 +36,7 @@
     {
       "id": "negative-feedback-gap-created",
       "passed": true,
-      "gap_id": "kgap-59af82cbd6a1"
+      "gap_id": "kgap-a9993bc3f212"
     },
     {
       "id": "patch-status-ignored",
@@ -46,7 +46,7 @@
     {
       "id": "admin-list-and-overview-fields",
       "passed": true,
-      "count": 5
+      "count": 3
     },
     {
       "id": "no-session-id",

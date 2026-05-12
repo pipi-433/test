@@ -11,7 +11,11 @@ from app.repositories.content_repository import (
     list_attractions,
     list_knowledge_chunks,
 )
+from app.services.crowd_service import get_crowd_snapshot
+from app.services.operation_service import list_operation_events
 from app.services.query_understanding_service import build_gate_answer, understand_query
+from app.services.recommendation_service import compare_targets, recommend_attractions
+from app.services.scenic_area_service import build_scenic_area_intro
 
 
 DEFAULT_TOP_K = 5
@@ -263,6 +267,85 @@ def build_mock_answer(
     return "\n".join(lines)
 
 
+def _answer_scenic_area_intro(understanding: dict[str, Any]) -> dict[str, Any]:
+    slots = understanding.get("slots") if isinstance(understanding.get("slots"), dict) else {}
+    scenic_area = slots.get("scenic_area")
+    intro = build_scenic_area_intro(str(scenic_area) if scenic_area else None)
+    answer = f"{intro['title']}：{intro['summary']}\n" + "\n".join(f"{index}. {item}" for index, item in enumerate(intro["highlights"][:4], start=1))
+    return {
+        "answer": answer,
+        "scenic_area_intro": intro,
+        "suggested_questions": intro.get("suggested_questions", []),
+    }
+
+
+def _answer_interest_recommendation(understanding: dict[str, Any]) -> dict[str, Any]:
+    slots = understanding.get("slots") if isinstance(understanding.get("slots"), dict) else {}
+    recommendations = recommend_attractions(
+        interests=slots.get("interests") or [],
+        scenic_area=slots.get("scenic_area"),
+        group_type=slots.get("group_type"),
+        limit=5,
+    )
+    if recommendations:
+        lead = "我会先按本地 22 个景点的标签、类别和简介做规则评分，推荐这些点："
+        lines = [lead]
+        for index, item in enumerate(recommendations[:3], start=1):
+            lines.append(f"{index}. {item['name']}（{item['scenic_area']}）：{item['reason']}")
+        answer = "\n".join(lines)
+    else:
+        answer = "本地景点资料里暂时没有匹配到足够明确的推荐项，我不会硬凑结果。你可以补充兴趣，例如历史、拍照、亲子、自然或祈福。"
+    return {
+        "answer": answer,
+        "recommendations": recommendations,
+        "suggested_questions": [item["suggested_question"] for item in recommendations[:4]],
+    }
+
+
+def _answer_comparison(understanding: dict[str, Any]) -> dict[str, Any]:
+    slots = understanding.get("slots") if isinstance(understanding.get("slots"), dict) else {}
+    comparison = compare_targets(
+        compare_targets=slots.get("compare_targets") or [],
+        interests=slots.get("interests") or ["photo"],
+    )
+    answer = comparison["recommendation"] + "\n" + "\n".join(comparison.get("reasons", [])[:3])
+    return {
+        "answer": answer,
+        "comparison": comparison,
+        "suggested_questions": comparison.get("suggested_next_questions", []),
+    }
+
+
+def _answer_crowd_status(understanding: dict[str, Any]) -> dict[str, Any]:
+    slots = understanding.get("slots") if isinstance(understanding.get("slots"), dict) else {}
+    scenic_area = slots.get("scenic_area")
+    crowd_items = get_crowd_snapshot()["items"]
+    if scenic_area:
+        crowd_items = [item for item in crowd_items if item.get("scenic_area") == scenic_area]
+    high_or_medium = [item for item in crowd_items if item.get("crowd_level") in {"high", "medium"}]
+    operation_events = list_operation_events(active_only=True)
+    if scenic_area:
+        operation_events = [event for event in operation_events if event.get("scenic_area") == scenic_area]
+    focus_items = sorted(high_or_medium, key=lambda item: (-int(item.get("crowd_score") or 0), item.get("name") or ""))[:5]
+    lines = ["当前为模拟拥挤度和运营事件演示数据，不代表真实硬件客流。"]
+    if focus_items:
+        lines.append("较需要关注的点位：" + "；".join(f"{item['name']} {item['crowd_score']} 分，等待约 {item['wait_minutes']} 分钟" for item in focus_items[:3]))
+    else:
+        lines.append("当前模拟拥挤度整体较舒适。")
+    if operation_events:
+        lines.append("运营提醒：" + "；".join(f"{event['attraction_name']}：{event['message']}（{event['source']}）" for event in operation_events[:3]))
+    crowd_status = {
+        "items": focus_items,
+        "operation_events": operation_events[:5],
+        "source_note": "crowd=mock_simulation；operation=manual_admin/mock_simulation，均为演示数据。",
+    }
+    return {
+        "answer": "\n".join(lines),
+        "crowd_status": crowd_status,
+        "suggested_questions": ["帮我规划一条避开人多的路线", "有哪些临时关闭？", "哪些地方适合现在去？"],
+    }
+
+
 def answer_question(
     *,
     question: str,
@@ -283,6 +366,7 @@ def answer_question(
         latency_ms = int((time.perf_counter() - start) * 1000)
         return {
             "answer": answer,
+            "type": "out_of_scope",
             "sources": [],
             "mode": "mock",
             "latency_ms": latency_ms,
@@ -294,10 +378,46 @@ def answer_question(
         }
 
     understanding = understand_query(question, selected_attraction_id=attraction_id)
-    if not understanding.get("should_retrieve"):
+    handler = understanding.get("handler")
+    if handler == "route_planner":
         latency_ms = int((time.perf_counter() - start) * 1000)
         return {
+            "answer": "这是路线规划需求，应交给受约束的 Route Planner 生成路线；不会直接用 RAG 编造行程。",
+            "type": "route",
+            "sources": [],
+            "mode": "mock",
+            "latency_ms": latency_ms,
+            "understanding": understanding,
+        }
+    if handler in {"scenic_area_intro", "interest_recommendation", "comparison", "crowd_status"}:
+        if handler == "scenic_area_intro":
+            extra = _answer_scenic_area_intro(understanding)
+            response_type = "scenic_area_intro"
+        elif handler == "interest_recommendation":
+            extra = _answer_interest_recommendation(understanding)
+            response_type = "recommendation"
+        elif handler == "comparison":
+            extra = _answer_comparison(understanding)
+            response_type = "comparison"
+        else:
+            extra = _answer_crowd_status(understanding)
+            response_type = "crowd_status"
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return {
+            **extra,
+            "type": response_type,
+            "sources": [],
+            "mode": "mock",
+            "latency_ms": latency_ms,
+            "understanding": understanding,
+        }
+
+    if not understanding.get("should_retrieve"):
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        response_type = "clarification" if understanding.get("needs_clarification") else "out_of_scope"
+        return {
             "answer": build_gate_answer(understanding),
+            "type": response_type,
             "sources": [],
             "mode": "mock",
             "latency_ms": latency_ms,
@@ -330,6 +450,7 @@ def answer_question(
     latency_ms = int((time.perf_counter() - start) * 1000)
     return {
         "answer": answer,
+        "type": "qa",
         "sources": [
             {
                 "chunk_id": item.chunk["id"],

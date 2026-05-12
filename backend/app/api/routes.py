@@ -105,6 +105,14 @@ class QueryUnderstandRequest(BaseModel):
     channel: str = "mobile"
 
 
+class GuideQueryRequest(BaseModel):
+    message: str
+    selected_attraction_id: str | None = None
+    visitor_profile: dict[str, Any] | None = None
+    top_k: int = 5
+    channel: str = "mobile"
+
+
 class FeedbackRequest(BaseModel):
     channel: str = "mobile"
     route_id: str | None = None
@@ -275,6 +283,40 @@ def query_understand(payload: QueryUnderstandRequest) -> dict[str, object]:
     )
 
 
+@router.post("/guide/query")
+def guide_query(payload: GuideQueryRequest) -> dict[str, object]:
+    message = payload.message.strip()
+    if not message:
+        raise ApiError(
+            code="EMPTY_GUIDE_QUERY",
+            message="请先输入一个导览问题或路线需求。",
+            cause="POST /api/guide/query received an empty message.",
+            fix="在 message 字段中传入游客自然语言问题。",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    result = answer_question(
+        question=message,
+        attraction_id=payload.selected_attraction_id,
+        visitor_profile=payload.visitor_profile,
+        top_k=max(1, min(payload.top_k, 10)),
+    )
+    return {
+        "answer": result.get("answer"),
+        "type": result.get("type") or "qa",
+        "understanding": result.get("understanding"),
+        "sources": result.get("sources", []),
+        "items": result.get("recommendations", []),
+        "recommendations": result.get("recommendations", []),
+        "scenic_area_intro": result.get("scenic_area_intro"),
+        "comparison": result.get("comparison"),
+        "crowd_status": result.get("crowd_status"),
+        "route": None,
+        "suggested_questions": result.get("suggested_questions", []),
+        "mode": result.get("mode") or "mock",
+        "latency_ms": result.get("latency_ms", 0),
+    }
+
+
 @router.post("/qa")
 def qa(payload: QARequest) -> dict[str, object]:
     question = payload.question.strip()
@@ -295,6 +337,8 @@ def qa(payload: QARequest) -> dict[str, object]:
     )
     source_scores = [float(source.get("score") or 0) for source in result.get("sources", [])]
     confidence = min(1.0, max(source_scores) / 4.0) if source_scores else 0.0
+    result_type = str(result.get("type") or "qa")
+    success = bool(result.get("sources")) or result_type in {"scenic_area_intro", "recommendation", "comparison", "crowd_status"}
     record_interaction_event(
         event_type="qa",
         channel=payload.channel,
@@ -302,12 +346,13 @@ def qa(payload: QARequest) -> dict[str, object]:
         answer_preview=str(result.get("answer") or ""),
         attraction_id=payload.attraction_id,
         confidence=round(confidence, 4),
-        success=bool(result.get("sources")),
+        success=success,
         metadata={
             "source_count": len(result.get("sources", [])),
-            "fallback": len(result.get("sources", [])) == 0,
+            "fallback": len(result.get("sources", [])) == 0 and result_type in {"qa", "out_of_scope", "clarification"},
             "latency_ms": result.get("latency_ms"),
             "mode": result.get("mode"),
+            "type": result_type,
             "understanding": result.get("understanding"),
             "understanding_domain": (result.get("understanding") or {}).get("domain")
             if isinstance(result.get("understanding"), dict)
@@ -315,7 +360,7 @@ def qa(payload: QARequest) -> dict[str, object]:
         },
     )
     sources = result.get("sources", [])
-    if not sources:
+    if not sources and result_type in {"qa", "out_of_scope", "clarification"}:
         safe_record_knowledge_gap(
             query=question,
             trigger_type="no_source",
@@ -552,9 +597,7 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
         memory=memory,
     )
     if understanding.get("domain") == "out_of_scope" or (
-        not understanding.get("should_route")
-        and understanding.get("domain") == "unclear"
-        and intent_probe.get("intent") != "explanation_style"
+        not understanding.get("should_route") and intent_probe.get("intent") != "explanation_style"
     ):
         reply = build_gate_answer(understanding)
         gate_intent = _route_intent_from_understanding(understanding)

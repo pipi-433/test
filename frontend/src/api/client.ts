@@ -22,35 +22,124 @@ export type Source = {
 
 export type QAResponse = {
   answer: string;
+  type?: "qa" | "scenic_area_intro" | "recommendation" | "comparison" | "crowd_status" | "route" | "clarification" | "out_of_scope" | string;
   sources: Source[];
   mode: string;
   latency_ms: number;
   understanding?: QueryUnderstandingResult;
+  recommendations?: RecommendationItem[];
+  scenic_area_intro?: ScenicAreaIntro;
+  comparison?: ComparisonResult;
+  crowd_status?: CrowdStatusResult;
+  suggested_questions?: string[];
 };
 
-export type QueryUnderstandingDomain = "scenic_guide" | "route_planning" | "out_of_scope" | "unclear";
+export type QueryUnderstandingDomain = "scenic_guide" | "route_planning" | "recommendation" | "operations" | "out_of_scope" | "unclear";
 
-export type QueryUnderstandingIntent = "fact_qa" | "attraction_intro" | "route_request" | "route_replan" | "unknown";
+export type QueryUnderstandingIntent =
+  | "fact_qa"
+  | "attraction_intro"
+  | "scenic_area_intro"
+  | "interest_recommendation"
+  | "attraction_compare"
+  | "crowd_status"
+  | "operation_status"
+  | "route_request"
+  | "route_replan"
+  | "unknown";
 
 export type QueryUnderstandingEntity = {
-  type: "attraction";
+  type: "attraction" | "scenic_area";
   id: string;
   name: string;
   matched_text: string;
+};
+
+export type QueryUnderstandingHandler =
+  | "qa_rag"
+  | "scenic_area_intro"
+  | "interest_recommendation"
+  | "comparison"
+  | "crowd_status"
+  | "route_planner"
+  | "clarification"
+  | "out_of_scope";
+
+export type QueryUnderstandingSlots = {
+  scenic_area: string | null;
+  interests: string[];
+  group_type: "family" | "elderly" | "friends" | null;
+  time_budget_minutes: number | null;
+  compare_targets: QueryUnderstandingEntity[];
 };
 
 export type QueryUnderstandingResult = {
   domain: QueryUnderstandingDomain;
   intent: QueryUnderstandingIntent;
   entities: QueryUnderstandingEntity[];
+  slots?: QueryUnderstandingSlots;
   confidence: number;
   should_retrieve: boolean;
   should_route: boolean;
+  handler?: QueryUnderstandingHandler;
   needs_clarification: boolean;
   clarification_question: string | null;
   clarification_options: string[];
   reasons: string[];
   mode: "mock_rule_gate" | string;
+};
+
+export type RecommendationItem = {
+  attraction_id: string;
+  name: string;
+  scenic_area: string;
+  score: number;
+  reason: string;
+  matched_interests: string[];
+  suggested_question: string;
+};
+
+export type ScenicAreaIntro = {
+  title: string;
+  summary: string;
+  highlights: string[];
+  suggested_questions: string[];
+  source: string;
+  disclaimer: string;
+  sections?: Array<{
+    scenic_area: string;
+    attraction_count: number;
+    highlights: string[];
+    suggested_questions: string[];
+  }>;
+};
+
+export type ComparisonResult = {
+  compare_targets: Array<{ type: string; id: string; name: string; score: number; strengths: string[] }>;
+  dimensions: string[];
+  recommendation: string;
+  reasons: string[];
+  suggested_next_questions: string[];
+};
+
+export type CrowdStatusResult = {
+  items: Array<{
+    attraction_id: string;
+    name: string;
+    scenic_area?: string;
+    crowd_level: CrowdLevel;
+    crowd_score: number;
+    wait_minutes: number;
+    source: string;
+    note: string;
+  }>;
+  operation_events: OperationEvent[];
+  source_note: string;
+};
+
+export type GuideQueryResponse = QAResponse & {
+  items?: RecommendationItem[];
+  route?: RouteRecommendation | null;
 };
 
 export type VisionCandidate = {
@@ -598,6 +687,29 @@ export async function askQuestion({
     body: JSON.stringify({
       attraction_id: attractionId || null,
       question,
+      top_k: 5,
+      channel: "mobile",
+      visitor_profile: {
+        group_type: "family",
+        time_budget_minutes: 120,
+        interests: ["佛教文化", "拍照打卡"],
+      },
+    }),
+    method: "POST",
+  });
+}
+
+export async function guideQuery({
+  message,
+  selectedAttractionId,
+}: {
+  message: string;
+  selectedAttractionId?: string;
+}): Promise<GuideQueryResponse> {
+  return requestJson<GuideQueryResponse>("/api/guide/query", {
+    body: JSON.stringify({
+      message,
+      selected_attraction_id: selectedAttractionId || null,
       top_k: 5,
       channel: "mobile",
       visitor_profile: {

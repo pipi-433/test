@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-29T10:32:17+00:00",
+  "generated_at": "2026-05-12T10:05:03+00:00",
   "mode": "mock",
   "total": 9,
   "passed": 9,
@@ -47,13 +47,13 @@
       "type": "replan",
       "passed": true,
       "operation": "shorten",
-      "route_id": "route-cb93fc3449",
+      "route_id": "route-ad456f72e9",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",
         "lingshan-ls-009",
-        "nianhuawan-nh-005",
-        "lingshan-ls-006"
+        "lingshan-ls-006",
+        "nianhuawan-nh-003"
       ],
       "score": 81,
       "operation_ok": true,
@@ -70,7 +70,7 @@
       "type": "replan",
       "passed": true,
       "operation": "avoid_crowd",
-      "route_id": "route-76038ec2a0",
+      "route_id": "route-1e8a93c947",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",
@@ -93,7 +93,7 @@
       "type": "replan",
       "passed": true,
       "operation": "none",
-      "route_id": "route-41b81f18dc",
+      "route_id": "route-440ed16266",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",
@@ -117,9 +117,9 @@
       "passed": true,
       "needs_clarification": true,
       "options": [
-        "帮我规划路线",
-        "讲解当前景点",
-        "避开拥挤重新安排"
+        "2 小时轻松路线",
+        "带老人孩子 3 小时",
+        "灵山大佛一定要去"
       ]
     },
     {
