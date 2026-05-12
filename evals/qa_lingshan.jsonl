@@ -8,3 +8,4 @@
 {"id":"qa_008","category":"景点事实","question":"五印坛城有什么特色？","attraction_id":"lingshan-ls-014","expected_keywords":["五印坛城","藏传佛教"],"must_not_include":["购物"],"expect_sources":true}
 {"id":"qa_009","category":"无资料问题","question":"火星基地在哪里？","expected_keywords":["没有在本地资料里检索到","不编造"],"must_not_include":["火星基地位于"],"expect_sources":false}
 {"id":"qa_010","category":"不存在景点","question":"这个景点怎么游览？","attraction_id":"not-real","expected_keywords":["没有找到这个景点编号"],"must_not_include":["推荐你直接前往"],"expect_sources":false}
+{"id":"qa_011","category":"资料外问题带当前景点过滤","question":"火星基地在哪里？","attraction_id":"lingshan-ls-011","expected_keywords":["没有在本地资料里检索到","不编造"],"must_not_include":["灵山大佛","火星基地位于"],"expect_sources":false}

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-12T03:59:25+00:00",
+  "generated_at": "2026-05-12T04:53:23+00:00",
   "mode": "mock",
   "total": 7,
   "passed": 7,
@@ -8,11 +8,11 @@
   "overview": {
     "available_reports": 12,
     "total_reports": 12,
-    "total_cases": 99,
-    "passed_cases": 99,
+    "total_cases": 100,
+    "passed_cases": 100,
     "failed_cases": 0,
     "overall_accuracy": 1.0,
-    "latest_generated_at": "2026-05-12T03:58:39+00:00"
+    "latest_generated_at": "2026-05-12T04:53:23+00:00"
   },
   "results": [
     {
@@ -32,11 +32,11 @@
         "total_reports": 12,
         "available_reports": 12,
         "passing_reports": 12,
-        "total_cases": 99,
-        "passed_cases": 99,
+        "total_cases": 100,
+        "passed_cases": 100,
         "failed_cases": 0,
         "overall_accuracy": 1.0,
-        "latest_generated_at": "2026-05-12T03:58:39+00:00"
+        "latest_generated_at": "2026-05-12T04:53:23+00:00"
       }
     },
     {

@@ -121,6 +121,32 @@ def _score_chunk(chunk: dict[str, Any], terms: list[str], attraction: dict[str, 
     return ScoredChunk(chunk=chunk, score=score, reasons=reasons[:8])
 
 
+def _has_query_term_hit(item: ScoredChunk) -> bool:
+    return any(reason.startswith(("title:", "tag:", "content:")) for reason in item.reasons)
+
+
+def _is_generic_attraction_question(question: str) -> bool:
+    compact = re.sub(r"\s+", "", question)
+    guide_markers = ("怎么游览", "如何游览", "怎么玩", "介绍", "讲解", "看点", "亮点", "适合", "推荐")
+    context_markers = ("这个景点", "这个地方", "这里", "当前景点", "该景点", "它")
+    if any(marker in compact for marker in context_markers) and any(marker in compact for marker in guide_markers):
+        return True
+    return len(compact) <= 12 and any(marker in compact for marker in guide_markers)
+
+
+def _selected_attraction_context_chunks(chunks: list[dict[str, Any]], top_k: int) -> list[ScoredChunk]:
+    scored = [
+        ScoredChunk(
+            chunk=chunk,
+            score=round(1.0 + min(float(chunk.get("priority") or 0), 100.0) / 100.0, 4),
+            reasons=["selected_attraction_context"],
+        )
+        for chunk in chunks
+    ]
+    scored.sort(key=lambda item: (-item.score, item.chunk.get("id", "")))
+    return scored[: max(1, min(top_k, 10))]
+
+
 def retrieve_chunks(
     *,
     question: str,
@@ -140,15 +166,15 @@ def retrieve_chunks(
         chunks = list_all_knowledge_chunks()
 
     terms = _extract_terms(question, visitor_profile, attractions)
-    if attraction:
-        terms.extend([_norm(attraction.get("name")), *[_norm(tag) for tag in attraction.get("tags", [])]])
-        terms = sorted({term for term in terms if term}, key=lambda value: (-len(value), value))[:80]
     scored = [_score_chunk(chunk, terms, attraction) for chunk in chunks]
-    scored = [
-        item
-        for item in scored
-        if item.score >= (0.8 if attraction else 0.55) and any(not reason.startswith("attraction_filter") for reason in item.reasons)
-    ]
+
+    if attraction:
+        scored = [item for item in scored if item.score >= 0.8 and _has_query_term_hit(item)]
+        if not scored and _is_generic_attraction_question(question):
+            return _selected_attraction_context_chunks(chunks, top_k), attraction, terms
+    else:
+        scored = [item for item in scored if item.score >= 0.55 and _has_query_term_hit(item)]
+
     scored.sort(key=lambda item: (-item.score, -(item.chunk.get("priority") or 0), item.chunk.get("id", "")))
     return scored[: max(1, min(top_k, 10))], attraction, terms
 
