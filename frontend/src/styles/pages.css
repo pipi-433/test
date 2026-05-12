@@ -45,6 +45,49 @@
   min-width: 0;
 }
 
+.mobile-page--recommend .mobile-chat,
+.mobile-page--recommend .capability-panel,
+.mobile-page--recommend .source-panel,
+.mobile-page--recommend .clarification-panel,
+.mobile-page--recommend .vision-panel,
+.mobile-page--recommend .route-panel,
+.mobile-page--recommend .feedback-panel,
+.mobile-page--guide .vision-panel,
+.mobile-page--guide .route-panel,
+.mobile-page--guide .feedback-panel,
+.mobile-page--vision .mobile-avatar,
+.mobile-page--vision .mobile-greeting,
+.mobile-page--vision .ask-composer,
+.mobile-page--vision .mobile-chat,
+.mobile-page--vision .capability-panel,
+.mobile-page--vision .source-panel,
+.mobile-page--vision .clarification-panel,
+.mobile-page--vision .mobile-spot-summary,
+.mobile-page--vision .route-panel,
+.mobile-page--vision .feedback-panel,
+.mobile-page--route .mobile-avatar,
+.mobile-page--route .mobile-greeting,
+.mobile-page--route .ask-composer,
+.mobile-page--route .mobile-chat,
+.mobile-page--route .capability-panel,
+.mobile-page--route .source-panel,
+.mobile-page--route .clarification-panel,
+.mobile-page--route .mobile-spot-summary,
+.mobile-page--route .vision-panel,
+.mobile-page--route .feedback-panel,
+.mobile-page--mine .mobile-avatar,
+.mobile-page--mine .mobile-greeting,
+.mobile-page--mine .ask-composer,
+.mobile-page--mine .mobile-chat,
+.mobile-page--mine .capability-panel,
+.mobile-page--mine .source-panel,
+.mobile-page--mine .clarification-panel,
+.mobile-page--mine .mobile-spot-summary,
+.mobile-page--mine .vision-panel,
+.mobile-page--mine .route-panel {
+  display: none;
+}
+
 .mobile-top-anchor {
   position: absolute;
   top: 0;

@@ -425,6 +425,7 @@ export function MobileHomePage() {
       setError("请先输入一个问题。");
       return;
     }
+    setActiveNav("guide");
     setQaLoading(true);
     setError("");
     setQuestion(cleanQuestion);
@@ -621,7 +622,6 @@ export function MobileHomePage() {
 
   function focusRoutePanel() {
     setActiveNav("route");
-    routePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (!routeResult) {
       void generateRoute();
     }
@@ -629,24 +629,13 @@ export function MobileHomePage() {
 
   function handleScenicNavSelect(next: ScenicNavKey) {
     setActiveNav(next);
-    if (next === "recommend") {
-      topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
     if (next === "guide") {
-      answerPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       composerInputRef.current?.focus();
-      return;
-    }
-    if (next === "vision") {
-      visionPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
     }
     if (next === "route") {
       focusRoutePanel();
-      return;
     }
-    feedbackPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function toggleFeedbackTag(tag: string) {
@@ -718,7 +707,7 @@ export function MobileHomePage() {
   }
 
   return (
-    <PageShell className="mobile-page">
+    <PageShell className={`mobile-page mobile-page--${activeNav}`}>
       <div className="mobile-top-anchor" ref={topRef} />
       <header className="mobile-header">
         <div>
@@ -847,7 +836,6 @@ export function MobileHomePage() {
             icon={<ScenicCameraIcon />}
             onClick={() => {
               setActiveNav("vision");
-              visionPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
               window.setTimeout(() => fileInputRef.current?.click(), 200);
             }}
           >
