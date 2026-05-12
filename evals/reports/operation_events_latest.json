@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-09T04:19:32+00:00",
+  "generated_at": "2026-05-12T11:12:31+00:00",
   "mode": "mock",
   "total": 6,
   "passed": 6,
@@ -21,30 +21,37 @@
     {
       "id": "manual_crowd_affects_trace",
       "passed": true,
-      "event_id": "op-622a0159673c",
-      "stop_operation_note": "拥挤运营事件：eval operation crowd：五灯湖等待约 35 分钟，路线需提示错峰。。source=manual_admin",
-      "trace": "根据主题=自然休闲、时长=240分钟、同行=未指定、体力=未指定生成候选路线。 经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。 约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。 曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。 拥挤策略：avoid_crowd=true，crowd_tolerance=low，数据源=mock_simulation。 五灯湖 因运营拥挤事件调整等待/拥挤评分，source=manual_admin，message=eval operation crowd：五灯湖等待约 35 分钟，路线需提示错峰。。 五灯湖 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。 已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。 运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。 高拥挤点：五灯湖；核心点保留时会提示错峰，非核心点会降权或延后。 mock_simulation 仅用于比赛演示，不代表实时客流。",
+      "event_id": "op-5567b5545667",
+      "active_event_ids": [
+        "op-5567b5545667"
+      ],
+      "stop_operation_note": "拥挤运营事件：[eval_operation_events] crowd on Wudeng Lake, wait about 35 minutes.。source=manual_admin",
+      "trace": "根据主题=自然休闲、时长=240分钟、同行=未指定、体力=未指定生成候选路线。 经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。 约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。 曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。 拥挤策略：avoid_crowd=true，crowd_tolerance=low，数据源=mock_simulation。 五灯湖 因运营拥挤事件调整等待/拥挤评分，source=manual_admin，message=[eval_operation_events] crowd on Wudeng Lake, wait about 35 minutes.。 五灯湖 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。 已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。 运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。 高拥挤点：五灯湖；核心点保留时会提示错峰，非核心点会降权或延后。 mock_simulation 仅用于比赛演示，不代表实时客流。",
       "description": "手动拥挤事件会进入路线决策说明"
     },
     {
       "id": "closed_non_must_avoided",
       "passed": true,
-      "event_id": "op-aaa81be8015c",
+      "event_id": "op-db238e48eab5",
       "stop_ids": [
         "lingshan-ls-001",
         "nianhuawan-nh-002",
         "nianhuawan-nh-003",
+        "nianhuawan-nh-005",
         "nianhuawan-nh-001",
         "lingshan-ls-002",
-        "lingshan-ls-006",
-        "nianhuawan-nh-005"
+        "lingshan-ls-006"
       ],
-      "trace": "根据主题=拍照打卡、时长=300分钟、同行=未指定、体力=未指定生成候选路线。 经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。 约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。 灵山梵宫 因 active closed 运营事件从非必去候选路线中避开，source=manual_admin，message=eval operation closed：灵山梵宫临时维护，非必去路线避开。。 曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。 灵山梵宫 被用户标记为避开景点，已从候选路线移除。 拈花广场 来自全量景点池，selection_source=full_pool，主题分 100。 五灯湖 来自全量景点池，selection_source=full_pool，主题分 100。 五明桥 来自全量景点池，selection_source=full_pool，主题分 89。 拥挤策略：avoid_crowd=true，crowd_tolerance=medium，数据源=mock_simulation。 九龙灌浴 因运营拥挤事件调整等待/拥挤评分，source=mock_simulation，message=九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。。 九龙灌浴 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。 五灯湖 因运营拥挤事件调整等待/拥挤评分，source=manual_admin，message=eval operation crowd：五灯湖等待约 35 分钟，路线需提示错峰。。 五灯湖 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。 已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。 香月花街 命中运营推荐分流事件，source=mock_simulation，message=香月花街适合作为亲子与休闲游客的演示分流方向。。 九龙灌浴 命中演出提醒事件，source=mock_simulation，message=九龙灌浴演出即将开始，适合在附近游客提前就位。。 运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。 高拥挤点：九龙灌浴、五灯湖；核心点保留时会提示错峰，非核心点会降权或延后。 mock_simulation 仅用于比赛演示，不代表实时客流。",
+      "trace": "根据主题=拍照打卡、时长=300分钟、同行=未指定、体力=未指定生成候选路线。 经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。 约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。 灵山梵宫 因 active closed 运营事件从非必去候选路线中避开，source=manual_admin，message=[eval_operation_events] closed non-must stop should be avoided.。 曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。 灵山梵宫 被用户标记为避开景点，已从候选路线移除。 五灯湖 来自全量景点池，selection_source=full_pool，主题分 100。 拈花广场 来自全量景点池，selection_source=full_pool，主题分 100。 五明桥 来自全量景点池，selection_source=full_pool，主题分 89。 拥挤策略：avoid_crowd=true，crowd_tolerance=medium，数据源=mock_simulation。 九龙灌浴 因运营拥挤事件调整等待/拥挤评分，source=mock_simulation，message=九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。。 九龙灌浴 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。 已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。 香月花街 命中运营推荐分流事件，source=mock_simulation，message=香月花街适合作为亲子与休闲游客的演示分流方向。。 九龙灌浴 命中演出提醒事件，source=mock_simulation，message=九龙灌浴演出即将开始，适合在附近游客提前就位。。 运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。 高拥挤点：九龙灌浴；核心点保留时会提示错峰，非核心点会降权或延后。 mock_simulation 仅用于比赛演示，不代表实时客流。",
       "description": "临时关闭事件命中非必去点时路线避开"
     },
     {
       "id": "closed_must_kept_warning",
       "passed": true,
+      "event_id": "op-8a9d38a83931",
+      "active_event_ids": [
+        "op-8a9d38a83931"
+      ],
       "stop": {
         "order": 2,
         "attraction_id": "lingshan-ls-013",
@@ -65,7 +72,7 @@
         "constraint_type": "must_visit",
         "constraint_reason": "必去：灵山梵宫由用户明确指定。",
         "crowd_action": "keep_with_warning",
-        "decision_reason": "必去点：灵山梵宫由用户明确指定，优先保留；若拥挤只能延后或提示错峰。 拥挤处理：按计划保留。 运营事件：临时关闭提醒：eval operation closed：灵山梵宫临时维护，非必去路线避开。；该点是必去约束，已保留并建议现场确认。source=manual_admin",
+        "decision_reason": "必去点：灵山梵宫由用户明确指定，优先保留；若拥挤只能延后或提示错峰。 拥挤处理：按计划保留。 运营事件：临时关闭提醒：[eval_operation_events] closed must-visit stop should be kept with warning.；该点是必去约束，已保留并建议现场确认。source=manual_admin",
         "selection_source": "must_visit",
         "route_profile_scores": {
           "family_score": 68,
@@ -86,19 +93,19 @@
         "crowd_source": "mock_simulation",
         "operation_events": [
           {
-            "id": "op-aaa81be8015c",
+            "id": "op-8a9d38a83931",
             "attraction_id": "lingshan-ls-013",
             "attraction_name": "灵山梵宫",
             "event_type": "closed",
             "severity": "critical",
-            "message": "eval operation closed：灵山梵宫临时维护，非必去路线避开。",
-            "start_at": "2026-05-09T04:17:32+00:00",
-            "end_at": "2026-05-09T06:19:32+00:00",
+            "message": "[eval_operation_events] closed must-visit stop should be kept with warning.",
+            "start_at": "2026-05-12T11:10:30+00:00",
+            "end_at": "2026-05-12T13:12:30+00:00",
             "source": "manual_admin",
             "active": true
           }
         ],
-        "operation_note": "临时关闭提醒：eval operation closed：灵山梵宫临时维护，非必去路线避开。；该点是必去约束，已保留并建议现场确认。source=manual_admin"
+        "operation_note": "临时关闭提醒：[eval_operation_events] closed must-visit stop should be kept with warning.；该点是必去约束，已保留并建议现场确认。source=manual_admin"
       },
       "trace": "根据主题=拍照打卡、时长=300分钟、同行=未指定、体力=未指定生成候选路线。 经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。 约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。 曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。 拥挤策略：avoid_crowd=true，crowd_tolerance=medium，数据源=mock_simulation。 九龙灌浴 因运营拥挤事件调整等待/拥挤评分，source=mock_simulation，message=九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。。 九龙灌浴 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。 已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。 灵山梵宫 是必去点，但受临时关闭运营事件影响，source=manual_admin；路线保留该点并提示现场确认，未静默删除。 香月花街 命中运营推荐分流事件，source=mock_simulation，message=香月花街适合作为亲子与休闲游客的演示分流方向。。 九龙灌浴 命中演出提醒事件，source=mock_simulation，message=九龙灌浴演出即将开始，适合在附近游客提前就位。。 运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。 高拥挤点：九龙灌浴；核心点保留时会提示错峰，非核心点会降权或延后。 mock_simulation 仅用于比赛演示，不代表实时客流。",
       "warning": null,
@@ -107,15 +114,20 @@
     {
       "id": "show_event_visible",
       "passed": true,
-      "event_id": "op-2ef1c616f84e",
-      "stop_operation_note": "拥挤运营事件：九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。。source=mock_simulation 演出提醒：eval operation show：九龙灌浴演出 15 分钟后开始。。source=manual_admin 演出提醒：九龙灌浴演出即将开始，适合在附近游客提前就位。。source=mock_simulation",
+      "event_id": "op-c026d60dc9a3",
+      "active_event_ids": [
+        "op-c026d60dc9a3",
+        "op-demo-crowd-jiulong",
+        "op-demo-show-jiulong"
+      ],
+      "stop_operation_note": "拥挤运营事件：九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。。source=mock_simulation 演出提醒：[eval_operation_events] Jiulong show starts in 15 minutes.。source=manual_admin 演出提醒：九龙灌浴演出即将开始，适合在附近游客提前就位。。source=mock_simulation",
       "description": "演出提醒会进入站点提示或决策说明"
     },
     {
       "id": "patch_deactivate_event",
       "passed": true,
-      "event_id": "op-1baa7fc61c36",
-      "stop_found": false,
+      "event_id": "op-4c4fc5508f97",
+      "stop_found": true,
       "active_event_ids": [],
       "description": "停用事件后不再影响路线"
     }

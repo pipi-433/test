@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-29T10:32:10+00:00",
+  "generated_at": "2026-05-12T11:12:27+00:00",
   "mode": "mock",
   "snapshot_ok": true,
   "snapshot_count": 8,
@@ -7,7 +7,7 @@
   "passed": 5,
   "failed": 0,
   "accuracy": 1.0,
-  "avg_latency_ms": 20.25,
+  "avg_latency_ms": 22.0,
   "results": [
     {
       "id": "crowd-family-avoid",
@@ -25,13 +25,17 @@
         "根据主题=亲子轻松、时长=240分钟、同行=family、体力=easy生成候选路线。",
         "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         "约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。",
+        "曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。",
         "拥挤策略：avoid_crowd=true，crowd_tolerance=medium，数据源=mock_simulation。",
+        "九龙灌浴 因运营拥挤事件调整等待/拥挤评分，source=mock_simulation，message=九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。。",
         "九龙灌浴 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。",
         "已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。",
+        "九龙灌浴 命中演出提醒事件，source=mock_simulation，message=九龙灌浴演出即将开始，适合在附近游客提前就位。。",
+        "运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。",
         "高拥挤点：九龙灌浴；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 20
+      "latency_ms": 22
     },
     {
       "id": "crowd-blessing-core",
@@ -50,15 +54,19 @@
         "根据主题=祈福朝圣、时长=240分钟、同行=family、体力=balanced生成候选路线。",
         "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         "约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。",
+        "曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。",
         "拥挤策略：avoid_crowd=true，crowd_tolerance=low，数据源=mock_simulation。",
+        "九龙灌浴 因运营拥挤事件调整等待/拥挤评分，source=mock_simulation，message=九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。。",
         "九龙灌浴 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。",
         "祥符禅寺 超过舒适阈值，已缩短停留。",
         "灵山大佛 当前为 high/高拥挤或超过容忍阈值，已降权并延后，建议错峰返回。",
         "已将可延后的拥挤站点放到路线后段，优先保障前半程舒适度。",
+        "九龙灌浴 命中演出提醒事件，source=mock_simulation，message=九龙灌浴演出即将开始，适合在附近游客提前就位。。",
+        "运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。",
         "高拥挤点：九龙灌浴、灵山大佛；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 19
+      "latency_ms": 23
     },
     {
       "id": "crowd-nature-comfort",
@@ -74,7 +82,9 @@
         "根据主题=自然休闲、时长=240分钟、同行=friends、体力=easy生成候选路线。",
         "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         "约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。",
+        "曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。",
         "拥挤策略：avoid_crowd=true，crowd_tolerance=low，数据源=mock_simulation。",
+        "运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。",
         "当前候选路线没有 high 拥挤站点，整体舒适度较好。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
@@ -96,12 +106,17 @@
         "根据主题=拍照打卡、时长=300分钟、同行=friends、体力=balanced生成候选路线。",
         "经典路线模板仅作为 seed，最终会结合全部已解析景点候选池、用户约束和拥挤度重新筛选。",
         "约束优先级：data_available > user_avoid_attraction > user_must_visit > time_budget > crowd_comfort > theme_preference > template_default。",
+        "曼飞龙塔 因 active closed 运营事件从非必去候选路线中避开，source=mock_simulation，message=曼飞龙塔局部维护演示，非必去路线将自动避开该点。。",
         "拥挤策略：avoid_crowd=false，crowd_tolerance=high，数据源=mock_simulation。",
+        "九龙灌浴 因运营拥挤事件调整等待/拥挤评分，source=mock_simulation，message=九龙灌浴广场演示拥挤，建议预留约 30 分钟等待或错峰进入。。",
         "九龙灌浴 是路线核心点但模拟拥挤度高，路线保留并提示错峰。",
+        "九龙灌浴 命中演出提醒事件，source=mock_simulation，message=九龙灌浴演出即将开始，适合在附近游客提前就位。。",
+        "香月花街 命中运营推荐分流事件，source=mock_simulation，message=香月花街适合作为亲子与休闲游客的演示分流方向。。",
+        "运营事件策略：active events 来自 manual_admin/mock_simulation；closed/crowd/show/recommendation 会影响候选池、等待提示或分流加权，但不会静默删除用户必去点。",
         "高拥挤点：九龙灌浴；核心点保留时会提示错峰，非核心点会降权或延后。",
         "mock_simulation 仅用于比赛演示，不代表实时客流。"
       ],
-      "latency_ms": 22
+      "latency_ms": 23
     }
   ]
 }

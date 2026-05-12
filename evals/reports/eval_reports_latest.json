@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-12T10:04:46+00:00",
+  "generated_at": "2026-05-12T11:12:32+00:00",
   "mode": "mock",
   "total": 7,
   "passed": 7,
@@ -12,7 +12,7 @@
     "passed_cases": 167,
     "failed_cases": 0,
     "overall_accuracy": 1.0,
-    "latest_generated_at": "2026-05-12T09:58:44+00:00"
+    "latest_generated_at": "2026-05-12T11:12:31+00:00"
   },
   "results": [
     {
@@ -36,7 +36,7 @@
         "passed_cases": 167,
         "failed_cases": 0,
         "overall_accuracy": 1.0,
-        "latest_generated_at": "2026-05-12T09:58:44+00:00"
+        "latest_generated_at": "2026-05-12T11:12:31+00:00"
       }
     },
     {
