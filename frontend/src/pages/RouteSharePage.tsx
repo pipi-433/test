@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Clock3, Copy, Heart, MapPinned, Route as RouteIcon } from "lucide-react";
+import { AlertTriangle, Check, Copy, Heart, MapPinned } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { ApiClientError, getRouteShare, submitFeedback } from "../api/client";
@@ -6,6 +6,13 @@ import type { CrowdLevel, RouteRecommendation } from "../api/client";
 import { Button } from "../components/Button";
 import { PageShell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
+import {
+  BuddhaIcon,
+  CrowdWaveIcon,
+  QrHandoffIcon,
+  RoutePathIcon,
+  ScenicCameraIcon,
+} from "../components/icons/LingshanIcons";
 
 function formatExpiresAt(isoString: string | null | undefined): string {
   if (!isoString) {
@@ -69,6 +76,7 @@ export function RouteSharePage() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackDone, setFeedbackDone] = useState("");
   const [feedbackError, setFeedbackError] = useState("");
+  const [checkedIn, setCheckedIn] = useState(false);
 
   useEffect(() => {
     if (!code) {
@@ -144,7 +152,7 @@ export function RouteSharePage() {
     return (
       <PageShell className="mobile-page route-share-page">
         <section className="share-loading" aria-live="polite">
-          <RouteIcon aria-hidden="true" size={28} />
+          <RoutePathIcon />
           <h1>正在打开路线</h1>
           <p>正在校验短码并读取 Kiosk 生成的路线。</p>
         </section>
@@ -168,19 +176,27 @@ export function RouteSharePage() {
     );
   }
 
+  const currentStop = route.stops[0];
+  const nextStop = route.stops[1];
+
   return (
     <PageShell className="mobile-page route-share-page">
       <header className="share-header">
-        <span className="eyebrow">Kiosk 路线带走</span>
-        <h1>{route.title}</h1>
-        <p>{route.summary}</p>
-        <div className="share-meta-row">
-          <StatusBadge tone="ok">{route.theme_label}</StatusBadge>
-          <strong>{route.recommendation_score} 分</strong>
-          <span>
-            <Clock3 aria-hidden="true" size={16} />
-            约 {route.estimated_duration_minutes} 分钟
-          </span>
+        <div>
+          <span className="eyebrow">Kiosk 路线带走</span>
+          <h1>{route.title}</h1>
+          <p>{route.summary}</p>
+        </div>
+        <div className="share-ticket" aria-label="路线小票">
+          <div className="share-ticket__main">
+            <span>凭证码</span>
+            <strong>{route.share.share_code}</strong>
+            <small>生成后 30 分钟有效</small>
+          </div>
+          <div className="share-ticket__qr">
+            <QrHandoffIcon />
+            <span>扫码带走</span>
+          </div>
         </div>
       </header>
 
@@ -189,6 +205,51 @@ export function RouteSharePage() {
         <div>
           <p>{route.crowd_policy.caveat} 分享码 {route.share.share_code}，默认 30 分钟有效。</p>
           <p className="expires-at">到期时间：{formatExpiresAt(route.share.expires_at)}</p>
+        </div>
+      </section>
+
+      <section className="share-journey-card" aria-label="当前路线进度">
+        <div className="share-journey-card__score">
+          <span>{route.theme_label}</span>
+          <strong>{route.recommendation_score}</strong>
+          <small>/100 舒适度评分</small>
+        </div>
+        <div className="share-progress-line" aria-label={`当前第 1 站，共 ${route.stops.length} 站`}>
+          {route.stops.map((stop, index) => (
+            <span className={index === 0 ? "share-progress-line__dot share-progress-line__dot--active" : "share-progress-line__dot"} key={stop.attraction_id} />
+          ))}
+        </div>
+        {currentStop ? (
+          <div className="share-current-stop">
+            <span>当前站</span>
+            <strong>{currentStop.name}</strong>
+            <p>{currentStop.scenic_area} · 停留 {currentStop.stay_minutes} 分钟</p>
+          </div>
+        ) : null}
+        {nextStop ? (
+          <div className="share-current-stop share-current-stop--next">
+            <span>下一站</span>
+            <strong>{nextStop.name}</strong>
+            <p>等待约 {nextStop.wait_minutes} 分钟 · {crowdLabel(nextStop.crowd_level)}</p>
+          </div>
+        ) : null}
+        <div className="share-action-grid" aria-label="路线快捷操作">
+          <button type="button" onClick={() => currentStop && void copyQuestion(currentStop.attraction_id, currentStop.narration_question)}>
+            <BuddhaIcon />
+            听本站讲解
+          </button>
+          <a href="/">
+            <ScenicCameraIcon />
+            拍照识景
+          </a>
+          <button type="button" onClick={() => void navigator.clipboard?.writeText("人太多，换一个")}>
+            <CrowdWaveIcon />
+            人太多换一个
+          </button>
+          <button className={checkedIn ? "share-action-grid__done" : ""} type="button" onClick={() => setCheckedIn((value) => !value)}>
+            <Check aria-hidden="true" size={19} />
+            {checkedIn ? "已打卡" : "完成打卡"}
+          </button>
         </div>
       </section>
 

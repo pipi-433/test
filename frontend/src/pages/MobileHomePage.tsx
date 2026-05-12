@@ -2,16 +2,11 @@ import { type ChangeEvent, type FormEvent, type KeyboardEvent, useEffect, useMem
 import {
   AlertTriangle,
   Clock3,
-  Camera,
   CheckCircle2,
-  ExternalLink,
-  FileImage,
   Heart,
   Layers,
   Map as MapIcon,
   Mic,
-  Navigation,
-  Route as RouteIcon,
   Send,
   ShieldCheck,
   Volume2,
@@ -31,10 +26,29 @@ import type {
 } from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock, type DigitalHumanState } from "../components/DigitalHumanMock";
-import { IconButton } from "../components/IconButton";
+import {
+  RouteConstraintChip,
+  ScenicActionTile,
+  ScenicBottomNav,
+  ScenicSegmentedControl,
+  SourceChip,
+  type ScenicNavKey,
+} from "../components/ScenicControls";
 import { PageShell } from "../components/Shell";
 import { SpotCard } from "../components/SpotCard";
 import { StatusBadge } from "../components/StatusBadge";
+import {
+  BodhiLeafIcon,
+  BridgeIcon,
+  BuddhaIcon,
+  CrowdWaveIcon,
+  EventBellIcon,
+  LotusIcon,
+  QrHandoffIcon,
+  RoutePathIcon,
+  ScenicCameraIcon,
+  SourceDocIcon,
+} from "../components/icons/LingshanIcons";
 import { useDigitalHumanState } from "../hooks/useDigitalHumanState";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis";
@@ -214,8 +228,11 @@ function visionSpeechSummary(result: VisionResponse) {
 
 export function MobileHomePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const topRef = useRef<HTMLDivElement | null>(null);
   const routePanelRef = useRef<HTMLElement | null>(null);
   const answerPanelRef = useRef<HTMLElement | null>(null);
+  const visionPanelRef = useRef<HTMLElement | null>(null);
+  const feedbackPanelRef = useRef<HTMLElement | null>(null);
   const composerInputRef = useRef<HTMLInputElement | null>(null);
   const composingRef = useRef(false);
   const [attractions, setAttractions] = useState<Attraction[]>([]);
@@ -246,6 +263,7 @@ export function MobileHomePage() {
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackDone, setFeedbackDone] = useState("");
+  const [activeNav, setActiveNav] = useState<ScenicNavKey>("recommend");
   const [error, setError] = useState("");
   const { caption: humanCaption, resetHuman, setHumanState, state: humanState } = useDigitalHumanState();
   const speech = useSpeechSynthesis();
@@ -297,6 +315,27 @@ export function MobileHomePage() {
       .slice(0, query ? 10 : 8)
       .map(({ item }) => item);
   }, [attractions, avoidAttractionIds, mustVisitIds, optionalAttractionIds, routeConstraintQuery]);
+
+  const routeThemeItems = useMemo(
+    () =>
+      routeThemes.map((theme) => ({
+        ...theme,
+        icon:
+          theme.id === "history" ? (
+            <BridgeIcon />
+          ) : theme.id === "nature" ? (
+            <BodhiLeafIcon />
+          ) : theme.id === "blessing" ? (
+            <BuddhaIcon />
+          ) : theme.id === "photo" ? (
+            <ScenicCameraIcon />
+          ) : (
+            <LotusIcon />
+          ),
+        value: theme.id,
+      })),
+    [],
+  );
 
   function scrollAnswerIntoView(block: ScrollLogicalPosition = "start") {
     window.setTimeout(() => {
@@ -491,6 +530,7 @@ export function MobileHomePage() {
     if (!file) {
       return;
     }
+    setActiveNav("vision");
     setVisionLoading(true);
     setError("");
     speech.stop();
@@ -566,6 +606,7 @@ export function MobileHomePage() {
         avoidAttractionIds,
       });
       setRouteResult(result);
+      setActiveNav("route");
       setHumanState("happy", routeSpeechSummary(result));
       speakWithHuman(routeSpeechSummary(result), { endState: "happy", maxChars: 320 });
     } catch (cause) {
@@ -579,10 +620,33 @@ export function MobileHomePage() {
   }
 
   function focusRoutePanel() {
+    setActiveNav("route");
     routePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (!routeResult) {
       void generateRoute();
     }
+  }
+
+  function handleScenicNavSelect(next: ScenicNavKey) {
+    setActiveNav(next);
+    if (next === "recommend") {
+      topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (next === "guide") {
+      answerPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      composerInputRef.current?.focus();
+      return;
+    }
+    if (next === "vision") {
+      visionPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (next === "route") {
+      focusRoutePanel();
+      return;
+    }
+    feedbackPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function toggleFeedbackTag(tag: string) {
@@ -655,12 +719,17 @@ export function MobileHomePage() {
 
   return (
     <PageShell className="mobile-page">
+      <div className="mobile-top-anchor" ref={topRef} />
       <header className="mobile-header">
         <div>
-          <span className="eyebrow">灵山胜境 / 拈花湾</span>
+          <span className="eyebrow">无锡灵山胜境</span>
           <h1>灵境导游</h1>
+          <p>AI 智能导游 · 灵山胜境</p>
         </div>
-        <StatusBadge tone={error ? "warning" : "ok"}>{error ? "需要处理" : "mock 在线"}</StatusBadge>
+        <div className="mobile-header__status">
+          <StatusBadge tone={error ? "warning" : "ok"}>{error ? "需要处理" : "mock 在线"}</StatusBadge>
+          <span className="weather-pill">26°C 多云</span>
+        </div>
       </header>
 
       <DigitalHumanMock caption={humanCaption} state={humanState} className="mobile-avatar" />
@@ -757,6 +826,47 @@ export function MobileHomePage() {
               {item}
             </button>
           ))}
+        </div>
+
+        <div className="scenic-action-grid" aria-label="景区文化功能入口">
+          <ScenicActionTile
+            active={activeNav === "guide"}
+            caption="故事 / 看点"
+            icon={<BuddhaIcon />}
+            onClick={() => {
+              setActiveNav("guide");
+              composerInputRef.current?.focus();
+            }}
+            tone="primary"
+          >
+            问景点
+          </ScenicActionTile>
+          <ScenicActionTile
+            active={activeNav === "vision"}
+            caption="Top3 确认"
+            icon={<ScenicCameraIcon />}
+            onClick={() => {
+              setActiveNav("vision");
+              visionPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              window.setTimeout(() => fileInputRef.current?.click(), 200);
+            }}
+          >
+            拍照识景
+          </ScenicActionTile>
+          <ScenicActionTile active={activeNav === "route"} caption="避峰规划" icon={<RoutePathIcon />} onClick={focusRoutePanel}>
+            规划路线
+          </ScenicActionTile>
+          <ScenicActionTile
+            caption="人多换一个"
+            icon={<CrowdWaveIcon />}
+            onClick={() => {
+              setAvoidCrowd(true);
+              focusRoutePanel();
+            }}
+            tone="warning"
+          >
+            避开拥挤
+          </ScenicActionTile>
         </div>
 
         <div className="attraction-context">
@@ -928,9 +1038,10 @@ export function MobileHomePage() {
           <div className="source-list">
             {qaResult.sources.map((source) => (
               <div className="source-item" key={source.chunk_id}>
+                <SourceChip icon={<SourceDocIcon />}>{source.source_file}</SourceChip>
                 <strong>{source.title}</strong>
-                <span>{source.source_file}</span>
-                <span>分数 {source.score.toFixed(2)}</span>
+                <span>来源章节：{source.source_section || "本地资料切片"}</span>
+                <span>引用分数 {source.score.toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -971,14 +1082,14 @@ export function MobileHomePage() {
         <p className="empty-state mobile-empty">正在等待景点数据，确认后端启动后会自动加载。</p>
       )}
 
-      <section className="vision-panel" aria-label="图片识景">
+      <section className="vision-panel" aria-label="图片识景" ref={visionPanelRef}>
         <div className="section-title-row">
           <div>
             <h2>拍照识景</h2>
             <p>上传样例图，mock 识景会先给出 Top3 候选，确认后再进入讲解。</p>
           </div>
           <Button
-            icon={<FileImage size={18} />}
+            icon={<ScenicCameraIcon />}
             loading={visionLoading}
             onClick={() => fileInputRef.current?.click()}
             type="button"
@@ -1031,7 +1142,7 @@ export function MobileHomePage() {
                         <small>信号：{candidate.match_signals.map((item) => ({ filename: "文件名", hint: "提示词", text_hint: "描述", tag: "标签", scenic_area: "景区" }[item] || item)).join(" / ") || "弱相关"}</small>
                       </div>
                       <Button
-                        icon={confirmed ? <CheckCircle2 size={16} /> : <ShieldCheck size={16} />}
+                        icon={confirmed ? <CheckCircle2 size={16} /> : <BuddhaIcon />}
                         onClick={() => confirmVisionCandidate(candidate)}
                         type="button"
                         variant={confirmed ? "secondary" : "accent"}
@@ -1071,7 +1182,7 @@ export function MobileHomePage() {
             <p>根据兴趣、时长、当前景点和模拟拥挤度生成可解释路线。</p>
           </div>
           <Button
-            icon={<RouteIcon size={18} />}
+            icon={<RoutePathIcon />}
             loading={routeLoading}
             onClick={() => void generateRoute()}
             type="button"
@@ -1081,18 +1192,7 @@ export function MobileHomePage() {
           </Button>
         </div>
         <div className="route-preferences" aria-label="路线偏好">
-          <div className="route-theme-grid" role="group" aria-label="路线主题">
-            {routeThemes.map((theme) => (
-              <button
-                className={`route-theme ${routeTheme === theme.id ? "route-theme--active" : ""}`}
-                key={theme.id}
-                onClick={() => void generateRoute(theme.id)}
-                type="button"
-              >
-                {theme.label}
-              </button>
-            ))}
-          </div>
+          <ScenicSegmentedControl items={routeThemeItems} onChange={(value) => void generateRoute(value)} value={routeTheme} />
           <label className="field-label" htmlFor="route-budget">
             游玩时长
           </label>
@@ -1111,7 +1211,7 @@ export function MobileHomePage() {
           <label className="crowd-switch">
             <input checked={avoidCrowd} onChange={(event) => setAvoidCrowd(event.target.checked)} type="checkbox" />
             <span>
-              <ShieldCheck aria-hidden="true" size={18} />
+              <CrowdWaveIcon />
               避开拥挤
             </span>
           </label>
@@ -1156,15 +1256,9 @@ export function MobileHomePage() {
                   {group.ids.length ? (
                     <div className="constraint-selected-chips">
                       {group.ids.map((id) => (
-                        <button
-                          className={`constraint-chip constraint-chip--${group.kind}`}
-                          key={`${group.kind}-${id}`}
-                          onClick={() => removeRouteConstraint(group.kind, id)}
-                          type="button"
-                        >
+                        <RouteConstraintChip key={`${group.kind}-${id}`} onRemove={() => removeRouteConstraint(group.kind, id)} tone={group.kind}>
                           {attractionById.get(id)?.name || id}
-                          <span>移除</span>
-                        </button>
+                        </RouteConstraintChip>
                       ))}
                     </div>
                   ) : (
@@ -1224,7 +1318,7 @@ export function MobileHomePage() {
                 约 {routeResult.estimated_duration_minutes} 分钟 · 分享码 {routeResult.share.share_code}
               </span>
               <a className="route-share-link" href={routeResult.share.share_url}>
-                <ExternalLink aria-hidden="true" size={16} />
+                <QrHandoffIcon />
                 打开手机路线带走页
               </a>
               <div className="score-grid" aria-label="路线评分拆解">
@@ -1261,7 +1355,7 @@ export function MobileHomePage() {
               ) : null}
               {operationImpactSummary(routeResult) ? (
                 <p className="operation-route-note">
-                  <AlertTriangle aria-hidden="true" size={16} />
+                  <EventBellIcon />
                   {operationImpactSummary(routeResult)} {(routeResult.operation_policy || routeResult.operation_events_summary)?.caveat}
                 </p>
               ) : null}
@@ -1324,7 +1418,7 @@ export function MobileHomePage() {
         )}
       </section>
 
-      <section className="feedback-panel" aria-label="游客反馈">
+      <section className="feedback-panel" aria-label="游客反馈" ref={feedbackPanelRef}>
         <div className="section-title-row">
           <div>
             <h2>体验反馈</h2>
@@ -1373,17 +1467,7 @@ export function MobileHomePage() {
         {feedbackDone ? <p className="success-note">{feedbackDone}</p> : null}
       </section>
 
-      <nav className="mobile-actions" aria-label="游客主操作">
-        <IconButton icon={Mic} label={recognition.listening ? "停止听取" : "语音"} onClick={toggleVoiceInput} />
-        <IconButton icon={Camera} label="拍照" onClick={() => fileInputRef.current?.click()} />
-        <IconButton icon={MapIcon} label="路线" onClick={focusRoutePanel} />
-        <IconButton icon={Navigation} label="终端" onClick={() => window.location.assign("/kiosk")} />
-      </nav>
-
-      <a className="route-link" href="/kiosk">
-        <Navigation aria-hidden="true" size={18} />
-        查看景区终端演示
-      </a>
+      <ScenicBottomNav active={activeNav} onSelect={handleScenicNavSelect} />
 
       <div className="mobile-mode-note">
         <Layers aria-hidden="true" size={16} />
