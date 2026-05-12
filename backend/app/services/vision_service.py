@@ -23,6 +23,27 @@ class VisionMatch:
     attraction: dict[str, Any]
     score: float
     reasons: list[str]
+    match_signals: list[str]
+
+
+SIGNAL_LABELS = {
+    "filename": "文件名",
+    "hint": "提示词",
+    "text_hint": "补充描述",
+    "tag": "标签",
+    "scenic_area": "景区名",
+}
+
+SIGNAL_WEIGHTS = {
+    "filename": 0.42,
+    "hint": 0.52,
+    "text_hint": 0.4,
+}
+
+CANDIDATE_SCORE_THRESHOLD = 0.12
+MATCH_CONFIDENCE_THRESHOLD = 0.62
+CONFIRMATION_CONFIDENCE_THRESHOLD = 0.76
+CONFIRMATION_GAP_THRESHOLD = 0.15
 
 
 def _normalize(text: Any) -> str:
@@ -41,9 +62,27 @@ def _candidate_text(*, filename: str | None, hint: str | None, text_hint: str | 
     return _normalize(" ".join(part for part in [filename_stem, filename, hint, text_hint] if part))
 
 
-def _score_attraction(attraction: dict[str, Any], text: str) -> VisionMatch:
-    compact_text = _compact(text)
+def _source_texts(*, filename: str | None, hint: str | None, text_hint: str | None) -> dict[str, str]:
+    filename_stem = Path(filename or "").stem
+    return {
+        "filename": _normalize(" ".join(part for part in [filename_stem, filename] if part)),
+        "hint": _normalize(hint),
+        "text_hint": _normalize(text_hint),
+    }
+
+
+def _alias_hit(field_text: str, alias: str) -> bool:
+    alias_norm = _normalize(alias)
+    alias_compact = _compact(alias_norm)
+    field_compact = _compact(field_text)
+    return bool(alias_compact and ((alias_norm and alias_norm in field_text) or alias_compact in field_compact))
+
+
+def _score_attraction(attraction: dict[str, Any], source_texts: dict[str, str]) -> VisionMatch:
+    combined_text = _normalize(" ".join(value for value in source_texts.values() if value))
+    compact_text = _compact(combined_text)
     reasons: list[str] = []
+    match_signals: list[str] = []
     score = 0.0
 
     stable_id = attraction["id"]
@@ -51,29 +90,39 @@ def _score_attraction(attraction: dict[str, Any], text: str) -> VisionMatch:
     name = attraction.get("name", "")
     aliases = [stable_id, legacy_id, name, *ALIAS_MAP.get(stable_id, [])]
 
-    for alias in aliases:
-        alias_norm = _normalize(alias)
-        alias_compact = _compact(alias_norm)
-        if not alias_compact:
+    exact_aliases = {_compact(stable_id), _compact(legacy_id), _compact(name)}
+    for signal, field_text in source_texts.items():
+        if not field_text:
             continue
-        if alias_norm and alias_norm in text:
-            score += 0.82 if alias_norm in {stable_id, legacy_id.lower(), name.lower()} else 0.7
-            reasons.append(f"alias:{alias}")
-        elif alias_compact and alias_compact in compact_text:
-            score += 0.72
-            reasons.append(f"compact_alias:{alias}")
+        best_hit: tuple[float, str] | None = None
+        for alias in aliases:
+            alias_compact = _compact(_normalize(alias))
+            if not alias_compact or not _alias_hit(field_text, alias):
+                continue
+            weight = SIGNAL_WEIGHTS[signal]
+            if alias_compact in exact_aliases:
+                weight += 0.16
+            if best_hit is None or weight > best_hit[0]:
+                best_hit = (weight, str(alias))
+        if best_hit:
+            score += best_hit[0]
+            match_signals.append(signal)
+            reasons.append(f"{SIGNAL_LABELS[signal]}命中“{best_hit[1]}”")
 
     for tag in attraction.get("tags", []):
         tag_compact = _compact(tag)
         if tag_compact and tag_compact in compact_text:
-            score += 0.18
-            reasons.append(f"tag:{tag}")
+            score += 0.08
+            match_signals.append("tag")
+            reasons.append(f"标签命中“{tag}”")
 
     if attraction.get("scenic_area") and _compact(attraction["scenic_area"]) in compact_text:
-        score += 0.1
-        reasons.append("scenic_area")
+        score += 0.05
+        match_signals.append("scenic_area")
+        reasons.append(f"景区名命中“{attraction['scenic_area']}”")
 
-    return VisionMatch(attraction=attraction, score=round(min(score, 1.0), 4), reasons=reasons[:6])
+    unique_signals = list(dict.fromkeys(match_signals))
+    return VisionMatch(attraction=attraction, score=round(min(score, 1.0), 4), reasons=reasons[:6], match_signals=unique_signals)
 
 
 def suggested_questions(attraction: dict[str, Any]) -> list[str]:
@@ -88,6 +137,42 @@ def suggested_questions(attraction: dict[str, Any]) -> list[str]:
     return questions[:4]
 
 
+def _confidence_from_score(score: float) -> float:
+    if score <= 0:
+        return 0.0
+    return round(min(0.99, 0.34 + score * 0.62), 2)
+
+
+def _candidate_reason(match: VisionMatch) -> str:
+    if match.reasons:
+        return "、".join(match.reasons[:3])
+    return "mock 规则给出弱相关候选，需游客确认。"
+
+
+def _candidate_payload(match: VisionMatch) -> dict[str, Any]:
+    return {
+        "attraction": match.attraction,
+        "confidence": _confidence_from_score(match.score),
+        "reason": _candidate_reason(match),
+        "match_signals": match.match_signals,
+    }
+
+
+def _confirmation_state(candidates: list[dict[str, Any]]) -> tuple[bool, str]:
+    if not candidates:
+        return False, "mock 识景没有找到可靠候选，不会编造识别结果。"
+    top = candidates[0]
+    top_confidence = float(top.get("confidence") or 0.0)
+    second_confidence = float(candidates[1].get("confidence") or 0.0) if len(candidates) > 1 else 0.0
+    if top_confidence < MATCH_CONFIDENCE_THRESHOLD:
+        return True, "Top1 候选置信度偏低，请游客确认后再进入讲解。"
+    if len(candidates) > 1 and top_confidence - second_confidence < CONFIRMATION_GAP_THRESHOLD:
+        return True, "前两个候选分差较小，请游客确认拍摄的是哪个景点。"
+    if top_confidence < CONFIRMATION_CONFIDENCE_THRESHOLD:
+        return True, "识景结果可用但仍需确认，避免把低置信候选当作事实讲解。"
+    return False, "Top1 候选置信度较高，仍可由游客确认或改选。"
+
+
 def recognize_image_mock(
     *,
     filename: str | None = None,
@@ -96,16 +181,23 @@ def recognize_image_mock(
     file_size: int | None = None,
 ) -> dict[str, Any]:
     start = time.perf_counter()
-    text = _candidate_text(filename=filename, hint=hint, text_hint=text_hint)
-    matches = [_score_attraction(attraction, text) for attraction in list_attractions()]
+    source_texts = _source_texts(filename=filename, hint=hint, text_hint=text_hint)
+    matches = [_score_attraction(attraction, source_texts) for attraction in list_attractions()]
     matches.sort(key=lambda item: (-item.score, item.attraction["id"]))
-    best = matches[0] if matches else None
+    candidate_matches = [match for match in matches if match.score >= CANDIDATE_SCORE_THRESHOLD][:3]
+    candidates = [_candidate_payload(match) for match in candidate_matches]
+    needs_confirmation, confirmation_reason = _confirmation_state(candidates)
+    best = candidate_matches[0] if candidate_matches else None
 
-    if best is None or best.score < 0.45:
+    if best is None:
         latency_ms = int((time.perf_counter() - start) * 1000)
         return {
             "matched_attraction": None,
             "confidence": 0.0,
+            "candidates": [],
+            "needs_confirmation": False,
+            "confirmation_reason": confirmation_reason,
+            "selected_attraction_id": None,
             "explanation": (
                 "mock 识景没有从文件名或提示词中匹配到可靠景点。"
                 "请换用包含景点名称、景点编号或更明确 hint 的样例继续演示。"
@@ -119,17 +211,26 @@ def recognize_image_mock(
                 "text_hint": text_hint,
                 "file_size": file_size,
                 "strategy": "filename_hint_alias_match",
+                "candidates_count": 0,
+                "needs_confirmation": False,
+                "top1_attraction_id": None,
             },
         }
 
-    confidence = round(min(0.99, 0.52 + best.score * 0.43), 2)
+    confidence = float(candidates[0]["confidence"])
+    matched_attraction = best.attraction if confidence >= MATCH_CONFIDENCE_THRESHOLD else None
     latency_ms = int((time.perf_counter() - start) * 1000)
+    explanation_target = best.attraction["name"] if best else "候选景点"
     return {
-        "matched_attraction": best.attraction,
+        "matched_attraction": matched_attraction,
         "confidence": confidence,
+        "candidates": candidates,
+        "needs_confirmation": needs_confirmation,
+        "confirmation_reason": confirmation_reason,
+        "selected_attraction_id": None,
         "explanation": (
-            f"mock 识景根据文件名/提示词命中 {best.attraction['name']}。"
-            f"匹配依据：{', '.join(best.reasons) if best.reasons else '样例映射'}。"
+            f"mock 识景根据文件名/提示词给出 Top{len(candidates)} 候选，Top1 为 {explanation_target}。"
+            f"判断依据：{_candidate_reason(best)}。"
         ),
         "suggested_questions": suggested_questions(best.attraction),
         "mode": "mock",
@@ -140,5 +241,8 @@ def recognize_image_mock(
             "text_hint": text_hint,
             "file_size": file_size,
             "strategy": "filename_hint_alias_match",
+            "candidates_count": len(candidates),
+            "needs_confirmation": needs_confirmation,
+            "top1_attraction_id": best.attraction["id"],
         },
     }

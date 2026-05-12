@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Clock3,
   Camera,
+  CheckCircle2,
   ExternalLink,
   FileImage,
   Heart,
@@ -18,7 +19,15 @@ import {
 } from "lucide-react";
 
 import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, sendRouteConversation, submitFeedback } from "../api/client";
-import type { Attraction, CrowdLevel, QAResponse, RouteConversationResponse, RouteRecommendation, VisionResponse } from "../api/client";
+import type {
+  Attraction,
+  CrowdLevel,
+  QAResponse,
+  RouteConversationResponse,
+  RouteRecommendation,
+  VisionCandidate,
+  VisionResponse,
+} from "../api/client";
 import { Button } from "../components/Button";
 import { DigitalHumanMock, type DigitalHumanState } from "../components/DigitalHumanMock";
 import { IconButton } from "../components/IconButton";
@@ -154,8 +163,10 @@ function routeSpeechSummary(route: RouteRecommendation) {
 }
 
 function visionSpeechSummary(result: VisionResponse) {
-  if (result.matched_attraction) {
-    return `识景完成，我识别到${result.matched_attraction.name}，置信度约 ${Math.round(result.confidence * 100)}%。你可以继续问我这个景点的看点或游览建议。`;
+  const topCandidate = result.candidates[0];
+  if (topCandidate) {
+    const prefix = result.needs_confirmation ? "我找到几个可能的景点，需要你确认。" : "识景候选已生成。";
+    return `${prefix}Top1 是${topCandidate.attraction.name}，置信度约 ${Math.round(topCandidate.confidence * 100)}%。确认后我再进入讲解。`;
   }
   return "这张图暂时没有匹配到确定景点，我不会编造结果。你可以换一张样例图，或手动选择当前讲解景点。";
 }
@@ -171,6 +182,7 @@ export function MobileHomePage() {
   const [question, setQuestion] = useState("灵山大佛适合怎么游览？");
   const [qaResult, setQaResult] = useState<QAResponse | null>(null);
   const [visionResult, setVisionResult] = useState<VisionResponse | null>(null);
+  const [confirmedVisionId, setConfirmedVisionId] = useState<string | null>(null);
   const [routeTheme, setRouteTheme] = useState("family");
   const [routeBudget, setRouteBudget] = useState(240);
   const [avoidCrowd, setAvoidCrowd] = useState(true);
@@ -424,14 +436,10 @@ export function MobileHomePage() {
     try {
       const result = await recognizeImage({
         file,
-        hint: selectedAttraction?.name,
-        textHint: question,
       });
       setVisionResult(result);
-      if (result.matched_attraction) {
-        setSelectedId(result.matched_attraction.id);
-      }
-      const nextState = result.matched_attraction ? "happy" : "comforting";
+      setConfirmedVisionId(null);
+      const nextState = result.candidates.length ? (result.needs_confirmation ? "comforting" : "happy") : "comforting";
       setHumanState(nextState, visionSpeechSummary(result));
       speakWithHuman(visionSpeechSummary(result), { endState: nextState, maxChars: 240 });
     } catch (cause) {
@@ -442,6 +450,37 @@ export function MobileHomePage() {
     } finally {
       setVisionLoading(false);
     }
+  }
+
+  function confirmVisionCandidate(candidate: VisionCandidate) {
+    setSelectedId(candidate.attraction.id);
+    setConfirmedVisionId(candidate.attraction.id);
+    const questionText = `${candidate.attraction.name}有什么看点？`;
+    setQuestion(questionText);
+    setHumanState("happy", `已确认${candidate.attraction.name}。我可以继续讲解这个景点。`);
+    speakWithHuman(`已确认${candidate.attraction.name}。你可以点一键讲解，或继续问我游览建议。`, {
+      endState: "happy",
+      maxChars: 120,
+    });
+  }
+
+  function confirmedVisionCandidate() {
+    if (!visionResult || !confirmedVisionId) {
+      return null;
+    }
+    return visionResult.candidates.find((candidate) => candidate.attraction.id === confirmedVisionId) || null;
+  }
+
+  function visionSuggestedQuestions() {
+    const confirmed = confirmedVisionCandidate();
+    if (!confirmed) {
+      return visionResult?.suggested_questions || [];
+    }
+    return [
+      `${confirmed.attraction.name}有什么看点？`,
+      `${confirmed.attraction.name}适合怎么游览？`,
+      `${confirmed.attraction.name}背后有什么文化故事？`,
+    ];
   }
 
   async function generateRoute(nextTheme = routeTheme) {
@@ -744,7 +783,7 @@ export function MobileHomePage() {
         <div className="section-title-row">
           <div>
             <h2>拍照识景</h2>
-            <p>上传样例图，mock 识景会根据文件名和提示词匹配景点。</p>
+            <p>上传样例图，mock 识景会先给出 Top3 候选，确认后再进入讲解。</p>
           </div>
           <Button
             icon={<FileImage size={18} />}
@@ -766,26 +805,67 @@ export function MobileHomePage() {
         {visionResult ? (
           <div className="vision-result">
             <div className="vision-result__top">
-              <StatusBadge tone={visionResult.matched_attraction ? "ok" : "warning"}>
-                {visionResult.matched_attraction ? `置信度 ${Math.round(visionResult.confidence * 100)}%` : "未命中"}
+              <StatusBadge tone={visionResult.candidates.length ? (visionResult.needs_confirmation ? "warning" : "ok") : "warning"}>
+                {visionResult.candidates.length ? `候选 ${visionResult.candidates.length} 个` : "未命中"}
               </StatusBadge>
               <span>
                 {visionResult.latency_ms} ms · {visionResult.mode}
               </span>
             </div>
             <p>{visionResult.explanation}</p>
-            {visionResult.matched_attraction ? (
-              <strong>
-                {visionResult.matched_attraction.scenic_area} · {visionResult.matched_attraction.name}
-              </strong>
+            {visionResult.confirmation_reason ? (
+              <p className={visionResult.needs_confirmation ? "vision-confirm-note vision-confirm-note--warning" : "vision-confirm-note"}>
+                {visionResult.confirmation_reason}
+              </p>
             ) : null}
-            <div className="suggested-question-list" aria-label="识景建议问题">
-              {visionResult.suggested_questions.map((item) => (
-                <button className="quick-question" key={item} onClick={() => void submitQuestion(item)} type="button">
-                  {item}
-                </button>
-              ))}
-            </div>
+            {visionResult.candidates.length > 0 ? (
+              <div className="vision-candidate-list" aria-label="识景候选列表">
+                {visionResult.candidates.map((candidate, index) => {
+                  const confirmed = confirmedVisionId === candidate.attraction.id;
+                  return (
+                    <article className={confirmed ? "vision-candidate vision-candidate--confirmed" : "vision-candidate"} key={candidate.attraction.id}>
+                      <div className="vision-candidate__main">
+                        <div className="vision-candidate__title">
+                          <strong>
+                            Top{index + 1} · {candidate.attraction.name}
+                          </strong>
+                          <StatusBadge tone={index === 0 && !visionResult.needs_confirmation ? "ok" : "neutral"}>
+                            {Math.round(candidate.confidence * 100)}%
+                          </StatusBadge>
+                          {confirmed ? <StatusBadge tone="ok">已确认</StatusBadge> : null}
+                        </div>
+                        <span>{candidate.attraction.scenic_area} · {candidate.attraction.category || "景点"}</span>
+                        <p>{candidate.reason}</p>
+                        <small>信号：{candidate.match_signals.map((item) => ({ filename: "文件名", hint: "提示词", text_hint: "描述", tag: "标签", scenic_area: "景区" }[item] || item)).join(" / ") || "弱相关"}</small>
+                      </div>
+                      <Button
+                        icon={confirmed ? <CheckCircle2 size={16} /> : <ShieldCheck size={16} />}
+                        onClick={() => confirmVisionCandidate(candidate)}
+                        type="button"
+                        variant={confirmed ? "secondary" : "accent"}
+                      >
+                        {confirmed ? "已确认" : "确认"}
+                      </Button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="vision-fallback">
+                <p>没有可靠候选时，灵境不会把低置信结果当事实讲解。你可以换一张样例图，或在上方“当前讲解景点”手动选择。</p>
+              </div>
+            )}
+            {confirmedVisionId ? (
+              <div className="suggested-question-list" aria-label="识景建议问题">
+                {visionSuggestedQuestions().map((item) => (
+                  <button className="quick-question" key={item} onClick={() => void submitQuestion(item)} type="button">
+                    {item}
+                  </button>
+                ))}
+              </div>
+            ) : visionResult.candidates.length > 0 ? (
+              <p className="vision-pending-note">请先确认一个候选，再进入该景点讲解或继续追问。</p>
+            ) : null}
           </div>
         ) : (
           <p className="empty-state mobile-empty">还没有上传图片。可用 evals/vision_samples 下的样例文件演示。</p>

@@ -43,19 +43,77 @@ def check_case(case: dict[str, Any]) -> dict[str, Any]:
     )
     matched = response["matched_attraction"]
     matched_id = matched["id"] if matched else None
+    candidates = response.get("candidates", [])
+    candidate_ids = [item["attraction"]["id"] for item in candidates if isinstance(item, dict) and isinstance(item.get("attraction"), dict)]
+    candidate_confidences = [float(item.get("confidence") or 0.0) for item in candidates if isinstance(item, dict)]
     expect_match = case.get("expect_match", True)
     id_ok = matched_id == case.get("expected_attraction_id")
     match_ok = (matched is not None) if expect_match else (matched is None)
-    passed = id_ok and match_ok
+    old_fields_ok = all(key in response for key in ["matched_attraction", "confidence", "suggested_questions"])
+    candidates_present_ok = (len(candidates) >= 1) if expect_match else len(candidates) == 0
+    top1_ok = (candidate_ids[0] == case.get("expected_attraction_id")) if expect_match and candidate_ids else not expect_match
+    max3_ok = len(candidates) <= 3
+    sorted_ok = candidate_confidences == sorted(candidate_confidences, reverse=True)
+    needs_confirmation_ok = isinstance(response.get("needs_confirmation"), bool)
+    passed = id_ok and match_ok and old_fields_ok and candidates_present_ok and top1_ok and max3_ok and sorted_ok and needs_confirmation_ok
     return {
         "id": case["id"],
         "image_path": case["image_path"],
         "expected_attraction_id": case.get("expected_attraction_id"),
         "matched_attraction_id": matched_id,
+        "candidate_ids": candidate_ids,
+        "candidates_count": len(candidates),
         "confidence": response["confidence"],
         "passed": passed,
         "match_ok": match_ok,
         "id_ok": id_ok,
+        "old_fields_ok": old_fields_ok,
+        "candidates_present_ok": candidates_present_ok,
+        "top1_ok": top1_ok,
+        "max3_ok": max3_ok,
+        "sorted_ok": sorted_ok,
+        "needs_confirmation_ok": needs_confirmation_ok,
+        "needs_confirmation": response.get("needs_confirmation"),
+        "latency_ms": response["latency_ms"],
+        "explanation": response["explanation"],
+    }
+
+
+def check_ambiguous_case() -> dict[str, Any]:
+    response = recognize_image_mock(
+        filename="ambiguous_mock.jpg",
+        hint="大佛 九龙",
+        text_hint="",
+        file_size=12,
+    )
+    candidates = response.get("candidates", [])
+    candidate_ids = [item["attraction"]["id"] for item in candidates if isinstance(item, dict) and isinstance(item.get("attraction"), dict)]
+    passed = (
+        len(candidates) >= 2
+        and len(candidates) <= 3
+        and response.get("needs_confirmation") is True
+        and {"lingshan-ls-011", "lingshan-ls-006"}.issubset(set(candidate_ids))
+    )
+    return {
+        "id": "vision_ambiguous_confirmation",
+        "image_path": "synthetic",
+        "expected_attraction_id": None,
+        "matched_attraction_id": (response.get("matched_attraction") or {}).get("id")
+        if isinstance(response.get("matched_attraction"), dict)
+        else None,
+        "candidate_ids": candidate_ids,
+        "candidates_count": len(candidates),
+        "confidence": response.get("confidence"),
+        "passed": passed,
+        "match_ok": True,
+        "id_ok": True,
+        "old_fields_ok": all(key in response for key in ["matched_attraction", "confidence", "suggested_questions"]),
+        "candidates_present_ok": len(candidates) >= 2,
+        "top1_ok": True,
+        "max3_ok": len(candidates) <= 3,
+        "sorted_ok": True,
+        "needs_confirmation_ok": response.get("needs_confirmation") is True,
+        "needs_confirmation": response.get("needs_confirmation"),
         "latency_ms": response["latency_ms"],
         "explanation": response["explanation"],
     }
@@ -64,6 +122,7 @@ def check_case(case: dict[str, Any]) -> dict[str, Any]:
 def main() -> int:
     cases = load_cases()
     results = [check_case(case) for case in cases]
+    results.append(check_ambiguous_case())
     passed = sum(1 for result in results if result["passed"])
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

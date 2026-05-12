@@ -126,9 +126,9 @@ python .\scripts\eval_qa.py
 }
 ```
 
-## Mock 识景
+## Mock 识景与 Top3 候选确认
 
-Task 04.5 提供文件名 / hint / text_hint 驱动的 mock 识景，不需要真实 VLM 或 API Key：
+Task 04.5 提供文件名 / hint / text_hint 驱动的 mock 识景，Task 04.6 将其升级为 Top3 候选确认流程。不需要真实 VLM 或 API Key：
 
 ```powershell
 python .\scripts\eval_vision.py
@@ -144,7 +144,14 @@ python .\scripts\eval_vision.py
 - `hint`: 可选，景点名称、景点 id 或关键词
 - `text_hint`: 可选，补充描述
 
-返回会包含 `matched_attraction`、`confidence`、`explanation`、`suggested_questions`、`mode`、`latency_ms`。无匹配时 `matched_attraction` 为 `null`，不会编造识别结果。
+返回会兼容旧字段 `matched_attraction`、`confidence`、`explanation`、`suggested_questions`、`mode`、`latency_ms`，并新增：
+
+- `candidates`：最多 3 个本地景点候选，每个候选包含景点对象、置信度、判断依据和命中信号。
+- `needs_confirmation`：低置信或候选分差较小时为 `true`。
+- `confirmation_reason`：解释为什么需要确认。
+- `selected_attraction_id`：当前确认前为 `null`，前端确认后在本地切换当前讲解景点。
+
+游客端不会把低置信候选直接当事实讲解；确认某个候选后才进入该景点的一键讲解和 suggested questions。无匹配时 `matched_attraction` 为 `null` 且 `candidates=[]`，不会编造识别结果。未来可替换为真实 VLM provider，但 VLM 只负责候选识别，事实讲解仍由 RAG 来源生成。
 
 ## Mock 路线推荐
 

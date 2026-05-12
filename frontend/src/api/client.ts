@@ -27,9 +27,20 @@ export type QAResponse = {
   latency_ms: number;
 };
 
+export type VisionCandidate = {
+  attraction: Attraction;
+  confidence: number;
+  reason: string;
+  match_signals: string[];
+};
+
 export type VisionResponse = {
   matched_attraction: Attraction | null;
   confidence: number;
+  candidates: VisionCandidate[];
+  needs_confirmation: boolean;
+  confirmation_reason: string;
+  selected_attraction_id: string | null;
   explanation: string;
   suggested_questions: string[];
   mode: string;

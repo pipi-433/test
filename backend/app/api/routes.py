@@ -810,6 +810,7 @@ async def vision_recognize(request: Request) -> dict[str, object]:
         file_size=file_size,
     )
     matched = result.get("matched_attraction")
+    metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
     record_interaction_event(
         event_type="vision",
         channel=str(fields.get("channel") or "mobile"),
@@ -821,7 +822,10 @@ async def vision_recognize(request: Request) -> dict[str, object]:
             "mode": result.get("mode"),
             "matched_attraction_name": matched.get("name") if isinstance(matched, dict) else None,
             "latency_ms": result.get("latency_ms"),
-            "strategy": (result.get("metadata") or {}).get("strategy") if isinstance(result.get("metadata"), dict) else None,
+            "strategy": metadata.get("strategy"),
+            "candidates_count": metadata.get("candidates_count"),
+            "needs_confirmation": metadata.get("needs_confirmation"),
+            "top1_attraction_id": metadata.get("top1_attraction_id"),
         },
     )
     return result
