@@ -26,12 +26,13 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import {
   addKnowledgeGapToEval,
   createOperationEvent,
   draftKnowledgeGapFaq,
+  fetchAttractions,
   getAdminOperationEvents,
   getAnalyticsOverview,
   getEvalReportsOverview,
@@ -41,6 +42,7 @@ import {
 } from "../api/client";
 import type {
   AnalyticsOverview,
+  Attraction,
   EvalDerivedMetric,
   EvalReportItem,
   EvalReportStatus,
@@ -48,7 +50,6 @@ import type {
   KnowledgeGap,
   KnowledgeGapStatus,
   OperationEvent,
-  OperationEventCreateRequest,
   OperationEventSeverity,
   OperationEventType,
 } from "../api/client";
@@ -63,49 +64,50 @@ type ProviderMap = Record<string, { provider: string; status: string }>;
 const quickOperationEvents: Array<{
   label: string;
   iconLabel: string;
-  payload: OperationEventCreateRequest;
+  event_type: OperationEventType;
+  severity: OperationEventSeverity;
 }> = [
   {
     label: "拥挤",
     iconLabel: "crowd",
-    payload: {
-      attraction_id: "lingshan-ls-006",
-      event_type: "crowd",
-      severity: "warning",
-      message: "管理员发布：九龙灌浴广场排队增多，建议路线预留 30 分钟或错峰。",
-    },
+    event_type: "crowd",
+    severity: "warning",
   },
   {
     label: "临时关闭",
     iconLabel: "closed",
-    payload: {
-      attraction_id: "lingshan-ls-013",
-      event_type: "closed",
-      severity: "critical",
-      message: "管理员发布：灵山梵宫临时维护，非必去路线建议避开。",
-    },
+    event_type: "closed",
+    severity: "critical",
   },
   {
     label: "演出提醒",
     iconLabel: "show",
-    payload: {
-      attraction_id: "lingshan-ls-006",
-      event_type: "show",
-      severity: "info",
-      message: "管理员发布：九龙灌浴演出即将开始，附近游客可提前就位。",
-    },
+    event_type: "show",
+    severity: "info",
   },
   {
     label: "推荐分流",
     iconLabel: "recommendation",
-    payload: {
-      attraction_id: "nianhuawan-nh-003",
-      event_type: "recommendation",
-      severity: "info",
-      message: "管理员发布：亲子与休闲游客建议分流至香月花街。",
-    },
+    event_type: "recommendation",
+    severity: "info",
   },
 ];
+
+type OperationFormState = {
+  attraction_id: string;
+  event_type: OperationEventType;
+  severity: OperationEventSeverity;
+  message: string;
+  duration_hours: number;
+};
+
+const defaultOperationForm: OperationFormState = {
+  attraction_id: "",
+  event_type: "crowd",
+  severity: "warning",
+  message: "",
+  duration_hours: 3,
+};
 
 const adminNavItems = [
   { id: "admin-overview", label: "概览", path: "/admin", Icon: ChartNoAxesCombined },
@@ -148,6 +150,23 @@ function severityLabel(severity: OperationEventSeverity | string) {
 
 function severityTone(severity: OperationEventSeverity | string) {
   return severity === "critical" || severity === "warning" ? "warning" : "neutral";
+}
+
+function defaultOperationMessage(type: OperationEventType, attractionName?: string) {
+  const name = attractionName || "所选景点";
+  const messages: Record<OperationEventType, string> = {
+    crowd: `管理员发布：${name} 当前游客较多，建议路线预留等待时间或安排错峰游览。`,
+    closed: `管理员发布：${name} 临时关闭或维护，非必去路线建议暂时避开。`,
+    show: `管理员发布：${name} 附近有演出或活动提醒，建议游客提前安排到达时间。`,
+    recommendation: `管理员发布：推荐将游客分流至 ${name}，用于缓解热门点压力。`,
+  };
+  return messages[type];
+}
+
+function defaultOperationSeverity(type: OperationEventType): OperationEventSeverity {
+  if (type === "closed") return "critical";
+  if (type === "crowd") return "warning";
+  return "info";
 }
 
 function gapStatusLabel(status: KnowledgeGapStatus | string) {
@@ -225,7 +244,9 @@ export function AdminPage() {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [evalOverview, setEvalOverview] = useState<EvalReportsOverview | null>(null);
   const activeAdminSection = currentAdminSection(window.location.pathname);
+  const [operationAttractions, setOperationAttractions] = useState<Attraction[]>([]);
   const [operationEvents, setOperationEvents] = useState<OperationEvent[]>([]);
+  const [operationForm, setOperationForm] = useState<OperationFormState>(defaultOperationForm);
   const [operationMessage, setOperationMessage] = useState("");
   const [operationLoading, setOperationLoading] = useState(false);
   const [operationBusyId, setOperationBusyId] = useState("");
@@ -245,9 +266,20 @@ export function AdminPage() {
     getEvalReportsOverview()
       .then(setEvalOverview)
       .catch(() => setEvalOverview(null));
+    loadOperationAttractions();
     loadOperationEvents();
     loadKnowledgeGaps();
   }, []);
+
+  async function loadOperationAttractions() {
+    try {
+      const items = await fetchAttractions();
+      setOperationAttractions(items);
+      setOperationForm((current) => (current.attraction_id || !items[0] ? current : { ...current, attraction_id: items[0].id }));
+    } catch {
+      setOperationAttractions([]);
+    }
+  }
 
   async function loadOperationEvents() {
     try {
@@ -258,20 +290,46 @@ export function AdminPage() {
     }
   }
 
-  async function quickCreateOperationEvent(payload: OperationEventCreateRequest) {
+  function applyOperationTemplate(eventType: OperationEventType, severity: OperationEventSeverity) {
+    setOperationForm((current) => {
+      const attractionId = current.attraction_id || operationAttractions[0]?.id || "";
+      const attraction = operationAttractions.find((item) => item.id === attractionId);
+      return {
+        ...current,
+        attraction_id: attractionId,
+        event_type: eventType,
+        severity,
+        message: defaultOperationMessage(eventType, attraction?.name),
+      };
+    });
+    setOperationMessage("已套用事件模板。请确认景点、等级和说明后再发布。");
+  }
+
+  async function handleCreateOperationEvent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const attraction = operationAttractions.find((item) => item.id === operationForm.attraction_id);
+    if (!operationForm.attraction_id || !attraction) {
+      setOperationMessage("请先选择要发布事件的景点。");
+      return;
+    }
     setOperationLoading(true);
     setOperationMessage("");
     const now = Date.now();
+    const durationHours = Number.isFinite(operationForm.duration_hours) ? Math.min(Math.max(operationForm.duration_hours, 0.5), 24) : 3;
+    const message = operationForm.message.trim() || defaultOperationMessage(operationForm.event_type, attraction.name);
     try {
       await createOperationEvent({
-        ...payload,
+        attraction_id: operationForm.attraction_id,
+        event_type: operationForm.event_type,
+        severity: operationForm.severity,
+        message,
         source: "manual_admin",
         created_by: "admin-console",
         active: true,
         start_at: new Date(now - 60_000).toISOString(),
-        end_at: new Date(now + 3 * 60 * 60 * 1000).toISOString(),
+        end_at: new Date(now + durationHours * 60 * 60 * 1000).toISOString(),
       });
-      setOperationMessage("运营事件已发布，新的路线推荐会立即读取该事件。");
+      setOperationMessage(`已发布 ${attraction.name} 的${operationTypeLabel(operationForm.event_type)}事件，新的路线推荐会立即读取该事件。`);
       await loadOperationEvents();
     } catch (cause) {
       setOperationMessage(cause instanceof Error ? cause.message : "运营事件发布失败。");
@@ -558,20 +616,121 @@ export function AdminPage() {
             <StatusBadge tone="neutral">{operationEvents.filter((item) => item.active).length} active</StatusBadge>
           </div>
 
-          <div className="operation-quick-actions" aria-label="快速创建运营事件">
-            {quickOperationEvents.map((item) => (
+          <form className="operation-create-form" onSubmit={(event) => void handleCreateOperationEvent(event)}>
+            <div className="operation-template-row" aria-label="运营事件模板">
+              {quickOperationEvents.map((item) => (
+                <button
+                  className={operationForm.event_type === item.event_type ? "operation-template-button operation-template-button--active" : "operation-template-button"}
+                  key={item.iconLabel}
+                  onClick={() => applyOperationTemplate(item.event_type, item.severity)}
+                  type="button"
+                >
+                  <Plus aria-hidden="true" size={16} />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="operation-form-grid">
+              <label className="operation-field">
+                <span>影响景点</span>
+                <select
+                  disabled={operationAttractions.length === 0}
+                  onChange={(event) => {
+                    const attraction = operationAttractions.find((item) => item.id === event.target.value);
+                    setOperationForm((current) => ({
+                      ...current,
+                      attraction_id: event.target.value,
+                      message: current.message ? current.message : defaultOperationMessage(current.event_type, attraction?.name),
+                    }));
+                  }}
+                  required
+                  value={operationForm.attraction_id}
+                >
+                  {operationAttractions.length > 0 ? (
+                    operationAttractions.map((attraction) => (
+                      <option key={attraction.id} value={attraction.id}>
+                        {attraction.scenic_area} · {attraction.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">景点加载中</option>
+                  )}
+                </select>
+              </label>
+
+              <label className="operation-field">
+                <span>事件类型</span>
+                <select
+                  onChange={(event) => {
+                    const eventType = event.target.value as OperationEventType;
+                    setOperationForm((current) => ({
+                      ...current,
+                      event_type: eventType,
+                      severity: defaultOperationSeverity(eventType),
+                      message: defaultOperationMessage(eventType, operationAttractions.find((item) => item.id === current.attraction_id)?.name),
+                    }));
+                  }}
+                  value={operationForm.event_type}
+                >
+                  {(["crowd", "closed", "show", "recommendation"] as OperationEventType[]).map((type) => (
+                    <option key={type} value={type}>
+                      {operationTypeLabel(type)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="operation-field">
+                <span>影响等级</span>
+                <select
+                  onChange={(event) => setOperationForm((current) => ({ ...current, severity: event.target.value as OperationEventSeverity }))}
+                  value={operationForm.severity}
+                >
+                  {(["info", "warning", "critical"] as OperationEventSeverity[]).map((severity) => (
+                    <option key={severity} value={severity}>
+                      {severityLabel(severity)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="operation-field">
+                <span>持续小时</span>
+                <input
+                  max={24}
+                  min={0.5}
+                  onChange={(event) => setOperationForm((current) => ({ ...current, duration_hours: Number(event.target.value) }))}
+                  step={0.5}
+                  type="number"
+                  value={operationForm.duration_hours}
+                />
+              </label>
+            </div>
+
+            <label className="operation-field operation-field--wide">
+              <span>对游客展示的说明</span>
+              <textarea
+                onChange={(event) => setOperationForm((current) => ({ ...current, message: event.target.value }))}
+                placeholder="例如：当前排队较多，建议先前往周边景点，稍后返回。"
+                rows={3}
+                value={operationForm.message}
+              />
+            </label>
+
+            <div className="operation-form-actions">
               <Button
+                disabled={operationAttractions.length === 0}
                 icon={<Plus size={16} />}
-                key={item.iconLabel}
                 loading={operationLoading}
-                onClick={() => void quickCreateOperationEvent(item.payload)}
-                type="button"
-                variant={item.payload.event_type === "closed" ? "accent" : "secondary"}
+                type="submit"
+                variant={operationForm.event_type === "closed" ? "accent" : "primary"}
               >
-                {item.label}
+                发布运营事件
               </Button>
-            ))}
-          </div>
+              <p>模板只填充类型和建议文案；最终发布会使用当前选择的景点。</p>
+            </div>
+          </form>
           {operationMessage ? <p className="operation-message">{operationMessage}</p> : null}
 
           <div className="operation-event-list" aria-label="运营事件列表">
