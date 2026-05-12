@@ -30,6 +30,7 @@ from app.services.knowledge_gap_service import (
 )
 from app.services.eval_report_service import eval_reports_overview
 from app.services.qa_service import answer_question
+from app.services.query_understanding_service import build_gate_answer, understand_query
 from app.services.route_intent_service import parse_route_intent
 from app.services.route_memory_service import apply_intent_to_memory, get_route_memory, update_memory_after_route
 from app.services.route_service import (
@@ -94,6 +95,13 @@ class RouteConversationRequest(BaseModel):
     session_id: str | None = None
     current_route_id: str | None = None
     selected_attraction_id: str | None = None
+    channel: str = "mobile"
+
+
+class QueryUnderstandRequest(BaseModel):
+    message: str
+    selected_attraction_id: str | None = None
+    current_route_id: str | None = None
     channel: str = "mobile"
 
 
@@ -183,6 +191,30 @@ def _preview_route_constraints(memory: dict[str, Any], intent: dict[str, Any]) -
     )
 
 
+def _route_intent_from_understanding(understanding: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "intent": "clarification" if understanding.get("needs_clarification") else "unknown",
+        "operation": "none",
+        "theme": None,
+        "time_budget_minutes": None,
+        "group_type": None,
+        "intensity": None,
+        "interests": [],
+        "must_visit_attraction_ids": [],
+        "optional_attraction_ids": [],
+        "avoid_attraction_ids": [],
+        "avoid_crowd": False,
+        "crowd_tolerance": "medium",
+        "style": "default",
+        "intent_confidence": understanding.get("confidence", 0),
+        "needs_clarification": bool(understanding.get("needs_clarification")),
+        "clarification_question": understanding.get("clarification_question"),
+        "clarification_options": understanding.get("clarification_options", []),
+        "mode": "mock_rule_gate",
+        "metadata": {"query_understanding": understanding},
+    }
+
+
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     settings = get_settings()
@@ -225,6 +257,24 @@ def analytics() -> dict[str, object]:
     return analytics_overview()
 
 
+@router.post("/query/understand")
+def query_understand(payload: QueryUnderstandRequest) -> dict[str, object]:
+    message = payload.message.strip()
+    if not message:
+        raise ApiError(
+            code="EMPTY_QUERY",
+            message="请先输入一个问题或路线需求。",
+            cause="POST /api/query/understand received an empty message.",
+            fix="在 message 字段中传入游客文本。",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    return understand_query(
+        message,
+        selected_attraction_id=payload.selected_attraction_id,
+        current_route_id=payload.current_route_id,
+    )
+
+
 @router.post("/qa")
 def qa(payload: QARequest) -> dict[str, object]:
     question = payload.question.strip()
@@ -258,6 +308,10 @@ def qa(payload: QARequest) -> dict[str, object]:
             "fallback": len(result.get("sources", [])) == 0,
             "latency_ms": result.get("latency_ms"),
             "mode": result.get("mode"),
+            "understanding": result.get("understanding"),
+            "understanding_domain": (result.get("understanding") or {}).get("domain")
+            if isinstance(result.get("understanding"), dict)
+            else None,
         },
     )
     sources = result.get("sources", [])
@@ -486,6 +540,46 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
     memory = get_route_memory(payload.session_id)
+    understanding = understand_query(
+        message,
+        selected_attraction_id=payload.selected_attraction_id,
+        current_route_id=payload.current_route_id or memory.get("current_route_id"),
+    )
+    intent_probe = parse_route_intent(
+        message=message,
+        selected_attraction_id=payload.selected_attraction_id,
+        current_route_id=payload.current_route_id or memory.get("current_route_id"),
+        memory=memory,
+    )
+    if understanding.get("domain") == "out_of_scope" or (
+        not understanding.get("should_route")
+        and understanding.get("domain") == "unclear"
+        and intent_probe.get("intent") != "explanation_style"
+    ):
+        reply = build_gate_answer(understanding)
+        gate_intent = _route_intent_from_understanding(understanding)
+        record_interaction_event(
+            event_type="clarification" if understanding.get("needs_clarification") else "route_conversation",
+            channel=payload.channel,
+            question=message,
+            answer_preview=reply,
+            attraction_id=payload.selected_attraction_id,
+            confidence=float(understanding.get("confidence") or 0),
+            success=False,
+            metadata={"understanding": understanding, "blocked_by_query_gate": True},
+        )
+        return {
+            "session_id": memory["session_id"],
+            "intent": gate_intent,
+            "memory": memory,
+            "route": None,
+            "reply": reply,
+            "confidence": understanding.get("confidence", 0),
+            "needs_clarification": bool(understanding.get("needs_clarification")),
+            "clarification_options": understanding.get("clarification_options", []),
+            "understanding": understanding,
+            "mode": "mock",
+        }
     intent = parse_route_intent(
         message=message,
         selected_attraction_id=payload.selected_attraction_id,
@@ -522,6 +616,7 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
             "confidence": intent.get("intent_confidence", 0),
             "needs_clarification": True,
             "clarification_options": intent.get("clarification_options", []),
+            "understanding": understanding,
             "mode": "mock",
         }
 
@@ -559,6 +654,7 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
             "confidence": intent.get("intent_confidence", 0),
             "needs_clarification": True,
             "clarification_options": CONSTRAINT_CLARIFICATION_OPTIONS,
+            "understanding": understanding,
             "mode": "mock",
         }
 
@@ -594,6 +690,7 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
             "confidence": intent.get("intent_confidence", 0),
             "needs_clarification": False,
             "clarification_options": [],
+            "understanding": understanding,
             "mode": "mock",
         }
 
@@ -655,6 +752,7 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
         "confidence": intent.get("intent_confidence", 0),
         "needs_clarification": False,
         "clarification_options": [],
+        "understanding": understanding,
         "mode": "mock",
     }
 

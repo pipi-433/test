@@ -1,18 +1,18 @@
 {
-  "generated_at": "2026-05-12T05:29:33+00:00",
+  "generated_at": "2026-05-12T06:34:02+00:00",
   "mode": "mock",
   "total": 7,
   "passed": 7,
   "failed": 0,
   "accuracy": 1.0,
   "overview": {
-    "available_reports": 12,
-    "total_reports": 12,
-    "total_cases": 102,
-    "passed_cases": 102,
+    "available_reports": 13,
+    "total_reports": 13,
+    "total_cases": 129,
+    "passed_cases": 129,
     "failed_cases": 0,
     "overall_accuracy": 1.0,
-    "latest_generated_at": "2026-05-12T05:29:33+00:00"
+    "latest_generated_at": "2026-05-12T06:32:52+00:00"
   },
   "results": [
     {
@@ -22,21 +22,21 @@
     {
       "id": "reads-at-least-ten-reports",
       "passed": true,
-      "available_reports": 12,
-      "total_reports": 12
+      "available_reports": 13,
+      "total_reports": 13
     },
     {
       "id": "overall-cases-summarized",
       "passed": true,
       "overall": {
-        "total_reports": 12,
-        "available_reports": 12,
-        "passing_reports": 12,
-        "total_cases": 102,
-        "passed_cases": 102,
+        "total_reports": 13,
+        "available_reports": 13,
+        "passing_reports": 13,
+        "total_cases": 129,
+        "passed_cases": 129,
         "failed_cases": 0,
         "overall_accuracy": 1.0,
-        "latest_generated_at": "2026-05-12T05:29:33+00:00"
+        "latest_generated_at": "2026-05-12T06:32:52+00:00"
       }
     },
     {

@@ -21,6 +21,7 @@ class ReportDefinition:
 
 REPORT_DEFINITIONS = [
     ReportDefinition("qa", "RAG 问答", "qa_latest.json", "本地知识库问答、来源约束和低置信兜底评测。"),
+    ReportDefinition("query_understanding", "问题结构门控", "query_understanding_latest.json", "景区问答、路线规划、资料外兜底和澄清追问的本地规则门控。"),
     ReportDefinition("vision", "识景识别", "vision_latest.json", "mock 多模态识景样例成功率。"),
     ReportDefinition("route", "路线推荐", "route_latest.json", "路线模板、站点顺序和分享基础能力。"),
     ReportDefinition("route_crowd", "拥挤分流", "route_crowd_latest.json", "拥挤点降权、错峰解释和 crowd 信息覆盖。"),
@@ -232,7 +233,7 @@ def _derived_metrics(payloads: dict[str, dict[str, Any]]) -> dict[str, dict[str,
         ),
         "clarification_pass_rate": _metric_from_results(
             payloads,
-            ["route_conversation", "route_constraints", "knowledge_gaps"],
+            ["query_understanding", "route_conversation", "route_constraints", "knowledge_gaps"],
             ["clarify", "clarification", "conflict", "no-source"],
         ),
         "knowledge_gap_workflow_rate": _metric_from_report(payloads, "knowledge_gaps"),

@@ -1,0 +1,410 @@
+{
+  "generated_at": "2026-05-12T06:32:52+00:00",
+  "mode": "mock",
+  "total": 23,
+  "passed": 23,
+  "failed": 0,
+  "accuracy": 1.0,
+  "results": [
+    {
+      "id": "rag-lingshan-dafo",
+      "message": "灵山大佛适合怎么游览？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "should_retrieve": true,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [
+        "lingshan-ls-011"
+      ],
+      "confidence": 0.9,
+      "reasons": [
+        "scenic_entity_present"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "rag-jiulong",
+      "message": "九龙灌浴有什么看点？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "should_retrieve": true,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [
+        "lingshan-ls-006"
+      ],
+      "confidence": 0.9,
+      "reasons": [
+        "scenic_entity_present"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "rag-fangong-culture",
+      "message": "灵山梵宫背后有什么文化故事？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "should_retrieve": true,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [
+        "lingshan-ls-013"
+      ],
+      "confidence": 0.9,
+      "reasons": [
+        "scenic_entity_present"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "rag-tancheng",
+      "message": "五印坛城有什么特色？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "should_retrieve": true,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [
+        "lingshan-ls-014"
+      ],
+      "confidence": 0.9,
+      "reasons": [
+        "scenic_entity_present"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "rag-xiangyue",
+      "message": "香月花街在哪里？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "should_retrieve": true,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [
+        "nianhuawan-nh-003"
+      ],
+      "confidence": 0.9,
+      "reasons": [
+        "scenic_entity_present"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-generic-plan",
+      "message": "帮我规划一条路线",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_request",
+      "should_retrieve": false,
+      "should_route": true,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.74,
+      "reasons": [
+        "route_preference",
+        "route_without_entity_allowed"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-family-time-crowd",
+      "message": "带老人孩子，3小时，灵山大佛一定要去",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_request",
+      "should_retrieve": false,
+      "should_route": true,
+      "needs_clarification": false,
+      "entity_ids": [
+        "lingshan-ls-011"
+      ],
+      "confidence": 0.86,
+      "reasons": [
+        "route_constraint",
+        "attraction_entity_present"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-half-day",
+      "message": "避开人多，安排半天路线",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_request",
+      "should_retrieve": false,
+      "should_route": true,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.86,
+      "reasons": [
+        "route_preference",
+        "route_without_entity_allowed"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-nianhuawan-pool",
+      "message": "我想去拈花湾五灯湖和梵天花海",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_request",
+      "should_retrieve": false,
+      "should_route": true,
+      "needs_clarification": false,
+      "entity_ids": [
+        "nianhuawan-nh-002",
+        "nianhuawan-nh-005"
+      ],
+      "confidence": 0.86,
+      "reasons": [
+        "route_constraint",
+        "attraction_entity_present"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "route-replan-current",
+      "message": "太累了，缩短一点",
+      "passed": true,
+      "domain": "route_planning",
+      "intent": "route_replan",
+      "should_retrieve": false,
+      "should_route": true,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.74,
+      "reasons": [
+        "route_preference",
+        "route_without_entity_allowed"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-book",
+      "message": "海底两万里",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.94,
+      "reasons": [
+        "out_of_scope_term_without_scenic_entity",
+        "non_scenic_query"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-book-intro",
+      "message": "介绍海底两万里",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.94,
+      "reasons": [
+        "out_of_scope_term_without_scenic_entity",
+        "guide_words_are_not_entities"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-sky-guide-word",
+      "message": "天上适合怎么游览？",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.94,
+      "reasons": [
+        "out_of_scope_term_without_scenic_entity",
+        "guide_words_are_not_entities"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-not-real-guide-word",
+      "message": "不存在怎么游览？",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.94,
+      "reasons": [
+        "out_of_scope_term_without_scenic_entity",
+        "guide_words_are_not_entities"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-movie-guide-word",
+      "message": "这个电影适合怎么游览？",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.94,
+      "reasons": [
+        "out_of_scope_term_without_scenic_entity",
+        "guide_words_are_not_entities"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-code",
+      "message": "帮我写代码",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.94,
+      "reasons": [
+        "out_of_scope_term_without_scenic_entity",
+        "non_scenic_query"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "oos-stock",
+      "message": "今天股票怎么样",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.94,
+      "reasons": [
+        "out_of_scope_term_without_scenic_entity",
+        "non_scenic_query"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "clarify-pronoun-no-context",
+      "message": "这个景点怎么游览？",
+      "passed": true,
+      "domain": "unclear",
+      "intent": "attraction_intro",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": true,
+      "entity_ids": [],
+      "confidence": 0.42,
+      "reasons": [
+        "generic_attraction_reference_without_context"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "clarify-arrange-vague",
+      "message": "帮我安排一下",
+      "passed": true,
+      "domain": "unclear",
+      "intent": "route_request",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": true,
+      "entity_ids": [],
+      "confidence": 0.45,
+      "reasons": [
+        "route_phrase_too_short"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "clarify-route-short",
+      "message": "路线",
+      "passed": true,
+      "domain": "unclear",
+      "intent": "route_request",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": true,
+      "entity_ids": [],
+      "confidence": 0.45,
+      "reasons": [
+        "route_phrase_too_short"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "selected-oos-still-blocked",
+      "message": "海底两万里",
+      "passed": true,
+      "domain": "out_of_scope",
+      "intent": "unknown",
+      "should_retrieve": false,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [],
+      "confidence": 0.94,
+      "reasons": [
+        "out_of_scope_term_without_scenic_entity",
+        "non_scenic_query"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "explicit-entity-beats-current",
+      "message": "九龙灌浴有什么看点？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "should_retrieve": true,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [
+        "lingshan-ls-006"
+      ],
+      "confidence": 0.9,
+      "reasons": [
+        "scenic_entity_present"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "selected-context-allowed",
+      "message": "这个景点怎么游览？",
+      "passed": true,
+      "domain": "scenic_guide",
+      "intent": "attraction_intro",
+      "should_retrieve": true,
+      "should_route": false,
+      "needs_clarification": false,
+      "entity_ids": [
+        "lingshan-ls-011"
+      ],
+      "confidence": 0.9,
+      "reasons": [
+        "scenic_entity_present"
+      ],
+      "mismatches": []
+    }
+  ]
+}

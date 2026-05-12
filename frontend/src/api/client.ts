@@ -25,6 +25,32 @@ export type QAResponse = {
   sources: Source[];
   mode: string;
   latency_ms: number;
+  understanding?: QueryUnderstandingResult;
+};
+
+export type QueryUnderstandingDomain = "scenic_guide" | "route_planning" | "out_of_scope" | "unclear";
+
+export type QueryUnderstandingIntent = "fact_qa" | "attraction_intro" | "route_request" | "route_replan" | "unknown";
+
+export type QueryUnderstandingEntity = {
+  type: "attraction";
+  id: string;
+  name: string;
+  matched_text: string;
+};
+
+export type QueryUnderstandingResult = {
+  domain: QueryUnderstandingDomain;
+  intent: QueryUnderstandingIntent;
+  entities: QueryUnderstandingEntity[];
+  confidence: number;
+  should_retrieve: boolean;
+  should_route: boolean;
+  needs_clarification: boolean;
+  clarification_question: string | null;
+  clarification_options: string[];
+  reasons: string[];
+  mode: "mock_rule_gate" | string;
 };
 
 export type VisionCandidate = {
@@ -386,6 +412,7 @@ export type RouteConversationResponse = {
   confidence: number;
   needs_clarification: boolean;
   clarification_options: string[];
+  understanding?: QueryUnderstandingResult;
   mode: string;
 };
 
@@ -578,6 +605,26 @@ export async function askQuestion({
         time_budget_minutes: 120,
         interests: ["佛教文化", "拍照打卡"],
       },
+    }),
+    method: "POST",
+  });
+}
+
+export async function understandQuery({
+  message,
+  selectedAttractionId,
+  currentRouteId,
+}: {
+  message: string;
+  selectedAttractionId?: string;
+  currentRouteId?: string;
+}): Promise<QueryUnderstandingResult> {
+  return requestJson<QueryUnderstandingResult>("/api/query/understand", {
+    body: JSON.stringify({
+      message,
+      selected_attraction_id: selectedAttractionId || null,
+      current_route_id: currentRouteId || null,
+      channel: "mobile",
     }),
     method: "POST",
   });

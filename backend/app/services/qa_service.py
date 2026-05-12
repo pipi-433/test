@@ -11,6 +11,7 @@ from app.repositories.content_repository import (
     list_attractions,
     list_knowledge_chunks,
 )
+from app.services.query_understanding_service import build_gate_answer, understand_query
 
 
 DEFAULT_TOP_K = 5
@@ -270,9 +271,52 @@ def answer_question(
     top_k: int = DEFAULT_TOP_K,
 ) -> dict[str, Any]:
     start = time.perf_counter()
+    if attraction_id and get_attraction(attraction_id) is None:
+        understanding = understand_query(question, selected_attraction_id=attraction_id)
+        answer = build_mock_answer(
+            question=question,
+            sources=[],
+            attraction=None,
+            attraction_id=attraction_id,
+            visitor_profile=visitor_profile,
+        )
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return {
+            "answer": answer,
+            "sources": [],
+            "mode": "mock",
+            "latency_ms": latency_ms,
+            "understanding": {
+                **understanding,
+                "should_retrieve": False,
+                "reasons": [*(understanding.get("reasons") or []), "invalid_attraction_id"],
+            },
+        }
+
+    understanding = understand_query(question, selected_attraction_id=attraction_id)
+    if not understanding.get("should_retrieve"):
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return {
+            "answer": build_gate_answer(understanding),
+            "sources": [],
+            "mode": "mock",
+            "latency_ms": latency_ms,
+            "understanding": understanding,
+        }
+
+    retrieval_attraction_id = attraction_id
+    if not retrieval_attraction_id:
+        attraction_entities = [
+            entity
+            for entity in understanding.get("entities", [])
+            if isinstance(entity, dict) and entity.get("type") == "attraction" and entity.get("id")
+        ]
+        if len(attraction_entities) == 1:
+            retrieval_attraction_id = str(attraction_entities[0]["id"])
+
     sources, attraction, _terms = retrieve_chunks(
         question=question,
-        attraction_id=attraction_id,
+        attraction_id=retrieval_attraction_id,
         visitor_profile=visitor_profile,
         top_k=top_k,
     )
@@ -280,7 +324,7 @@ def answer_question(
         question=question,
         sources=sources,
         attraction=attraction,
-        attraction_id=attraction_id,
+        attraction_id=retrieval_attraction_id,
         visitor_profile=visitor_profile,
     )
     latency_ms = int((time.perf_counter() - start) * 1000)
@@ -299,4 +343,5 @@ def answer_question(
         ],
         "mode": "mock",
         "latency_ms": latency_ms,
+        "understanding": understanding,
     }

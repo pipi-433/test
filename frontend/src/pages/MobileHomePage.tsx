@@ -18,11 +18,12 @@ import {
   VolumeX,
 } from "lucide-react";
 
-import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, sendRouteConversation, submitFeedback } from "../api/client";
+import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, sendRouteConversation, submitFeedback, understandQuery } from "../api/client";
 import type {
   Attraction,
   CrowdLevel,
   QAResponse,
+  QueryUnderstandingResult,
   RouteConversationResponse,
   RouteRecommendation,
   VisionCandidate,
@@ -107,8 +108,32 @@ function crowdTone(level: CrowdLevel) {
   return level === "high" ? "warning" : level === "medium" ? "neutral" : "ok";
 }
 
+function shouldUseCurrentAttractionContext(value: string) {
+  return ["这里", "这个景点", "当前景点", "从这里", "我在"].some((keyword) => value.includes(keyword));
+}
+
 function isRouteIntentQuestion(value: string) {
   return routeIntentKeywords.some((keyword) => value.includes(keyword));
+}
+
+function understandingLabel(value: QueryUnderstandingResult | undefined) {
+  if (!value) {
+    return "";
+  }
+  const labels: Record<string, string> = {
+    scenic_guide: "景区问答",
+    route_planning: "路线规划",
+    out_of_scope: "资料外",
+    unclear: "需要澄清",
+  };
+  return labels[value.domain] || value.domain;
+}
+
+function understandingTone(value: QueryUnderstandingResult | undefined) {
+  if (!value) {
+    return "neutral" as const;
+  }
+  return value.domain === "out_of_scope" || value.domain === "unclear" ? "warning" : "ok";
 }
 
 function constraintLabel(value: string | undefined) {
@@ -239,6 +264,7 @@ export function MobileHomePage() {
     () => attractions.find((item) => item.id === selectedId) || null,
     [attractions, selectedId],
   );
+  const activeUnderstanding = qaResult?.understanding || routeConversation?.understanding;
 
   const attractionById = useMemo(() => new Map(attractions.map((item) => [item.id, item])), [attractions]);
   const routeConstraintResults = useMemo(() => {
@@ -349,18 +375,25 @@ export function MobileHomePage() {
     setQuestion(cleanQuestion);
     setSubmittedQuestion(cleanQuestion);
     setQaResult(null);
+    setRouteConversation(null);
     setClarificationOptions([]);
     speech.stop();
-    setHumanState("thinking", "我正在检索本地资料，并判断是否需要规划路线。");
+    setHumanState("thinking", "我正在先理解问题边界，再决定是否检索资料或规划路线。");
     const matchedAttraction = attractions.find((item) => cleanQuestion.includes(item.name));
-    const queryAttractionId = matchedAttraction?.id || undefined;
-    const routeContextAttractionId = matchedAttraction?.id || selectedId || undefined;
+    const explicitAttractionId = matchedAttraction?.id || undefined;
+    const routeContextAttractionId =
+      explicitAttractionId || (shouldUseCurrentAttractionContext(cleanQuestion) ? selectedId || undefined : undefined);
     if (matchedAttraction && matchedAttraction.id !== selectedId) {
       setSelectedId(matchedAttraction.id);
     }
     scrollAnswerIntoView();
     try {
-      if (isRouteIntentQuestion(cleanQuestion)) {
+      const understanding = await understandQuery({
+        message: cleanQuestion,
+        selectedAttractionId: routeContextAttractionId,
+        currentRouteId: routeResult?.id,
+      });
+      if (understanding.should_route || (isRouteIntentQuestion(cleanQuestion) && understanding.domain === "route_planning")) {
         const result = await sendRouteConversation({
           message: cleanQuestion,
           sessionId: routeSessionId || undefined,
@@ -369,7 +402,7 @@ export function MobileHomePage() {
         });
         setRouteConversation(result);
         setRouteSessionId(result.session_id);
-        setQaResult({ answer: result.reply, sources: [], mode: "route_memory", latency_ms: 0 });
+        setQaResult({ answer: result.reply, sources: [], mode: "route_memory", latency_ms: 0, understanding: result.understanding || understanding });
         setClarificationOptions(result.clarification_options || []);
         if (result.route) {
           setRouteResult(result.route);
@@ -393,10 +426,17 @@ export function MobileHomePage() {
         scrollAnswerIntoView("nearest");
         return;
       }
-      const result = await askQuestion({ attractionId: queryAttractionId, question: cleanQuestion });
+      const queryAttractionId = understanding.entities.length === 1 ? understanding.entities[0].id : explicitAttractionId;
+      const result = await askQuestion({ attractionId: understanding.should_retrieve ? queryAttractionId : undefined, question: cleanQuestion });
       setQaResult(result);
+      setClarificationOptions(result.understanding?.clarification_options || []);
       if (result.sources.length === 0) {
-        setHumanState("comforting", "本地资料没有明确命中，我会避免编造。");
+        setHumanState(
+          "comforting",
+          result.understanding?.domain === "out_of_scope"
+            ? "这个问题不在本地景区知识库范围内，我不会编造。"
+            : "本地资料没有明确命中，我会避免编造。",
+        );
         speakWithHuman(result.answer, { endState: "comforting", maxChars: 300 });
       } else {
         speakWithHuman(result.answer, { maxChars: 420 });
@@ -722,6 +762,15 @@ export function MobileHomePage() {
       </section>
 
       <section className="mobile-chat" aria-label="问答讲解" ref={answerPanelRef}>
+        {activeUnderstanding ? (
+          <div className="understanding-strip" aria-label="问题理解结果">
+            <StatusBadge tone={understandingTone(activeUnderstanding)}>识别为：{understandingLabel(activeUnderstanding)}</StatusBadge>
+            <span>
+              置信度 {Math.round(activeUnderstanding.confidence * 100)}%
+              {activeUnderstanding.reasons.length ? ` · ${activeUnderstanding.reasons.slice(0, 2).join(" / ")}` : ""}
+            </span>
+          </div>
+        ) : null}
         <div className="chat-row chat-row--visitor">
           <strong>游客</strong>
           <p>{submittedQuestion || "还没有发送问题"}</p>
@@ -758,7 +807,9 @@ export function MobileHomePage() {
 
       {clarificationOptions.length > 0 ? (
         <section className="clarification-panel" aria-label="澄清选项">
-          <strong>{routeConversation?.intent.clarification_question || "请选择一个更明确的方向"}</strong>
+          <strong>
+            {qaResult?.understanding?.clarification_question || routeConversation?.intent.clarification_question || "请选择一个更明确的方向"}
+          </strong>
           <div className="quick-question-row">
             {clarificationOptions.map((option) => (
               <button
