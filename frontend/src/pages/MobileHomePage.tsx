@@ -133,12 +133,28 @@ const genericGuideQuestionMarkers = [
 ];
 
 function shouldUseSelectedAttractionContext(value: string) {
-  const compact = value.replace(/\s+/g, "");
+  const compact = value.replace(/[\s，。！？；、,.!?;:：]+/g, "");
   const hasGuideMarker = genericGuideQuestionMarkers.some((marker) => compact.includes(marker));
   if (!hasGuideMarker) {
     return false;
   }
-  return contextualAttractionMarkers.some((marker) => compact.includes(marker)) || compact.length <= 14;
+  const bareGenericQuestions = new Set([
+    "\u4ecb\u7ecd",
+    "\u4ecb\u7ecd\u4e00\u4e0b",
+    "\u8bb2\u89e3",
+    "\u8bb2\u89e3\u4e00\u4e0b",
+    "\u6709\u4ec0\u4e48\u770b\u70b9",
+    "\u6709\u5565\u770b\u70b9",
+    "\u770b\u70b9",
+    "\u4eae\u70b9",
+    "\u6e38\u89c8\u5efa\u8bae",
+    "\u600e\u4e48\u6e38\u89c8",
+    "\u5982\u4f55\u6e38\u89c8",
+    "\u600e\u4e48\u73a9",
+    "\u9002\u5408\u600e\u4e48\u6e38\u89c8",
+    "\u63a8\u8350\u600e\u4e48\u73a9",
+  ]);
+  return contextualAttractionMarkers.some((marker) => compact.includes(marker)) || bareGenericQuestions.has(compact);
 }
 
 function constraintLabel(value: string | undefined) {

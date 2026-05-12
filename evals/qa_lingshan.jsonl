@@ -10,3 +10,4 @@
 {"id":"qa_010","category":"不存在景点","question":"这个景点怎么游览？","attraction_id":"not-real","expected_keywords":["没有找到这个景点编号"],"must_not_include":["推荐你直接前往"],"expect_sources":false}
 {"id":"qa_011","category":"资料外问题带当前景点过滤","question":"火星基地在哪里？","attraction_id":"lingshan-ls-011","expected_keywords":["没有在本地资料里检索到","不编造"],"must_not_include":["灵山大佛","火星基地位于"],"expect_sources":false}
 {"id":"qa_012","category":"非景区文本带当前景点过滤","question":"海底两万里","attraction_id":"lingshan-ls-011","expected_keywords":["没有在本地资料里检索到","不编造"],"must_not_include":["灵山大佛","可以这样理解"],"expect_sources":false}
+{"id":"qa_013","category":"非景区介绍意图带当前景点过滤","question":"介绍海底两万里","attraction_id":"lingshan-ls-011","expected_keywords":["没有在本地资料里检索到","不编造"],"must_not_include":["灵山大佛","可以这样理解"],"expect_sources":false}
