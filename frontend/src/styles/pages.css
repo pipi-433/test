@@ -1346,6 +1346,7 @@
   padding: 0 var(--space-3);
   border-radius: var(--radius-3);
   color: var(--color-ink-700);
+  cursor: pointer;
   font-weight: 650;
   text-decoration: none;
 }
@@ -1360,6 +1361,10 @@
 .admin-main {
   min-width: 0;
   padding: var(--space-6);
+}
+
+.admin-section-anchor {
+  scroll-margin-top: var(--space-6);
 }
 
 .admin-topbar {
