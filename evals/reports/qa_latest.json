@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-05-12T05:28:08+00:00",
+  "generated_at": "2026-05-12T05:37:28+00:00",
   "mode": "mock",
   "total": 13,
   "passed": 13,
   "failed": 0,
   "accuracy": 1.0,
-  "avg_latency_ms": 3.0,
+  "avg_latency_ms": 2.92,
   "results": [
     {
       "id": "qa_001",
@@ -136,7 +136,7 @@
       "forbidden_hits": [],
       "source_count": 0,
       "source_ok": true,
-      "latency_ms": 3,
+      "latency_ms": 2,
       "answer_preview": "这个问题我暂时没有在本地资料里检索到可靠依据，所以先不编造答案。你可以换成具体景点名、演出名或游览需求再问一次，我会继续用 mock 知识库帮你查。"
     },
     {
@@ -148,7 +148,7 @@
       "forbidden_hits": [],
       "source_count": 0,
       "source_ok": true,
-      "latency_ms": 3,
+      "latency_ms": 2,
       "answer_preview": "这个问题我暂时没有在本地资料里检索到可靠依据，所以先不编造答案。你可以换成具体景点名、演出名或游览需求再问一次，我会继续用 mock 知识库帮你查。"
     },
     {
@@ -160,7 +160,7 @@
       "forbidden_hits": [],
       "source_count": 0,
       "source_ok": true,
-      "latency_ms": 2,
+      "latency_ms": 3,
       "answer_preview": "这个问题我暂时没有在本地资料里检索到可靠依据，所以先不编造答案。你可以换成具体景点名、演出名或游览需求再问一次，我会继续用 mock 知识库帮你查。"
     }
   ]

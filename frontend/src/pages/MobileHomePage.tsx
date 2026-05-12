@@ -111,52 +111,6 @@ function isRouteIntentQuestion(value: string) {
   return routeIntentKeywords.some((keyword) => value.includes(keyword));
 }
 
-const contextualAttractionMarkers = [
-  "\u8fd9\u4e2a\u666f\u70b9",
-  "\u8fd9\u4e2a\u5730\u65b9",
-  "\u8fd9\u91cc",
-  "\u5f53\u524d\u666f\u70b9",
-  "\u8be5\u666f\u70b9",
-  "\u5b83",
-];
-
-const genericGuideQuestionMarkers = [
-  "\u600e\u4e48\u6e38\u89c8",
-  "\u5982\u4f55\u6e38\u89c8",
-  "\u600e\u4e48\u73a9",
-  "\u4ecb\u7ecd",
-  "\u8bb2\u89e3",
-  "\u770b\u70b9",
-  "\u4eae\u70b9",
-  "\u9002\u5408",
-  "\u63a8\u8350",
-];
-
-function shouldUseSelectedAttractionContext(value: string) {
-  const compact = value.replace(/[\s，。！？；、,.!?;:：]+/g, "");
-  const hasGuideMarker = genericGuideQuestionMarkers.some((marker) => compact.includes(marker));
-  if (!hasGuideMarker) {
-    return false;
-  }
-  const bareGenericQuestions = new Set([
-    "\u4ecb\u7ecd",
-    "\u4ecb\u7ecd\u4e00\u4e0b",
-    "\u8bb2\u89e3",
-    "\u8bb2\u89e3\u4e00\u4e0b",
-    "\u6709\u4ec0\u4e48\u770b\u70b9",
-    "\u6709\u5565\u770b\u70b9",
-    "\u770b\u70b9",
-    "\u4eae\u70b9",
-    "\u6e38\u89c8\u5efa\u8bae",
-    "\u600e\u4e48\u6e38\u89c8",
-    "\u5982\u4f55\u6e38\u89c8",
-    "\u600e\u4e48\u73a9",
-    "\u9002\u5408\u600e\u4e48\u6e38\u89c8",
-    "\u63a8\u8350\u600e\u4e48\u73a9",
-  ]);
-  return contextualAttractionMarkers.some((marker) => compact.includes(marker)) || bareGenericQuestions.has(compact);
-}
-
 function constraintLabel(value: string | undefined) {
   return value === "must_visit" ? "必去" : value === "optional" ? "可选" : value === "alternative" ? "替代" : "推荐";
 }
@@ -226,6 +180,7 @@ export function MobileHomePage() {
   const [attractions, setAttractions] = useState<Attraction[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [question, setQuestion] = useState("灵山大佛适合怎么游览？");
+  const [submittedQuestion, setSubmittedQuestion] = useState("");
   const [qaResult, setQaResult] = useState<QAResponse | null>(null);
   const [visionResult, setVisionResult] = useState<VisionResponse | null>(null);
   const [confirmedVisionId, setConfirmedVisionId] = useState<string | null>(null);
@@ -392,13 +347,13 @@ export function MobileHomePage() {
     setQaLoading(true);
     setError("");
     setQuestion(cleanQuestion);
+    setSubmittedQuestion(cleanQuestion);
     setQaResult(null);
     setClarificationOptions([]);
     speech.stop();
     setHumanState("thinking", "我正在检索本地资料，并判断是否需要规划路线。");
     const matchedAttraction = attractions.find((item) => cleanQuestion.includes(item.name));
-    const selectedContextId = shouldUseSelectedAttractionContext(cleanQuestion) ? selectedId : "";
-    const queryAttractionId = matchedAttraction?.id || selectedContextId || undefined;
+    const queryAttractionId = matchedAttraction?.id || undefined;
     const routeContextAttractionId = matchedAttraction?.id || selectedId || undefined;
     if (matchedAttraction && matchedAttraction.id !== selectedId) {
       setSelectedId(matchedAttraction.id);
@@ -747,7 +702,7 @@ export function MobileHomePage() {
 
         <div className="attraction-context">
           <label className="field-label" htmlFor="attraction-select">
-            当前讲解景点
+            当前展示景点
           </label>
           <select
             className="select-input"
@@ -762,13 +717,14 @@ export function MobileHomePage() {
               </option>
             ))}
           </select>
+          <p className="context-note">普通提问不会自动带入该景点；请直接写出景点名，或使用下方景点卡继续讲解。</p>
         </div>
       </section>
 
       <section className="mobile-chat" aria-label="问答讲解" ref={answerPanelRef}>
         <div className="chat-row chat-row--visitor">
           <strong>游客</strong>
-          <p>{question || "还没有输入问题"}</p>
+          <p>{submittedQuestion || "还没有发送问题"}</p>
         </div>
         <div className="chat-row chat-row--guide">
           <strong>灵境</strong>
@@ -805,7 +761,12 @@ export function MobileHomePage() {
           <strong>{routeConversation?.intent.clarification_question || "请选择一个更明确的方向"}</strong>
           <div className="quick-question-row">
             {clarificationOptions.map((option) => (
-              <button className="quick-question" key={option} onClick={() => void submitQuestion(`${question}，${option}`)} type="button">
+              <button
+                className="quick-question"
+                key={option}
+                onClick={() => void submitQuestion(`${submittedQuestion || question}，${option}`)}
+                type="button"
+              >
                 {option}
               </button>
             ))}
