@@ -230,6 +230,7 @@ export function MobileHomePage() {
   const [qaResult, setQaResult] = useState<QAResponse | null>(null);
   const [visionResult, setVisionResult] = useState<VisionResponse | null>(null);
   const [confirmedVisionId, setConfirmedVisionId] = useState<string | null>(null);
+  const [visionFileName, setVisionFileName] = useState("");
   const [routeTheme, setRouteTheme] = useState("family");
   const [routeBudget, setRouteBudget] = useState(240);
   const [avoidCrowd, setAvoidCrowd] = useState(true);
@@ -528,6 +529,7 @@ export function MobileHomePage() {
       return;
     }
     setActiveNav("vision");
+    setVisionFileName(file.name);
     setVisionLoading(true);
     setError("");
     speech.stop();
@@ -1252,10 +1254,26 @@ export function MobileHomePage() {
 
       {activeNav === "vision" ? (
       <section className="vision-panel" aria-label="图片识景" ref={visionPanelRef}>
-        <div className="section-title-row">
+        <div className="vision-hero">
           <div>
+            <span className="eyebrow">AI 识景确认</span>
             <h2>拍照识景</h2>
-            <p>上传样例图，mock 识景会先给出 Top3 候选，确认后再进入讲解。</p>
+            <p>拍下景点主体，我先给出候选，确认后再讲解。</p>
+          </div>
+          <StatusBadge
+            tone={visionLoading ? "neutral" : confirmedVisionId ? "ok" : visionResult?.candidates.length ? "warning" : visionResult ? "warning" : "neutral"}
+          >
+            {visionLoading ? "识别中" : confirmedVisionId ? "已确认" : visionResult?.candidates.length ? "需确认" : visionResult ? "未识别" : "待上传"}
+          </StatusBadge>
+        </div>
+
+        <div className="vision-upload-panel">
+          <div className="vision-upload-panel__icon">
+            <ImageIcon name="scenic-camera" size={46} />
+          </div>
+          <div className="vision-upload-panel__copy">
+            <strong>{visionLoading ? "正在识别候选景点" : visionFileName || "选择一张景点图片"}</strong>
+            <span>{visionFileName ? "已读取图片文件，结果只作为候选确认。" : "支持 jpg / png，mock 模式无 API Key 可运行。"}</span>
           </div>
           <Button
             icon={<ImageIcon name="scenic-camera" size={20} />}
@@ -1264,7 +1282,7 @@ export function MobileHomePage() {
             type="button"
             variant="secondary"
           >
-            上传
+            {visionFileName ? "换一张" : "上传图片"}
           </Button>
         </div>
         <input
@@ -1294,21 +1312,28 @@ export function MobileHomePage() {
               <div className="vision-candidate-list" aria-label="识景候选列表">
                 {visionResult.candidates.map((candidate, index) => {
                   const confirmed = confirmedVisionId === candidate.attraction.id;
+                  const topCandidate = index === 0;
                   return (
-                    <article className={confirmed ? "vision-candidate vision-candidate--confirmed" : "vision-candidate"} key={candidate.attraction.id}>
+                    <article
+                      className={[
+                        "vision-candidate",
+                        topCandidate ? "vision-candidate--top" : "",
+                        confirmed ? "vision-candidate--confirmed" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      key={candidate.attraction.id}
+                    >
                       <div className="vision-candidate__main">
                         <div className="vision-candidate__title">
-                          <strong>
-                            Top{index + 1} · {candidate.attraction.name}
-                          </strong>
-                          <StatusBadge tone={index === 0 && !visionResult.needs_confirmation ? "ok" : "neutral"}>
-                            {Math.round(candidate.confidence * 100)}%
-                          </StatusBadge>
+                          <span className="vision-candidate__rank">Top{index + 1}</span>
+                          <strong>{candidate.attraction.name}</strong>
+                          <span className="vision-candidate__score">{Math.round(candidate.confidence * 100)}%</span>
                           {confirmed ? <StatusBadge tone="ok">已确认</StatusBadge> : null}
                         </div>
                         <span>{candidate.attraction.scenic_area} · {candidate.attraction.category || "景点"}</span>
                         <p>{candidate.reason}</p>
-                        <small>信号：{candidate.match_signals.map((item) => ({ filename: "文件名", hint: "提示词", text_hint: "描述", tag: "标签", scenic_area: "景区" }[item] || item)).join(" / ") || "弱相关"}</small>
+                        <small>依据：{candidate.match_signals.map((item) => ({ filename: "文件名", hint: "提示词", text_hint: "描述", tag: "标签", scenic_area: "景区" }[item] || item)).join(" / ") || "弱相关"}</small>
                       </div>
                       <Button
                         icon={confirmed ? <CheckCircle2 size={16} /> : <ImageIcon name="buddha" size={18} />}
@@ -1324,16 +1349,21 @@ export function MobileHomePage() {
               </div>
             ) : (
               <div className="vision-fallback">
-                <p>没有可靠候选时，灵境不会把低置信结果当事实讲解。你可以换一张样例图，或在上方“当前讲解景点”手动选择。</p>
+                <strong>暂时没有把握识别这个画面</strong>
+                <p>请换个角度拍摄景点主体，或直接输入景点名。没有可靠候选时，灵境不会把低置信结果当事实讲解。</p>
               </div>
             )}
             {confirmedVisionId ? (
-              <div className="suggested-question-list" aria-label="识景建议问题">
+              <div className="vision-confirmed-panel" aria-label="确认后讲解入口">
+                <strong>已确认：{confirmedVisionCandidate()?.attraction.name}</strong>
+                <p>接下来会走本地知识库问答，不凭视觉候选编造讲解。</p>
+                <div className="suggested-question-list" aria-label="识景建议问题">
                 {visionSuggestedQuestions().map((item) => (
                   <button className="quick-question" key={item} onClick={() => void submitQuestion(item)} type="button">
                     {item}
                   </button>
                 ))}
+                </div>
               </div>
             ) : visionResult.candidates.length > 0 ? (
               <p className="vision-pending-note">请先确认一个候选，再进入该景点讲解或继续追问。</p>
