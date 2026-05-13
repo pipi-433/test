@@ -253,6 +253,7 @@ export function MobileHomePage() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackDone, setFeedbackDone] = useState("");
   const [activeNav, setActiveNav] = useState<ScenicNavKey>("recommend");
+  const [answerDetailOpen, setAnswerDetailOpen] = useState(false);
   const [error, setError] = useState("");
   const { caption: humanCaption, resetHuman, setHumanState, state: humanState } = useDigitalHumanState();
   const speech = useSpeechSynthesis();
@@ -292,6 +293,8 @@ export function MobileHomePage() {
     return seeded.slice(0, 3);
   }, [attractions, selectedAttraction]);
   const activeUnderstanding = qaResult?.understanding || routeConversation?.understanding;
+  const currentAnswer = qaResult?.answer || "";
+  const answerIsLong = currentAnswer.length > 120;
 
   const attractionById = useMemo(() => new Map(attractions.map((item) => [item.id, item])), [attractions]);
   const routeConstraintResults = useMemo(() => {
@@ -425,6 +428,7 @@ export function MobileHomePage() {
     setQuestion(cleanQuestion);
     setSubmittedQuestion(cleanQuestion);
     setQaResult(null);
+    setAnswerDetailOpen(false);
     setRouteConversation(null);
     setClarificationOptions([]);
     speech.stop();
@@ -836,6 +840,34 @@ export function MobileHomePage() {
         </div>
       </section>
 
+      <section className="guide-live-stage" aria-label="沉浸式数字人直播讲解">
+        <div className="guide-live-stage__top">
+          <span className="guide-live-stage__badge">
+            小灵 · {qaLoading ? "检索中" : recognition.listening ? "正在听" : speech.speaking ? "口型同步讲解" : "在线待命"}
+          </span>
+          <span className="guide-live-stage__signal">
+            {speech.speaking ? "TTS 播报中" : recognition.supported ? "语音可用" : "文本可用"}
+          </span>
+        </div>
+        <div className={`guide-live-avatar-slot guide-live-avatar-slot--${humanState}`} aria-label="数字人渲染接口位">
+          <div className="guide-live-avatar-slot__figure" aria-hidden="true">
+            <span />
+            <i />
+          </div>
+          <div className="guide-live-avatar-slot__waves" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <strong>数字人接口位</strong>
+          <small>后续接入语音、表情与口型同步</small>
+        </div>
+        <div className="guide-live-stage__caption">
+          <strong>{speech.speaking ? "正在讲解" : recognition.listening ? "我在听" : qaLoading ? "正在查资料" : "可以语音或文字提问"}</strong>
+          <span>{humanCaption}</span>
+        </div>
+      </section>
+
       <section className="ask-composer guide-composer" aria-labelledby="ask-composer-title">
         <div className="ask-composer__header">
           <div>
@@ -946,10 +978,15 @@ export function MobileHomePage() {
             {clarificationOptions.length > 0 ? <StatusBadge tone="warning">需要澄清</StatusBadge> : null}
           </div>
           {qaLoading ? (
-            <p>正在检索本地资料，并判断是否需要澄清...</p>
+            <p className="guide-answer-text">正在检索本地资料，并判断是否需要澄清...</p>
           ) : qaResult ? (
             <>
-              <p>{qaResult.answer}</p>
+              <p className={`guide-answer-text ${answerIsLong ? "guide-answer-text--clamped" : ""}`}>{qaResult.answer}</p>
+              {answerIsLong ? (
+                <button className="guide-answer-expand" onClick={() => setAnswerDetailOpen(true)} type="button">
+                  展开完整讲解
+                </button>
+              ) : null}
               <div className="guide-answer-proof" aria-label="来源参考与回答置信度">
                 {qaResult.sources.length > 0 ? (
                   <>
@@ -973,7 +1010,7 @@ export function MobileHomePage() {
               </div>
             </>
           ) : (
-            <p>你可以问景点看点、文化故事或适合怎么游览，回答会带上本地资料来源。</p>
+            <p className="guide-answer-text">你可以问景点看点、文化故事或适合怎么游览，回答会带上本地资料来源。</p>
           )}
         </div>
       </section>
@@ -996,6 +1033,43 @@ export function MobileHomePage() {
           反馈不准
         </button>
       </section>
+
+      {answerDetailOpen && qaResult ? (
+        <div className="guide-answer-drawer" role="dialog" aria-modal="true" aria-label="完整讲解">
+          <button className="guide-answer-drawer__scrim" aria-label="关闭完整讲解" onClick={() => setAnswerDetailOpen(false)} type="button" />
+          <section className="guide-answer-drawer__panel">
+            <div className="guide-answer-drawer__handle" aria-hidden="true" />
+            <div className="guide-answer-drawer__header">
+              <div>
+                <span className="eyebrow">完整讲解</span>
+                <h2>小灵的详细回答</h2>
+              </div>
+              <button onClick={() => setAnswerDetailOpen(false)} type="button">
+                收起
+              </button>
+            </div>
+            <p className="guide-answer-drawer__question">{submittedQuestion}</p>
+            <div className="guide-answer-drawer__body">
+              <p>{qaResult.answer}</p>
+            </div>
+            <div className="guide-answer-drawer__sources" aria-label="来源依据">
+              <strong>来源依据</strong>
+              {qaResult.sources.length > 0 ? (
+                qaResult.sources.map((source) => (
+                  <div className="guide-answer-drawer__source" key={source.chunk_id}>
+                    <span>{source.title || source.source_file}</span>
+                    <small>
+                      {source.source_section || "本地资料"} · 引用分 {Math.round(source.score * 100)}%
+                    </small>
+                  </div>
+                ))
+              ) : (
+                <p>暂无本地来源，当前回答按资料外或澄清策略展示。</p>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {qaResult?.scenic_area_intro ? (
         <section className="capability-panel" aria-label="景区总览">
@@ -1607,6 +1681,23 @@ export function MobileHomePage() {
         </Button>
         {feedbackDone ? <p className="success-note">{feedbackDone}</p> : null}
       </section>
+      ) : null}
+
+      {activeNav !== "guide" ? (
+        <button
+          aria-label="打开灵境导游"
+          className="floating-guide-entry"
+          onClick={() => {
+            setActiveNav("guide");
+            window.setTimeout(() => composerInputRef.current?.focus(), 80);
+          }}
+          type="button"
+        >
+          <span className="floating-guide-entry__avatar" aria-hidden="true">
+            <ImageIcon name="buddha" size={28} />
+          </span>
+          <span>问小灵</span>
+        </button>
       ) : null}
 
       <ScenicBottomNav active={activeNav} onSelect={handleScenicNavSelect} />
