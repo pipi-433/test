@@ -321,7 +321,7 @@
 .guide-live-stage {
   position: relative;
   order: 0;
-  min-height: 390px;
+  min-height: 396px;
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -356,7 +356,7 @@
   background:
     radial-gradient(circle at 50% 26%, rgb(38 59 52 / 12%) 0 18px, transparent 19px),
     linear-gradient(180deg, rgb(38 59 52 / 10%), rgb(38 59 52 / 4%));
-  opacity: 0.72;
+  opacity: 0.34;
 }
 
 .guide-live-stage__top,
@@ -409,60 +409,23 @@
 }
 
 .guide-live-avatar-slot__figure {
-  position: relative;
-  width: 196px;
-  height: 284px;
+  display: none;
 }
 
 .guide-live-avatar-slot__figure::before {
-  content: "";
-  position: absolute;
-  inset: 94px 0 0;
-  border-radius: 94px 94px 28px 28px;
-  background:
-    linear-gradient(90deg, transparent 0 48%, rgb(184 154 94 / 18%) 49% 50%, transparent 51% 100%),
-    linear-gradient(180deg, #fffdf8 0%, #f6f1e7 100%);
-  box-shadow:
-    inset 0 0 0 1px rgb(184 154 94 / 16%),
-    0 22px 42px rgb(65 52 32 / 11%);
+  content: none;
 }
 
 .guide-live-avatar-slot__figure span {
-  position: absolute;
-  left: 50%;
-  top: 18px;
-  width: 112px;
-  height: 122px;
-  transform: translateX(-50%);
-  border: 2px solid rgb(184 154 94 / 24%);
-  border-radius: 48% 48% 44% 44%;
-  background:
-    radial-gradient(circle at 36% 46%, #263b34 0 6px, transparent 7px),
-    radial-gradient(circle at 64% 46%, #263b34 0 6px, transparent 7px),
-    radial-gradient(ellipse at 50% 72%, rgb(199 111 98 / 54%) 0 13px, transparent 14px),
-    linear-gradient(180deg, #fff7ed 0%, #f2ddca 100%);
-  box-shadow: 0 -16px 0 4px rgb(38 31 25 / 82%);
+  display: none;
 }
 
 .guide-live-avatar-slot__figure i {
-  position: absolute;
-  left: 50%;
-  top: 194px;
-  width: 58px;
-  height: 8px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: rgb(31 91 74 / 58%);
+  display: none;
 }
 
 .guide-live-avatar-slot__waves {
-  position: absolute;
-  right: calc(50% - 116px);
-  top: 202px;
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  height: 34px;
+  display: none;
 }
 
 .guide-live-avatar-slot__waves span {
@@ -1169,12 +1132,12 @@
 .guide-chat .chat-row--visitor {
   position: relative;
   justify-self: end;
-  width: min(75%, 282px);
-  min-height: 62px;
-  margin: 0 54px 14px 0;
+  width: min(76%, 286px);
+  min-height: 58px;
+  margin: 0 54px 16px 0;
   border-color: rgb(31 91 74 / 16%);
-  border-radius: 20px;
-  padding: 14px 18px;
+  border-radius: 19px;
+  padding: 13px 18px;
   background: linear-gradient(180deg, #edf6e8, #dfeedd);
   color: var(--color-primary-700);
   box-shadow: 0 4px 14px rgb(31 91 74 / 7%);
@@ -1212,24 +1175,25 @@
 .guide-chat .chat-row--visitor p {
   color: var(--color-primary-700);
   font-family: var(--font-cultural);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 850;
   line-height: 1.45;
 }
 
 .guide-chat .chat-row--guide {
   position: relative;
+  margin-top: -16px;
   border: 1.5px solid rgb(184 154 94 / 28%);
-  border-radius: 22px 22px 0 0;
-  padding: 18px 20px 16px;
+  border-radius: 24px;
+  padding: 16px 20px 14px;
   background: rgb(255 253 248 / 96%);
   box-shadow: 0 12px 28px rgb(65 52 32 / 10%);
 }
 
 .guide-chat .chat-row p {
   font-family: var(--font-readable);
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: 16px;
+  line-height: 1.48;
 }
 
 .guide-chat .chat-row--guide > .guide-answer-text {
@@ -1263,7 +1227,7 @@
 
 .guide-chat .chat-row__speaker {
   min-height: auto;
-  margin-bottom: 8px;
+  margin-bottom: 7px;
   padding-left: 0;
 }
 
@@ -1274,7 +1238,7 @@
 .guide-chat .chat-row__speaker strong {
   margin: 0;
   color: var(--color-primary-700);
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 850;
 }
 
@@ -1347,7 +1311,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   overflow: hidden;
   border: 0;
   border-top: 1px solid rgb(232 223 208 / 90%);
@@ -1364,7 +1328,7 @@
   justify-content: center;
   gap: 5px;
   min-width: 0;
-  min-height: 44px;
+  min-height: 48px;
   border: 0;
   border-left: 1px solid rgb(232 223 208 / 86%);
   border-radius: 0;
@@ -1372,7 +1336,7 @@
   color: var(--color-accent-700);
   cursor: pointer;
   font-family: var(--font-cultural);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 850;
   line-height: 1.15;
   box-shadow: none;
@@ -1384,8 +1348,8 @@
 
 .guide-action-grid button svg,
 .guide-action-grid button .lingshan-image-icon {
-  width: 22px;
-  height: 22px;
+  width: 23px;
+  height: 23px;
 }
 
 .guide-action-grid button:disabled {
@@ -3988,17 +3952,12 @@
   }
 
   .guide-live-stage {
-    min-height: 376px;
+    min-height: 382px;
     padding-top: 28px;
   }
 
   .guide-live-avatar-slot {
-    min-height: 270px;
-  }
-
-  .guide-live-avatar-slot__figure {
-    width: 184px;
-    height: 270px;
+    min-height: 268px;
   }
 
   .guide-chat {
@@ -4015,11 +3974,11 @@
   }
 
   .guide-chat .chat-row--guide {
-    padding: 21px 18px 20px;
+    padding: 15px 18px 13px;
   }
 
   .guide-chat .chat-row p {
-    font-size: 17px;
+    font-size: 15px;
   }
 
   .guide-chat .chat-row--guide > .guide-answer-text {
@@ -4041,7 +4000,7 @@
   }
 
   .guide-action-grid button {
-    min-height: 56px;
+    min-height: 46px;
     font-size: 13px;
   }
 
