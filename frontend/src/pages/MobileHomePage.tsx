@@ -753,8 +753,7 @@ export function MobileHomePage() {
 
           <div className="scenic-action-grid scenic-action-grid--home" aria-label="景区文化功能入口">
             <ScenicActionTile
-              caption="故事 / 看点"
-              icon={<ImageIcon name="lotus" size={34} />}
+              icon={<ImageIcon name="lotus" size={56} />}
               onClick={() => {
                 setActiveNav("guide");
                 composerInputRef.current?.focus();
@@ -763,8 +762,7 @@ export function MobileHomePage() {
               问景点
             </ScenicActionTile>
             <ScenicActionTile
-              caption="Top3 确认"
-              icon={<ImageIcon name="scenic-camera" size={34} />}
+              icon={<ImageIcon name="scenic-camera" size={56} />}
               onClick={() => {
                 setActiveNav("vision");
                 window.setTimeout(() => fileInputRef.current?.click(), 200);
@@ -772,12 +770,11 @@ export function MobileHomePage() {
             >
               拍照识景
             </ScenicActionTile>
-            <ScenicActionTile caption="避峰规划" icon={<ImageIcon name="route-path" size={34} />} onClick={focusRoutePanel}>
+            <ScenicActionTile icon={<ImageIcon name="route-path" size={56} />} onClick={focusRoutePanel}>
               规划路线
             </ScenicActionTile>
             <ScenicActionTile
-              caption="人多换一个"
-              icon={<ImageIcon name="crowd-wave" size={34} />}
+              icon={<ImageIcon name="crowd-wave" size={56} />}
               onClick={() => {
                 setAvoidCrowd(true);
                 focusRoutePanel();
@@ -820,7 +817,25 @@ export function MobileHomePage() {
       ) : null}
 
       {activeNav === "guide" ? (
-      <section className="ask-composer" aria-labelledby="ask-composer-title">
+      <div className="guide-tab">
+      <section className="guide-status-panel" aria-labelledby="guide-status-title">
+        <div>
+          <span className="eyebrow">AI 导游讲解</span>
+          <h2 id="guide-status-title">游灵山</h2>
+          <p>问景点、故事、路线与拥挤状态。</p>
+        </div>
+        <div className="guide-status-card" aria-label="导游状态">
+          <ImageIcon name="buddha" size={32} />
+          <div>
+            <strong>
+              {qaLoading ? "检索中" : clarificationOptions.length ? "需要澄清" : speech.speaking ? "正在讲解" : submittedQuestion ? "待追问" : "待提问"}
+            </strong>
+            <span>{speech.speaking ? "TTS 播报中" : speech.supported ? "TTS 可用" : "TTS 不可用"}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="ask-composer guide-composer" aria-labelledby="ask-composer-title">
         <div className="ask-composer__header">
           <div>
             <span className="eyebrow">文本提问优先</span>
@@ -874,9 +889,7 @@ export function MobileHomePage() {
               发送
             </Button>
           </div>
-          <p className="composer-helper" id="composer-helper">
-            按 Enter 发送；语音会先填入文本框，确认后再发送。
-          </p>
+          <p className="composer-helper" id="composer-helper">Enter 发送，语音只辅助填入文本。</p>
           <div className="speech-control-row" aria-label="数字人语音控制">
             <Button
               className="speech-control-button"
@@ -909,71 +922,9 @@ export function MobileHomePage() {
           ))}
         </div>
 
-        <div className="scenic-action-grid" aria-label="景区文化功能入口">
-          <ScenicActionTile
-            active={activeNav === "guide"}
-            caption="故事 / 看点"
-            icon={<ImageIcon name="buddha" size={32} />}
-            onClick={() => {
-              setActiveNav("guide");
-              composerInputRef.current?.focus();
-            }}
-            tone="primary"
-          >
-            问景点
-          </ScenicActionTile>
-          <ScenicActionTile
-            active={false}
-            caption="Top3 确认"
-            icon={<ImageIcon name="scenic-camera" size={32} />}
-            onClick={() => {
-              setActiveNav("vision");
-              window.setTimeout(() => fileInputRef.current?.click(), 200);
-            }}
-          >
-            拍照识景
-          </ScenicActionTile>
-          <ScenicActionTile active={false} caption="避峰规划" icon={<ImageIcon name="route-path" size={32} />} onClick={focusRoutePanel}>
-            规划路线
-          </ScenicActionTile>
-          <ScenicActionTile
-            caption="人多换一个"
-            icon={<ImageIcon name="crowd-wave" size={32} />}
-            onClick={() => {
-              setAvoidCrowd(true);
-              focusRoutePanel();
-            }}
-            tone="warning"
-          >
-            避开拥挤
-          </ScenicActionTile>
-        </div>
-
-        <div className="attraction-context">
-          <label className="field-label" htmlFor="attraction-select">
-            当前展示景点
-          </label>
-          <select
-            className="select-input"
-            disabled={loadingAttractions || attractions.length === 0}
-            id="attraction-select"
-            onChange={(event) => setSelectedId(event.target.value)}
-            value={selectedId}
-          >
-            {attractions.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.scenic_area} · {item.name}
-              </option>
-            ))}
-          </select>
-          <p className="context-note">普通提问不会自动带入该景点；请直接写出景点名，或使用下方景点卡继续讲解。</p>
-        </div>
       </section>
-      ) : null}
 
-      {activeNav === "guide" ? (
-        <>
-      <section className="mobile-chat" aria-label="问答讲解" ref={answerPanelRef}>
+      <section className="mobile-chat guide-chat" aria-label="问答讲解" ref={answerPanelRef}>
         {activeUnderstanding ? (
           <div className="understanding-strip" aria-label="问题理解结果">
             <StatusBadge tone={understandingTone(activeUnderstanding)}>识别为：{understandingLabel(activeUnderstanding)}</StatusBadge>
@@ -988,9 +939,13 @@ export function MobileHomePage() {
           <p>{submittedQuestion || "还没有发送问题"}</p>
         </div>
         <div className="chat-row chat-row--guide">
-          <strong>灵境</strong>
+          <div className="chat-row__speaker">
+            <strong>灵境</strong>
+            {qaResult?.understanding?.domain === "out_of_scope" ? <StatusBadge tone="warning">资料外</StatusBadge> : null}
+            {clarificationOptions.length > 0 ? <StatusBadge tone="warning">需要澄清</StatusBadge> : null}
+          </div>
           {qaLoading ? (
-            <p>正在理解问题并分流到合适能力...</p>
+            <p>正在检索本地资料，并判断是否需要澄清...</p>
           ) : qaResult ? (
             <p>{qaResult.answer}</p>
           ) : (
@@ -1151,7 +1106,35 @@ export function MobileHomePage() {
         </section>
       ) : null}
 
-        </>
+      <section className="guide-context-panel" aria-label="讲解上下文">
+        <div className="section-title-row">
+          <div>
+            <h2>讲解上下文</h2>
+            <p>普通问题不会自动带入该景点。</p>
+          </div>
+          <ImageIcon name="source-doc" size={22} />
+        </div>
+        <div className="attraction-context">
+          <label className="field-label" htmlFor="attraction-select">
+            当前展示景点
+          </label>
+          <select
+            className="select-input"
+            disabled={loadingAttractions || attractions.length === 0}
+            id="attraction-select"
+            onChange={(event) => setSelectedId(event.target.value)}
+            value={selectedId}
+          >
+            {attractions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.scenic_area} · {item.name}
+              </option>
+            ))}
+          </select>
+          <p className="context-note">需要讲解当前景点时，请在问题里直接写出景点名，或使用识景确认后继续追问。</p>
+        </div>
+      </section>
+      </div>
       ) : null}
 
       {activeNav === "vision" ? (

@@ -1,3 +1,18 @@
+@font-face {
+  font-family: "Lingjing Cultural Serif";
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 900;
+  src:
+    local("Noto Serif SC"),
+    local("NotoSerifSC"),
+    local("Noto Serif CJK SC"),
+    local("Source Han Serif SC"),
+    local("STZhongsong"),
+    local("华文中宋"),
+    local("STSong");
+}
+
 * {
   box-sizing: border-box;
 }
@@ -21,6 +36,29 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+input,
+textarea,
+select {
+  font-family: var(--font-readable);
+}
+
+h1,
+h2,
+h3,
+h4,
+.scenic-cultural-text {
+  font-family: var(--font-cultural);
+}
+
+time,
+code,
+kbd,
+samp,
+.numeric-text {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
 }
 
 button {

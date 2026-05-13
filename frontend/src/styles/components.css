@@ -179,7 +179,7 @@
   border-bottom: 0;
   border-radius: 12px 12px 0 0;
   padding: 6px 8px calc(7px + env(safe-area-inset-bottom));
-  background: rgb(255 250 240 / 96%);
+  background: rgb(255 255 252 / 98%);
   box-shadow: 0 -6px 18px rgb(23 33 31 / 8%);
   backdrop-filter: blur(10px);
 }
@@ -188,7 +188,7 @@
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
   min-height: 64px;
   border: 1px solid transparent;
@@ -196,8 +196,9 @@
   background: transparent;
   color: var(--color-lingshan-bronze);
   cursor: pointer;
+  font-family: var(--font-cultural);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.1;
   transition:
     background var(--motion-fast) var(--ease-standard),
@@ -214,8 +215,8 @@
 }
 
 .scenic-bottom-nav__item .lingshan-image-icon {
-  width: var(--image-icon-size, 26px);
-  height: var(--image-icon-size, 26px);
+  width: var(--image-icon-size, 31px);
+  height: var(--image-icon-size, 31px);
 }
 
 .scenic-bottom-nav__item--active {
@@ -262,16 +263,29 @@
   margin-bottom: var(--space-3);
 }
 
+.scenic-action-grid--home .scenic-action-tile {
+  min-height: 102px;
+  gap: 6px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.scenic-action-grid--home .scenic-action-tile__icon {
+  width: 58px;
+  height: 52px;
+}
+
 .scenic-action-tile {
   display: grid;
   justify-items: center;
-  gap: var(--space-1);
+  align-content: center;
+  gap: 10px;
   min-width: 0;
-  min-height: 92px;
+  min-height: 96px;
   border: 1px solid rgb(182 138 58 / 24%);
   border-radius: 10px;
   padding: var(--space-2);
-  background: linear-gradient(180deg, #fffdf8, #fbf5ea);
+  background: linear-gradient(180deg, #ffffff, #fffdf8);
   color: var(--color-accent-700);
   cursor: pointer;
   text-align: center;
@@ -286,15 +300,16 @@
 .scenic-action-tile__icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   color: currentColor;
 }
 
 .scenic-action-tile__label {
   color: var(--color-ink-900);
-  font-size: var(--font-sm);
-  font-weight: 760;
+  font-family: var(--font-cultural);
+  font-size: 15px;
+  font-weight: 800;
   line-height: 1.2;
 }
 
@@ -785,6 +800,7 @@
 .spot-card h3,
 .route-step h3 {
   margin: var(--space-1) 0 var(--space-2);
+  font-family: var(--font-cultural);
   font-size: var(--font-lg);
 }
 
@@ -839,6 +855,7 @@
   padding: 0 var(--space-3);
   background: white;
   color: var(--color-ink-900);
+  font-family: var(--font-readable);
 }
 
 .select-input {

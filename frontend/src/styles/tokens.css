@@ -40,7 +40,11 @@
   --radius-kiosk: 12px;
   --shadow-1: 0 1px 2px rgb(23 33 31 / 8%);
   --shadow-2: 0 8px 24px rgb(23 33 31 / 10%);
-  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Source Han Sans SC", sans-serif;
+  --font-readable: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Source Han Sans SC", sans-serif;
+  --font-cultural: "FZQingKeBenYueSongS-R-GB", "FZQingKeBenYueSongS", "FZSongKeBenXiuKaiS-R-GB", "Lingjing Cultural Serif", "Noto Serif SC", "Source Han Serif SC", "Noto Serif CJK SC", "STZhongsong", "华文中宋", "STSong", "SimSun", serif;
+  --font-numeric: "SF Pro Text", "Segoe UI", "DIN Alternate", "Roboto", Arial, sans-serif;
+  --font-family: var(--font-body);
   --font-xs: 12px;
   --font-sm: 14px;
   --font-base: 16px;

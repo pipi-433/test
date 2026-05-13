@@ -15,11 +15,11 @@ const navItems: Array<{
   label: string;
   icon: ReactNode;
 }> = [
-  { key: "recommend", label: "推荐", icon: <LotusImageIcon size={28} /> },
-  { key: "guide", label: "游灵山", icon: <BuddhaImageIcon size={28} /> },
-  { key: "vision", label: "识景", icon: <ScenicCameraImageIcon size={28} /> },
-  { key: "route", label: "路线", icon: <RoutePathImageIcon size={28} /> },
-  { key: "mine", label: "我的", icon: <VisitorImageIcon size={28} /> },
+  { key: "recommend", label: "推荐", icon: <LotusImageIcon size={31} /> },
+  { key: "guide", label: "游灵山", icon: <BuddhaImageIcon size={31} /> },
+  { key: "vision", label: "识景", icon: <ScenicCameraImageIcon size={31} /> },
+  { key: "route", label: "路线", icon: <RoutePathImageIcon size={31} /> },
+  { key: "mine", label: "我的", icon: <VisitorImageIcon size={31} /> },
 ];
 
 export function ScenicBottomNav({
