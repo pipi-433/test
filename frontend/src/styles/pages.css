@@ -199,17 +199,7 @@
 }
 
 .guide-status-panel {
-  position: relative;
-  grid-template-columns: 1fr;
-  align-items: center;
-  min-height: 108px;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  padding: 38px 64px 0;
-  background: rgb(255 253 248 / 96%);
-  box-shadow: none;
-  text-align: center;
+  display: none;
 }
 
 .guide-status-panel::before,
@@ -321,11 +311,11 @@
 .guide-live-stage {
   position: relative;
   order: 0;
-  min-height: 396px;
+  min-height: calc(100vh - 148px - env(safe-area-inset-bottom));
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  padding: 32px 20px 0;
+  padding: 38px 20px 0;
   background:
     radial-gradient(ellipse at 86% 36%, rgb(38 59 52 / 12%) 0 42px, transparent 44px),
     radial-gradient(ellipse at 17% 56%, rgb(38 59 52 / 10%) 0 82px, transparent 86px),
@@ -1043,11 +1033,14 @@
 }
 
 .guide-chat {
-  position: relative;
+  position: fixed;
+  right: max(20px, calc((100vw - 430px) / 2 + 20px));
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  left: max(20px, calc((100vw - 430px) / 2 + 20px));
   order: 1;
   gap: 16px;
-  z-index: 3;
-  margin: -74px 20px 0;
+  z-index: 46;
+  margin: 0;
 }
 
 .guide-chat .understanding-strip {
@@ -1197,10 +1190,9 @@
 }
 
 .guide-chat .chat-row--guide > .guide-answer-text {
-  display: -webkit-box;
+  display: block;
+  max-height: 7.4em;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .guide-chat .chat-row--guide > .guide-answer-text:not(.guide-answer-text--clamped) {
@@ -3947,12 +3939,11 @@
   }
 
   .guide-status-panel {
-    min-height: 104px;
-    margin-bottom: 0;
+    display: none;
   }
 
   .guide-live-stage {
-    min-height: 382px;
+    min-height: calc(100vh - 144px - env(safe-area-inset-bottom));
     padding-top: 28px;
   }
 
@@ -3961,7 +3952,9 @@
   }
 
   .guide-chat {
-    margin: -76px 18px 0;
+    right: max(18px, calc((100vw - 430px) / 2 + 18px));
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    left: max(18px, calc((100vw - 430px) / 2 + 18px));
   }
 
   .guide-chat .chat-row--visitor {
