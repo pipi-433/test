@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-12T11:12:29+00:00",
+  "generated_at": "2026-05-13T00:07:20+00:00",
   "mode": "mock",
   "total": 9,
   "passed": 9,
@@ -47,13 +47,13 @@
       "type": "replan",
       "passed": true,
       "operation": "shorten",
-      "route_id": "route-ad456f72e9",
+      "route_id": "route-930837018b",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",
         "lingshan-ls-009",
-        "lingshan-ls-006",
-        "nianhuawan-nh-003"
+        "nianhuawan-nh-005",
+        "lingshan-ls-006"
       ],
       "score": 81,
       "operation_ok": true,
@@ -70,7 +70,7 @@
       "type": "replan",
       "passed": true,
       "operation": "avoid_crowd",
-      "route_id": "route-1e8a93c947",
+      "route_id": "route-6dea61b6c6",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",
@@ -93,7 +93,7 @@
       "type": "replan",
       "passed": true,
       "operation": "none",
-      "route_id": "route-440ed16266",
+      "route_id": "route-2632488cdd",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",

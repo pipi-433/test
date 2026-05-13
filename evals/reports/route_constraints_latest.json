@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-12T11:12:30+00:00",
+  "generated_at": "2026-05-13T00:07:20+00:00",
   "mode": "mock",
   "total": 12,
   "passed": 12,
@@ -27,7 +27,7 @@
         "lingshan-ls-009",
         "lingshan-ls-013",
         "nianhuawan-nh-005",
-        "nianhuawan-nh-003"
+        "nianhuawan-nh-001"
       ],
       "summary": {
         "priority": [
@@ -42,8 +42,7 @@
         "must_visit_attraction_ids": [],
         "optional_attraction_ids": [],
         "avoid_attraction_ids": [
-          "lingshan-ls-006",
-          "lingshan-ls-015"
+          "lingshan-ls-006"
         ],
         "invalid_attraction_ids": [],
         "conflict_attraction_ids": [],
@@ -53,10 +52,10 @@
         ],
         "optional_not_selected_attraction_ids": [],
         "full_pool_selected_attraction_ids": [
-          "nianhuawan-nh-003"
+          "nianhuawan-nh-001"
         ],
         "full_pool_not_selected_attraction_ids": [
-          "nianhuawan-nh-001",
+          "nianhuawan-nh-003",
           "nianhuawan-nh-002",
           "lingshan-ls-007",
           "lingshan-ls-002",
@@ -64,6 +63,7 @@
           "lingshan-ls-005",
           "nianhuawan-nh-004",
           "nianhuawan-nh-006",
+          "lingshan-ls-015",
           "lingshan-ls-014",
           "lingshan-ls-008",
           "lingshan-ls-012",
@@ -74,12 +74,8 @@
         ],
         "trimmed_attraction_ids": [],
         "warning": null,
-        "notes": [
-          "active closed 运营事件低于用户必去约束，但高于普通模板推荐；非必去点已避开。"
-        ],
-        "operation_closed_avoid_attraction_ids": [
-          "lingshan-ls-015"
-        ]
+        "notes": [],
+        "operation_closed_avoid_attraction_ids": []
       },
       "description": "避开景点命中模板点时从路线移除"
     },
@@ -155,7 +151,8 @@
         "lingshan-ls-004",
         "lingshan-ls-010",
         "lingshan-ls-014",
-        "nianhuawan-nh-003",
+        "lingshan-ls-009",
+        "lingshan-ls-002",
         "lingshan-ls-006"
       ],
       "start_context_only": true,

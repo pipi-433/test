@@ -156,6 +156,15 @@
   color: var(--color-ink-700);
 }
 
+.lingshan-image-icon {
+  display: inline-block;
+  width: var(--image-icon-size, 24px);
+  height: var(--image-icon-size, 24px);
+  object-fit: contain;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
 .scenic-bottom-nav {
   position: fixed;
   right: max(0px, calc((100vw - 440px) / 2));
@@ -201,6 +210,11 @@
   width: 25px;
   height: 25px;
   color: currentColor;
+}
+
+.scenic-bottom-nav__item .lingshan-image-icon {
+  width: var(--image-icon-size, 28px);
+  height: var(--image-icon-size, 28px);
 }
 
 .scenic-bottom-nav__item--active {

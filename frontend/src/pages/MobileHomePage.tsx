@@ -37,18 +37,7 @@ import {
 import { PageShell } from "../components/Shell";
 import { SpotCard } from "../components/SpotCard";
 import { StatusBadge } from "../components/StatusBadge";
-import {
-  BodhiLeafIcon,
-  BridgeIcon,
-  BuddhaIcon,
-  CrowdWaveIcon,
-  EventBellIcon,
-  LotusIcon,
-  QrHandoffIcon,
-  RoutePathIcon,
-  ScenicCameraIcon,
-  SourceDocIcon,
-} from "../components/icons/LingshanIcons";
+import { ImageIcon } from "../components/icons/LingshanImageIcons";
 import { useDigitalHumanState } from "../hooks/useDigitalHumanState";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis";
@@ -322,15 +311,15 @@ export function MobileHomePage() {
         ...theme,
         icon:
           theme.id === "history" ? (
-            <BridgeIcon />
+            <ImageIcon name="bridge" size={20} />
           ) : theme.id === "nature" ? (
-            <BodhiLeafIcon />
+            <ImageIcon name="bodhi-leaf" size={20} />
           ) : theme.id === "blessing" ? (
-            <BuddhaIcon />
+            <ImageIcon name="buddha" size={20} />
           ) : theme.id === "photo" ? (
-            <ScenicCameraIcon />
+            <ImageIcon name="scenic-camera" size={20} />
           ) : (
-            <LotusIcon />
+            <ImageIcon name="lotus" size={20} />
           ),
         value: theme.id,
       })),
@@ -338,8 +327,9 @@ export function MobileHomePage() {
   );
 
   function scrollAnswerIntoView(block: ScrollLogicalPosition = "start") {
+    void block;
     window.setTimeout(() => {
-      answerPanelRef.current?.scrollIntoView({ behavior: "smooth", block });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }, 0);
   }
 
@@ -469,7 +459,6 @@ export function MobileHomePage() {
           setMustVisitIds(result.memory.constraints.must_visit_attraction_ids || []);
           setOptionalAttractionIds(result.memory.constraints.optional_attraction_ids || []);
           setAvoidAttractionIds(result.memory.constraints.avoid_attraction_ids || []);
-          window.setTimeout(() => routePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
         }
         if (result.needs_clarification) {
           setHumanState("comforting", result.reply);
@@ -632,9 +621,6 @@ export function MobileHomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (next === "guide") {
       composerInputRef.current?.focus();
-    }
-    if (next === "route") {
-      focusRoutePanel();
     }
   }
 
@@ -821,7 +807,7 @@ export function MobileHomePage() {
           <ScenicActionTile
             active={activeNav === "guide"}
             caption="故事 / 看点"
-            icon={<BuddhaIcon />}
+            icon={<ImageIcon name="buddha" size={32} />}
             onClick={() => {
               setActiveNav("guide");
               composerInputRef.current?.focus();
@@ -833,7 +819,7 @@ export function MobileHomePage() {
           <ScenicActionTile
             active={activeNav === "vision"}
             caption="Top3 确认"
-            icon={<ScenicCameraIcon />}
+            icon={<ImageIcon name="scenic-camera" size={32} />}
             onClick={() => {
               setActiveNav("vision");
               window.setTimeout(() => fileInputRef.current?.click(), 200);
@@ -841,12 +827,12 @@ export function MobileHomePage() {
           >
             拍照识景
           </ScenicActionTile>
-          <ScenicActionTile active={activeNav === "route"} caption="避峰规划" icon={<RoutePathIcon />} onClick={focusRoutePanel}>
+          <ScenicActionTile active={activeNav === "route"} caption="避峰规划" icon={<ImageIcon name="route-path" size={32} />} onClick={focusRoutePanel}>
             规划路线
           </ScenicActionTile>
           <ScenicActionTile
             caption="人多换一个"
-            icon={<CrowdWaveIcon />}
+            icon={<ImageIcon name="crowd-wave" size={32} />}
             onClick={() => {
               setAvoidCrowd(true);
               focusRoutePanel();
@@ -1026,7 +1012,7 @@ export function MobileHomePage() {
           <div className="source-list">
             {qaResult.sources.map((source) => (
               <div className="source-item" key={source.chunk_id}>
-                <SourceChip icon={<SourceDocIcon />}>{source.source_file}</SourceChip>
+                <SourceChip icon={<ImageIcon name="source-doc" size={18} />}>{source.source_file}</SourceChip>
                 <strong>{source.title}</strong>
                 <span>来源章节：{source.source_section || "本地资料切片"}</span>
                 <span>引用分数 {source.score.toFixed(2)}</span>
@@ -1077,7 +1063,7 @@ export function MobileHomePage() {
             <p>上传样例图，mock 识景会先给出 Top3 候选，确认后再进入讲解。</p>
           </div>
           <Button
-            icon={<ScenicCameraIcon />}
+            icon={<ImageIcon name="scenic-camera" size={20} />}
             loading={visionLoading}
             onClick={() => fileInputRef.current?.click()}
             type="button"
@@ -1130,7 +1116,7 @@ export function MobileHomePage() {
                         <small>信号：{candidate.match_signals.map((item) => ({ filename: "文件名", hint: "提示词", text_hint: "描述", tag: "标签", scenic_area: "景区" }[item] || item)).join(" / ") || "弱相关"}</small>
                       </div>
                       <Button
-                        icon={confirmed ? <CheckCircle2 size={16} /> : <BuddhaIcon />}
+                        icon={confirmed ? <CheckCircle2 size={16} /> : <ImageIcon name="buddha" size={18} />}
                         onClick={() => confirmVisionCandidate(candidate)}
                         type="button"
                         variant={confirmed ? "secondary" : "accent"}
@@ -1170,7 +1156,7 @@ export function MobileHomePage() {
             <p>根据兴趣、时长、当前景点和模拟拥挤度生成可解释路线。</p>
           </div>
           <Button
-            icon={<RoutePathIcon />}
+            icon={<ImageIcon name="route-path" size={20} />}
             loading={routeLoading}
             onClick={() => void generateRoute()}
             type="button"
@@ -1199,7 +1185,7 @@ export function MobileHomePage() {
           <label className="crowd-switch">
             <input checked={avoidCrowd} onChange={(event) => setAvoidCrowd(event.target.checked)} type="checkbox" />
             <span>
-              <CrowdWaveIcon />
+              <ImageIcon name="crowd-wave" size={18} />
               避开拥挤
             </span>
           </label>
@@ -1306,7 +1292,7 @@ export function MobileHomePage() {
                 约 {routeResult.estimated_duration_minutes} 分钟 · 分享码 {routeResult.share.share_code}
               </span>
               <a className="route-share-link" href={routeResult.share.share_url}>
-                <QrHandoffIcon />
+                <ImageIcon name="qr-handoff" size={20} />
                 打开手机路线带走页
               </a>
               <div className="score-grid" aria-label="路线评分拆解">
@@ -1343,7 +1329,7 @@ export function MobileHomePage() {
               ) : null}
               {operationImpactSummary(routeResult) ? (
                 <p className="operation-route-note">
-                  <EventBellIcon />
+                  <ImageIcon name="event-bell" size={18} />
                   {operationImpactSummary(routeResult)} {(routeResult.operation_policy || routeResult.operation_events_summary)?.caveat}
                 </p>
               ) : null}
@@ -1409,10 +1395,48 @@ export function MobileHomePage() {
       <section className="feedback-panel" aria-label="游客反馈" ref={feedbackPanelRef}>
         <div className="section-title-row">
           <div>
+            <h2>我的行程</h2>
+            <p>路线小票、游中操作和体验反馈。</p>
+          </div>
+          <Heart aria-hidden="true" />
+        </div>
+        {routeResult ? (
+          <div className="mobile-route-ticket" aria-label="路线小票">
+            <div>
+              <span>当前路线</span>
+              <strong>{routeResult.title}</strong>
+              <small>
+                {routeResult.estimated_duration_minutes} 分钟 · {routeResult.stops.length} 站 · 分享码 {routeResult.share.share_code}
+              </small>
+            </div>
+            <div className="mobile-route-ticket__actions">
+              <a href={routeResult.share.share_url}>
+                <ImageIcon name="qr-handoff" size={20} />
+                扫码带走
+              </a>
+              <button type="button" onClick={() => setActiveNav("guide")}>
+                <ImageIcon name="buddha" size={20} />
+                听本站讲解
+              </button>
+              <button type="button" onClick={focusRoutePanel}>
+                <ImageIcon name="crowd-wave" size={20} />
+                人多换一个
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mobile-route-ticket mobile-route-ticket--empty">
+            <p>还没有路线小票。</p>
+            <button type="button" onClick={() => setActiveNav("route")}>
+              去路线页生成路线
+            </button>
+          </div>
+        )}
+        <div className="section-title-row section-title-row--sub">
+          <div>
             <h2>体验反馈</h2>
             <p>本地演示日志，不记录个人身份。</p>
           </div>
-          <Heart aria-hidden="true" />
         </div>
         <div className="rating-row" role="group" aria-label="满意度评分">
           {[1, 2, 3, 4, 5].map((value) => (

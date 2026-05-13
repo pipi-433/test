@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
 import {
-  BuddhaIcon,
-  LotusIcon,
-  RoutePathIcon,
-  ScenicCameraIcon,
-  VisitorIcon,
-} from "./icons/LingshanIcons";
+  BuddhaImageIcon,
+  LotusImageIcon,
+  RoutePathImageIcon,
+  ScenicCameraImageIcon,
+  VisitorImageIcon,
+} from "./icons/LingshanImageIcons";
 
 type ScenicNavKey = "recommend" | "guide" | "vision" | "route" | "mine";
 
@@ -15,11 +15,11 @@ const navItems: Array<{
   label: string;
   icon: ReactNode;
 }> = [
-  { key: "recommend", label: "推荐", icon: <LotusIcon /> },
-  { key: "guide", label: "游灵山", icon: <BuddhaIcon /> },
-  { key: "vision", label: "识景", icon: <ScenicCameraIcon /> },
-  { key: "route", label: "路线", icon: <RoutePathIcon /> },
-  { key: "mine", label: "我的", icon: <VisitorIcon /> },
+  { key: "recommend", label: "推荐", icon: <LotusImageIcon size={28} /> },
+  { key: "guide", label: "游灵山", icon: <BuddhaImageIcon size={28} /> },
+  { key: "vision", label: "识景", icon: <ScenicCameraImageIcon size={28} /> },
+  { key: "route", label: "路线", icon: <RoutePathImageIcon size={28} /> },
+  { key: "mine", label: "我的", icon: <VisitorImageIcon size={28} /> },
 ];
 
 export function ScenicBottomNav({

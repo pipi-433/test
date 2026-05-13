@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-05-12T11:12:25+00:00",
+  "generated_at": "2026-05-13T00:07:07+00:00",
   "mode": "mock",
   "total": 8,
   "passed": 8,
   "failed": 0,
   "accuracy": 1.0,
-  "avg_latency_ms": 2.5,
+  "avg_latency_ms": 3.62,
   "results": [
     {
       "id": "vision_001",
@@ -27,7 +27,7 @@
       "sorted_ok": true,
       "needs_confirmation_ok": true,
       "needs_confirmation": false,
-      "latency_ms": 5,
+      "latency_ms": 7,
       "explanation": "mock 识景根据文件名/提示词给出 Top1 候选，Top1 为 灵山大佛。判断依据：文件名命中“lingshan dafo”、提示词命中“灵山大佛”。"
     },
     {
@@ -50,7 +50,7 @@
       "sorted_ok": true,
       "needs_confirmation_ok": true,
       "needs_confirmation": false,
-      "latency_ms": 2,
+      "latency_ms": 3,
       "explanation": "mock 识景根据文件名/提示词给出 Top1 候选，Top1 为 九龙灌浴。判断依据：文件名命中“jiulong guanyu”、提示词命中“九龙灌浴”。"
     },
     {
@@ -73,7 +73,7 @@
       "sorted_ok": true,
       "needs_confirmation_ok": true,
       "needs_confirmation": false,
-      "latency_ms": 3,
+      "latency_ms": 4,
       "explanation": "mock 识景根据文件名/提示词给出 Top1 候选，Top1 为 灵山梵宫。判断依据：文件名命中“fangong”、补充描述命中“梵宫”。"
     },
     {
@@ -96,7 +96,7 @@
       "sorted_ok": true,
       "needs_confirmation_ok": true,
       "needs_confirmation": false,
-      "latency_ms": 2,
+      "latency_ms": 3,
       "explanation": "mock 识景根据文件名/提示词给出 Top1 候选，Top1 为 五印坛城。判断依据：文件名命中“wuyin tancheng”、提示词命中“五印坛城”。"
     },
     {
@@ -119,7 +119,7 @@
       "sorted_ok": true,
       "needs_confirmation_ok": true,
       "needs_confirmation": false,
-      "latency_ms": 2,
+      "latency_ms": 3,
       "explanation": "mock 识景根据文件名/提示词给出 Top1 候选，Top1 为 香月花街。判断依据：文件名命中“xiangyue huajie”、提示词命中“香月花街”。"
     },
     {
@@ -142,7 +142,7 @@
       "sorted_ok": true,
       "needs_confirmation_ok": true,
       "needs_confirmation": false,
-      "latency_ms": 2,
+      "latency_ms": 3,
       "explanation": "mock 识景根据文件名/提示词给出 Top1 候选，Top1 为 梵天花海。判断依据：提示词命中“梵天花海”。"
     },
     {
@@ -163,7 +163,7 @@
       "sorted_ok": true,
       "needs_confirmation_ok": true,
       "needs_confirmation": false,
-      "latency_ms": 2,
+      "latency_ms": 3,
       "explanation": "mock 识景没有从文件名或提示词中匹配到可靠景点。请换用包含景点名称、景点编号或更明确 hint 的样例继续演示。"
     },
     {
@@ -187,7 +187,7 @@
       "sorted_ok": true,
       "needs_confirmation_ok": true,
       "needs_confirmation": true,
-      "latency_ms": 2,
+      "latency_ms": 3,
       "explanation": "mock 识景根据文件名/提示词给出 Top2 候选，Top1 为 九龙灌浴。判断依据：提示词命中“九龙”。"
     }
   ]
