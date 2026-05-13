@@ -6,7 +6,6 @@ import {
   Heart,
   Layers,
   Map as MapIcon,
-  MessageSquareText,
   Mic,
   Send,
   ShieldCheck,
@@ -859,8 +858,6 @@ export function MobileHomePage() {
             <span />
             <span />
           </div>
-          <strong>数字人接口位</strong>
-          <small>后续接入语音、表情与口型同步</small>
         </div>
         <div className="guide-live-stage__caption">
           <strong>{speech.speaking ? "正在讲解" : recognition.listening ? "我在听" : qaLoading ? "正在查资料" : "可以语音或文字提问"}</strong>
@@ -1008,30 +1005,29 @@ export function MobileHomePage() {
                   <span>{qaResult.sources.length > 0 ? "数据来源充足" : "暂无本地来源"}</span>
                 </div>
               </div>
+              <section className="guide-action-grid" aria-label="讲解操作">
+                <button type="button" onClick={speech.speaking ? stopSpeaking : speakLatestAnswer} disabled={!qaResult && !routeResult && !visionResult}>
+                  <Volume2 aria-hidden="true" size={24} />
+                  播放讲解
+                </button>
+                <button type="button" onClick={() => setAnswerDetailOpen(true)} disabled={!qaResult}>
+                  <ImageIcon name="source-doc" size={25} />
+                  来源依据
+                </button>
+                <button type="button" onClick={focusRoutePanel}>
+                  <MapIcon aria-hidden="true" size={24} />
+                  生成路线
+                </button>
+                <button className="guide-action-grid__danger" type="button" onClick={() => setActiveNav("mine")}>
+                  <AlertTriangle aria-hidden="true" size={24} />
+                  反馈不准
+                </button>
+              </section>
             </>
           ) : (
             <p className="guide-answer-text">你可以问景点看点、文化故事或适合怎么游览，回答会带上本地资料来源。</p>
           )}
         </div>
-      </section>
-
-      <section className="guide-action-grid" aria-label="讲解操作">
-        <button type="button" onClick={() => composerInputRef.current?.focus()}>
-          <MessageSquareText aria-hidden="true" size={22} />
-          继续追问
-        </button>
-        <button type="button" onClick={focusRoutePanel}>
-          <MapIcon aria-hidden="true" size={22} />
-          生成路线
-        </button>
-        <button type="button" onClick={speech.speaking ? stopSpeaking : speakLatestAnswer} disabled={!qaResult && !routeResult && !visionResult}>
-          <Volume2 aria-hidden="true" size={22} />
-          播放讲解
-        </button>
-        <button className="guide-action-grid__danger" type="button" onClick={() => setActiveNav("mine")}>
-          <AlertTriangle aria-hidden="true" size={22} />
-          反馈不准
-        </button>
       </section>
 
       {answerDetailOpen && qaResult ? (
