@@ -35,7 +35,6 @@ import {
   type ScenicNavKey,
 } from "../components/ScenicControls";
 import { PageShell } from "../components/Shell";
-import { SpotCard } from "../components/SpotCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { ImageIcon } from "../components/icons/LingshanImageIcons";
 import { useDigitalHumanState } from "../hooks/useDigitalHumanState";
@@ -287,6 +286,10 @@ export function MobileHomePage() {
     () => attractions.find((item) => item.id === selectedId) || null,
     [attractions, selectedId],
   );
+  const recommendedAttractions = useMemo(() => {
+    const seeded = selectedAttraction ? [selectedAttraction, ...attractions.filter((item) => item.id !== selectedAttraction.id)] : attractions;
+    return seeded.slice(0, 3);
+  }, [attractions, selectedAttraction]);
   const activeUnderstanding = qaResult?.understanding || routeConversation?.understanding;
 
   const attractionById = useMemo(() => new Map(attractions.map((item) => [item.id, item])), [attractions]);
@@ -709,16 +712,114 @@ export function MobileHomePage() {
 
       {activeNav === "recommend" ? (
         <>
-          <DigitalHumanMock caption={humanCaption} state={humanState} className="mobile-avatar" />
+          <section className="mobile-home-hero scenic-image-placeholder" aria-labelledby="mobile-home-hero-title">
+            <div className="mobile-home-hero__mountains" aria-hidden="true" />
+            <DigitalHumanMock caption={humanCaption} state={humanState} className="mobile-home-hero__human" />
+            <div className="mobile-home-hero__bubble">
+              <h2 id="mobile-home-hero-title">您好，我是灵境导游小灵</h2>
+              <p>很高兴为您服务，想了解什么呢？</p>
+            </div>
+          </section>
 
-          <section className="mobile-greeting" aria-labelledby="mobile-greeting-title">
-            <span className="eyebrow">AI 导游待命</span>
-            <h2 id="mobile-greeting-title">你好，我是灵境。直接问我景点故事、游览建议或避峰路线。</h2>
+          <form className="home-ask-bar" aria-label="首页提问" onSubmit={handleSubmit}>
+            <input
+              aria-label="输入您的问题"
+              disabled={qaLoading}
+              onChange={(event) => setQuestion(event.target.value)}
+              onCompositionEnd={() => {
+                composingRef.current = false;
+              }}
+              onCompositionStart={() => {
+                composingRef.current = true;
+              }}
+              onKeyDown={handleComposerKeyDown}
+              placeholder="输入您的问题..."
+              type="text"
+              value={question}
+            />
+            <button
+              aria-label={recognition.listening ? "停止语音输入" : "开始语音输入"}
+              aria-pressed={recognition.listening}
+              className={recognition.listening ? "home-ask-bar__voice home-ask-bar__voice--active" : "home-ask-bar__voice"}
+              onClick={toggleVoiceInput}
+              type="button"
+            >
+              <Mic aria-hidden="true" size={20} />
+            </button>
+            <button aria-label="发送问题" className="home-ask-bar__send" disabled={!question.trim() || qaLoading} type="submit">
+              <Send aria-hidden="true" size={22} />
+            </button>
+          </form>
+
+          <div className="scenic-action-grid scenic-action-grid--home" aria-label="景区文化功能入口">
+            <ScenicActionTile
+              caption="故事 / 看点"
+              icon={<ImageIcon name="lotus" size={34} />}
+              onClick={() => {
+                setActiveNav("guide");
+                composerInputRef.current?.focus();
+              }}
+            >
+              问景点
+            </ScenicActionTile>
+            <ScenicActionTile
+              caption="Top3 确认"
+              icon={<ImageIcon name="scenic-camera" size={34} />}
+              onClick={() => {
+                setActiveNav("vision");
+                window.setTimeout(() => fileInputRef.current?.click(), 200);
+              }}
+            >
+              拍照识景
+            </ScenicActionTile>
+            <ScenicActionTile caption="避峰规划" icon={<ImageIcon name="route-path" size={34} />} onClick={focusRoutePanel}>
+              规划路线
+            </ScenicActionTile>
+            <ScenicActionTile
+              caption="人多换一个"
+              icon={<ImageIcon name="crowd-wave" size={34} />}
+              onClick={() => {
+                setAvoidCrowd(true);
+                focusRoutePanel();
+              }}
+            >
+              避开拥挤
+            </ScenicActionTile>
+          </div>
+
+          <section className="recommend-spots" aria-labelledby="recommend-spots-title">
+            <div className="recommend-spots__header">
+              <h2 id="recommend-spots-title">为你推荐</h2>
+              <button type="button" onClick={() => setSelectedId(recommendedAttractions[1]?.id || recommendedAttractions[0]?.id || selectedId)}>
+                换一批
+              </button>
+            </div>
+            {recommendedAttractions.length ? (
+              <div className="recommend-spot-list">
+                {recommendedAttractions.map((item, index) => (
+                  <article className="recommend-spot-card" key={item.id}>
+                    <div className="recommend-spot-card__image scenic-image-placeholder" aria-hidden="true">
+                      <ImageIcon name={index === 1 ? "lotus" : index === 2 ? "brahma-palace" : "buddha"} size={34} />
+                    </div>
+                    <div className="recommend-spot-card__body">
+                      <div className="recommend-spot-card__title">
+                        <h3>{item.name}</h3>
+                        <span>{item.category || "核心地标"}</span>
+                      </div>
+                      <p>{shortText(item.summary || item.description, 44)}</p>
+                      <small>客流：{index === 1 ? "中等" : "舒适"}　预计停留：{index === 1 ? "40" : index === 2 ? "30-40" : "15-20"} 分钟</small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state mobile-empty">正在等待景点数据，确认后端启动后会自动加载。</p>
+            )}
           </section>
         </>
       ) : null}
 
-      {activeNav === "recommend" || activeNav === "guide" ? (
+      {activeNav === "guide" ? (
       <section className="ask-composer" aria-labelledby="ask-composer-title">
         <div className="ask-composer__header">
           <div>
@@ -1051,22 +1152,6 @@ export function MobileHomePage() {
       ) : null}
 
         </>
-      ) : null}
-
-      {activeNav === "recommend" ? (
-        selectedAttraction ? (
-        <div className="mobile-spot-summary">
-          <SpotCard
-            description={shortText(selectedAttraction.summary || selectedAttraction.description)}
-            meta={`${selectedAttraction.category || "景点"} · ${
-              (selectedAttraction.tags || []).slice(0, 2).join(" / ") || "本地知识库"
-            }`}
-            title={selectedAttraction.name}
-          />
-        </div>
-        ) : (
-        <p className="empty-state mobile-empty">正在等待景点数据，确认后端启动后会自动加载。</p>
-        )
       ) : null}
 
       {activeNav === "vision" ? (
