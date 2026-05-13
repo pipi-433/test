@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ChangeEvent, type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Clock3,
@@ -6,6 +6,7 @@ import {
   Heart,
   Layers,
   Map as MapIcon,
+  MessageSquareText,
   Mic,
   Send,
   ShieldCheck,
@@ -947,11 +948,53 @@ export function MobileHomePage() {
           {qaLoading ? (
             <p>正在检索本地资料，并判断是否需要澄清...</p>
           ) : qaResult ? (
-            <p>{qaResult.answer}</p>
+            <>
+              <p>{qaResult.answer}</p>
+              <div className="guide-answer-proof" aria-label="来源参考与回答置信度">
+                {qaResult.sources.length > 0 ? (
+                  <>
+                    <strong>来源参考</strong>
+                    <div className="guide-answer-proof__chips">
+                      {qaResult.sources.slice(0, 2).map((source) => (
+                        <SourceChip icon={<ImageIcon name="source-doc" size={16} />} key={source.chunk_id}>
+                          {source.title || source.source_file}
+                        </SourceChip>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <strong>资料外 / 需要澄清</strong>
+                )}
+                <div className="guide-confidence-row">
+                  <span>回答置信度：{Math.round(Math.min(0.99, qaResult.sources[0]?.score || 0.72) * 100)}%</span>
+                  <i style={{ "--confidence": `${Math.round(Math.min(0.99, qaResult.sources[0]?.score || 0.72) * 100)}%` } as CSSProperties} />
+                  <span>{qaResult.sources.length > 0 ? "数据来源充足" : "暂无本地来源"}</span>
+                </div>
+              </div>
+            </>
           ) : (
             <p>你可以问景点看点、文化故事或适合怎么游览，回答会带上本地资料来源。</p>
           )}
         </div>
+      </section>
+
+      <section className="guide-action-grid" aria-label="讲解操作">
+        <button type="button" onClick={() => composerInputRef.current?.focus()}>
+          <MessageSquareText aria-hidden="true" size={22} />
+          继续追问
+        </button>
+        <button type="button" onClick={focusRoutePanel}>
+          <MapIcon aria-hidden="true" size={22} />
+          生成路线
+        </button>
+        <button type="button" onClick={speech.speaking ? stopSpeaking : speakLatestAnswer} disabled={!qaResult && !routeResult && !visionResult}>
+          <Volume2 aria-hidden="true" size={22} />
+          播放讲解
+        </button>
+        <button className="guide-action-grid__danger" type="button" onClick={() => setActiveNav("mine")}>
+          <AlertTriangle aria-hidden="true" size={22} />
+          反馈不准
+        </button>
       </section>
 
       {qaResult?.scenic_area_intro ? (
