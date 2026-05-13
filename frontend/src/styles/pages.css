@@ -765,7 +765,7 @@
 .guide-composer {
   position: fixed;
   right: max(20px, calc((100vw - 430px) / 2 + 20px));
-  bottom: calc(82px + env(safe-area-inset-bottom));
+  bottom: calc(92px + env(safe-area-inset-bottom));
   left: max(20px, calc((100vw - 430px) / 2 + 20px));
   z-index: 49;
   order: 3;
