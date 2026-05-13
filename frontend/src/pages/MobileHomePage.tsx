@@ -707,13 +707,18 @@ export function MobileHomePage() {
         </div>
       </header>
 
-      <DigitalHumanMock caption={humanCaption} state={humanState} className="mobile-avatar" />
+      {activeNav === "recommend" ? (
+        <>
+          <DigitalHumanMock caption={humanCaption} state={humanState} className="mobile-avatar" />
 
-      <section className="mobile-greeting" aria-labelledby="mobile-greeting-title">
-        <span className="eyebrow">AI 导游待命</span>
-        <h2 id="mobile-greeting-title">你好，我是灵境。直接问我景点故事、游览建议或避峰路线。</h2>
-      </section>
+          <section className="mobile-greeting" aria-labelledby="mobile-greeting-title">
+            <span className="eyebrow">AI 导游待命</span>
+            <h2 id="mobile-greeting-title">你好，我是灵境。直接问我景点故事、游览建议或避峰路线。</h2>
+          </section>
+        </>
+      ) : null}
 
+      {activeNav === "recommend" || activeNav === "guide" ? (
       <section className="ask-composer" aria-labelledby="ask-composer-title">
         <div className="ask-composer__header">
           <div>
@@ -817,7 +822,7 @@ export function MobileHomePage() {
             问景点
           </ScenicActionTile>
           <ScenicActionTile
-            active={activeNav === "vision"}
+            active={false}
             caption="Top3 确认"
             icon={<ImageIcon name="scenic-camera" size={32} />}
             onClick={() => {
@@ -827,7 +832,7 @@ export function MobileHomePage() {
           >
             拍照识景
           </ScenicActionTile>
-          <ScenicActionTile active={activeNav === "route"} caption="避峰规划" icon={<ImageIcon name="route-path" size={32} />} onClick={focusRoutePanel}>
+          <ScenicActionTile active={false} caption="避峰规划" icon={<ImageIcon name="route-path" size={32} />} onClick={focusRoutePanel}>
             规划路线
           </ScenicActionTile>
           <ScenicActionTile
@@ -863,7 +868,10 @@ export function MobileHomePage() {
           <p className="context-note">普通提问不会自动带入该景点；请直接写出景点名，或使用下方景点卡继续讲解。</p>
         </div>
       </section>
+      ) : null}
 
+      {activeNav === "guide" ? (
+        <>
       <section className="mobile-chat" aria-label="问答讲解" ref={answerPanelRef}>
         {activeUnderstanding ? (
           <div className="understanding-strip" aria-label="问题理解结果">
@@ -1042,7 +1050,11 @@ export function MobileHomePage() {
         </section>
       ) : null}
 
-      {selectedAttraction ? (
+        </>
+      ) : null}
+
+      {activeNav === "recommend" ? (
+        selectedAttraction ? (
         <div className="mobile-spot-summary">
           <SpotCard
             description={shortText(selectedAttraction.summary || selectedAttraction.description)}
@@ -1052,10 +1064,12 @@ export function MobileHomePage() {
             title={selectedAttraction.name}
           />
         </div>
-      ) : (
+        ) : (
         <p className="empty-state mobile-empty">正在等待景点数据，确认后端启动后会自动加载。</p>
-      )}
+        )
+      ) : null}
 
+      {activeNav === "vision" ? (
       <section className="vision-panel" aria-label="图片识景" ref={visionPanelRef}>
         <div className="section-title-row">
           <div>
@@ -1148,7 +1162,9 @@ export function MobileHomePage() {
           <p className="empty-state mobile-empty">还没有上传图片。可用 evals/vision_samples 下的样例文件演示。</p>
         )}
       </section>
+      ) : null}
 
+      {activeNav === "route" ? (
       <section className="route-panel" aria-label="路线推荐" ref={routePanelRef}>
         <div className="section-title-row">
           <div>
@@ -1391,7 +1407,9 @@ export function MobileHomePage() {
           <p className="empty-state mobile-empty">还没有生成路线。选择主题和时长后，灵境会给出逐站讲解顺序。</p>
         )}
       </section>
+      ) : null}
 
+      {activeNav === "mine" ? (
       <section className="feedback-panel" aria-label="游客反馈" ref={feedbackPanelRef}>
         <div className="section-title-row">
           <div>
@@ -1478,6 +1496,7 @@ export function MobileHomePage() {
         </Button>
         {feedbackDone ? <p className="success-note">{feedbackDone}</p> : null}
       </section>
+      ) : null}
 
       <ScenicBottomNav active={activeNav} onSelect={handleScenicNavSelect} />
 
