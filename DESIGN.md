@@ -37,3 +37,27 @@
 - 手机触控目标不小于 44px。
 - 底部导航整块 tab 可点击，不只点击图标或文字。
 - 固定底栏需要给页面内容预留底部空间，不能遮挡主按钮。
+
+## Visitor Visual Tokens UI-04
+
+The visitor mobile UI follows a warm new-Chinese scenic guide direction:
+
+- Primary pine green: `#1F5B4A`.
+- Deep pine green: `#123D33`.
+- Soft green background: `#DDEBE4` / `#EEF5F0`.
+- App background: `#F7F3EA`, with the bottom kept lighter as `#FBFAF6`.
+- Card surface: `#FFFDF8`.
+- Warm border: `#E8DFD0`.
+- Buddhist gold accent: `#B89A5E`.
+- Main text: `#263B34`.
+- Secondary text: `#7A817B`.
+
+Do not use bright technology green such as `#00B050`, `#00C853`, or `#1ABC9C` for the visitor side.
+
+Radius guidance for visitor UI:
+
+- Large hero/panel surfaces: `20px` to `24px`.
+- Normal cards: `16px`.
+- Buttons and inputs: `12px` to `16px`.
+- Bottom navigation active block: `12px` to `14px`.
+- Small tags: `8px` to `10px`.

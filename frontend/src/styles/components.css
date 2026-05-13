@@ -55,13 +55,13 @@
 }
 
 .button--primary {
-  background: var(--color-primary-600);
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-500));
   color: white;
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-green);
 }
 
 .button--primary:hover {
-  background: var(--color-primary-700);
+  background: linear-gradient(135deg, var(--color-primary-700), var(--color-primary-600));
 }
 
 .button--accent {
@@ -76,7 +76,7 @@
 }
 
 .button--quiet {
-  background: white;
+  background: var(--color-lingshan-ivory);
   border-color: var(--color-border);
   color: var(--color-ink-700);
 }
@@ -142,7 +142,7 @@
 }
 
 .status-badge--ok {
-  background: #e5f5ec;
+  background: var(--color-primary-50);
   color: var(--color-success);
 }
 
@@ -175,12 +175,12 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px;
   min-height: calc(78px + env(safe-area-inset-bottom));
-  border: 1px solid rgb(182 138 58 / 16%);
+  border: 1px solid rgb(184 154 94 / 16%);
   border-bottom: 0;
-  border-radius: 12px 12px 0 0;
+  border-radius: 14px 14px 0 0;
   padding: 6px 8px calc(7px + env(safe-area-inset-bottom));
-  background: rgb(255 255 252 / 98%);
-  box-shadow: 0 -6px 18px rgb(23 33 31 / 8%);
+  background: rgb(255 253 248 / 98%);
+  box-shadow: 0 -5px 16px rgb(65 52 32 / 7%);
   backdrop-filter: blur(10px);
 }
 
@@ -194,7 +194,7 @@
   border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
-  color: var(--color-lingshan-bronze);
+  color: var(--color-accent-700);
   cursor: pointer;
   font-family: var(--font-cultural);
   font-size: 13px;
@@ -225,8 +225,8 @@
   min-height: 66px;
   margin-top: 0;
   border-color: rgb(255 252 246 / 24%);
-  background: linear-gradient(180deg, #13786d 0%, #075548 100%);
-  color: #f4ca6a;
+  background: linear-gradient(180deg, var(--color-primary-600) 0%, var(--color-primary-700) 100%);
+  color: #f2e8d2;
   box-shadow:
     inset 0 0 0 1px rgb(255 255 255 / 12%),
     0 7px 16px rgb(31 95 85 / 24%);
@@ -234,7 +234,7 @@
 
 .scenic-bottom-nav__item--active svg,
 .scenic-bottom-nav__item--active .lingshan-image-icon {
-  color: #d7aa54;
+  color: var(--color-accent-500);
   filter: saturate(1.1) brightness(1.06);
 }
 
@@ -282,10 +282,10 @@
   gap: 10px;
   min-width: 0;
   min-height: 96px;
-  border: 1px solid rgb(182 138 58 / 24%);
-  border-radius: 10px;
+  border: 1px solid rgb(184 154 94 / 24%);
+  border-radius: 12px;
   padding: var(--space-2);
-  background: linear-gradient(180deg, #ffffff, #fffdf8);
+  background: linear-gradient(180deg, #ffffff, var(--color-lingshan-ivory));
   color: var(--color-accent-700);
   cursor: pointer;
   text-align: center;
@@ -328,8 +328,8 @@
 }
 
 .scenic-action-tile--warning {
-  border-color: #d8a14c;
-  background: #fff7ed;
+  border-color: var(--color-accent-500);
+  background: var(--color-accent-100);
   color: var(--color-warning);
 }
 
@@ -418,7 +418,7 @@
 
 .route-constraint-chip--must {
   border-color: var(--color-accent-500);
-  background: #fff7e8;
+  background: var(--color-accent-100);
 }
 
 .route-constraint-chip--optional {
@@ -428,7 +428,7 @@
 
 .route-constraint-chip--avoid {
   border-color: #d86f3d;
-  background: #fff7ed;
+  background: #fff4ef;
 }
 
 .source-chip {
