@@ -31,6 +31,7 @@ REPORT_DEFINITIONS = [
     ReportDefinition("route_conversation", "自然语言路线", "route_conversation_latest.json", "Route Memory、重规划、澄清和讲解风格。"),
     ReportDefinition("route_constraints", "路线约束", "route_constraints_latest.json", "必去/避开冲突、时间预算和会话隔离护栏。"),
     ReportDefinition("route_full_pool", "全量景点池", "route_full_pool_latest.json", "22 个景点可作为必去、可选、避开或补充候选。"),
+    ReportDefinition("route_topology", "导览图拓扑", "route_topology_latest.json", "22 个景点导览图拓扑覆盖、顺路指数、跨区转场和 stop 拓扑字段评测。"),
     ReportDefinition("operation_events", "运营事件", "operation_events_latest.json", "人工运营事件对路线决策的影响。"),
     ReportDefinition("multipart_parser", "上传解析", "multipart_parser_latest.json", "multipart 文件名和换行兼容性。"),
     ReportDefinition("knowledge_gaps", "知识缺口", "knowledge_gaps_latest.json", "低置信/反馈到 FAQ 草稿和评测集闭环。"),

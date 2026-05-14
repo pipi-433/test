@@ -1,0 +1,122 @@
+{
+  "generated_at": "2026-05-14T18:08:36+00:00",
+  "mode": "mock",
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "accuracy": 1.0,
+  "results": [
+    {
+      "id": "route_topology_present",
+      "passed": true,
+      "route_topology": {
+        "source": "scenic_graph",
+        "source_note": "基于用户提供的灵山胜境线路导览图、手绘观光车导览图和 Bing 地图人工抽象；用于比赛演示路线拓扑与顺路解释，不代表真实 GPS 导航。",
+        "line_ids": [
+          "central_axis",
+          "east_treasure",
+          "nianhuawan_loop"
+        ],
+        "line_names": [
+          "线路1 中轴线",
+          "线路2 宝藏东线",
+          "拈花湾禅意小镇环线"
+        ],
+        "route_smoothness_score": 72,
+        "total_walking_minutes": 36,
+        "backtrack_count": 0,
+        "sightseeing_bus_suggestion": null,
+        "topology_explanation": [
+          "路线拓扑基于导览图人工抽象，用于顺路解释，不代表真实 GPS 导航。",
+          "路线包含导览图中轴线，可按入口向北推进，减少回到入口的折返。",
+          "五印坛城、梵宫等点位属于线路2宝藏东线，适合作为中轴后的东线分流安排。",
+          "拈花湾景点按独立环线覆盖，与灵山胜境之间标注为跨景区转场。",
+          "路线包含灵山胜境与拈花湾之间的跨景区转场，不按步行分钟估算。"
+        ]
+      },
+      "decision_trace": [
+        "mock_simulation 仅用于比赛演示，不代表实时客流。",
+        "路线拓扑基于导览图人工抽象，用于顺路解释，不代表真实 GPS 导航。",
+        "路线包含导览图中轴线，可按入口向北推进，减少回到入口的折返。",
+        "五印坛城、梵宫等点位属于线路2宝藏东线，适合作为中轴后的东线分流安排。",
+        "导览图拓扑顺路指数 72 分，本次对推荐分做 -1 分轻量修正。"
+      ],
+      "description": "路线推荐返回 route_topology，且说明为导览图人工抽象。"
+    },
+    {
+      "id": "stops_have_topology",
+      "passed": true,
+      "missing": [],
+      "leg_missing": [],
+      "stop_count": 5,
+      "description": "每个路线站点都有拓扑线、拓扑节点和下一段估算。"
+    },
+    {
+      "id": "all_attractions_mapped",
+      "passed": true,
+      "coverage": {
+        "version": "2026-05-15",
+        "attraction_count": 22,
+        "mapped_count": 22,
+        "required_attraction_count": 22,
+        "missing_attraction_ids": [],
+        "missing_node_ids": [],
+        "route_candidate_missing_line": [],
+        "ok": true
+      },
+      "description": "全部 22 个景点都被 scenic_graph attraction_node_map 覆盖。"
+    },
+    {
+      "id": "all_must_visit_preserved",
+      "passed": true,
+      "checked": 22,
+      "failures": [],
+      "description": "任意 22 个景点作为必去点时，不会因为拓扑缺失被漏掉。"
+    },
+    {
+      "id": "central_axis_smoothness",
+      "passed": true,
+      "score": 72,
+      "line_ids": [
+        "central_axis"
+      ],
+      "line_names": [
+        "线路1 中轴线"
+      ],
+      "description": "中轴线主题路线返回 0-100 顺路指数。"
+    },
+    {
+      "id": "central_to_east_trace",
+      "passed": true,
+      "line_ids": [
+        "central_axis",
+        "east_treasure"
+      ],
+      "decision_trace": [
+        "高拥挤点：灵山大佛；核心点保留时会提示错峰，非核心点会降权或延后。",
+        "mock_simulation 仅用于比赛演示，不代表实时客流。",
+        "路线拓扑基于导览图人工抽象，用于顺路解释，不代表真实 GPS 导航。",
+        "路线包含导览图中轴线，可按入口向北推进，减少回到入口的折返。",
+        "五印坛城、梵宫等点位属于线路2宝藏东线，适合作为中轴后的东线分流安排。",
+        "导览图拓扑顺路指数 91 分，本次对推荐分做 +4 分轻量修正。"
+      ],
+      "description": "同时包含中轴和东线点位时，decision_trace 有宝藏东线/导览图解释。"
+    },
+    {
+      "id": "area_transfer_marked",
+      "passed": true,
+      "transfer_stops": [
+        "灵山梵宫",
+        "香月花街"
+      ],
+      "topology_explanation": [
+        "路线拓扑基于导览图人工抽象，用于顺路解释，不代表真实 GPS 导航。",
+        "路线包含导览图中轴线，可按入口向北推进，减少回到入口的折返。",
+        "五印坛城、梵宫等点位属于线路2宝藏东线，适合作为中轴后的东线分流安排。",
+        "拈花湾景点按独立环线覆盖，与灵山胜境之间标注为跨景区转场。",
+        "路线包含灵山胜境与拈花湾之间的跨景区转场，不按步行分钟估算。"
+      ],
+      "description": "灵山胜境到拈花湾跨区路线使用 area_transfer 标注，不伪装 GPS 步行导航。"
+    }
+  ]
+}

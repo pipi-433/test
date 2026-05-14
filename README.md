@@ -344,6 +344,33 @@ python .\scripts\eval_route_full_pool.py
 
 当前仍是规则评分 + mock parser，不接真实 LLM、真实 GPS 或真实客流硬件。经典模板只是 seed，不是候选上限。
 
+### 景区导览图拓扑路线规划
+
+Task 06.15 在全量景点候选池之上增加 `data/processed/scenic_graph.json`，把用户提供的灵山胜境线路导览图、手绘观光车导览图和 Bing 地图抽象为半真实游线拓扑。该拓扑用于比赛演示中的“顺路安排”“不走回头路”和“为什么这样排站点”的解释，不代表真实 GPS 导航，也没有接入高德/百度地图、经纬度、室内定位或 GIS。
+
+拓扑覆盖：
+- 灵山胜境：`线路1 中轴线`、`线路2 宝藏东线`、`线路3 愿心西线`、`出口假日广场线`。
+- 拈花湾禅意小镇：独立 `拈花湾禅意小镇环线`，用于覆盖资料包中的 6 个拈花湾景点。
+- `data/processed/attractions.json` 中全部 22 个 `attraction_id` 都必须映射到 `attraction_node_map`。
+
+路线返回会在每个 stop 上补充：
+- `topology_line_id` / `topology_line_name`
+- `topology_node_id` / `topology_order_index`
+- `walking_minutes_to_next`
+- `next_attraction_id`
+- `transport_hint`
+- `backtrack_risk`
+- `topology_note`
+- `smoothness_reason`
+
+路线顶层会补充 `route_topology`，包含 `route_smoothness_score`、`total_walking_minutes`、`backtrack_count`、`sightseeing_bus_suggestion` 和 `topology_explanation`。推荐分数只做轻量拓扑修正，原有 Route Planner 的主题、时间、拥挤度、必去/避开约束仍然优先。
+
+验证命令：
+```powershell
+python .\scripts\validate_scenic_graph.py
+python .\scripts\eval_route_topology.py
+```
+
 ### 运营事件控制台
 
 Task 06.12 将“mock 拥挤度分流”升级为“运营人员可配置事件 + 路线即时响应”。后台 `/admin` 提供运营事件控制台，可以快速创建并启停 4 类事件：

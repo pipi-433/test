@@ -339,6 +339,16 @@ export type RouteStop = {
   selection_source?: "must_visit" | "template_seed" | "full_pool" | "optional_boost" | "start_context" | string;
   profile_match_reason?: string;
   theme_score?: number;
+  topology_line_id?: string | null;
+  topology_line_name?: string | null;
+  topology_node_id?: string | null;
+  topology_order_index?: number | null;
+  walking_minutes_to_next?: number | null;
+  next_attraction_id?: string | null;
+  transport_hint?: string | null;
+  backtrack_risk?: "low" | "medium" | "high" | "transfer" | string | null;
+  topology_note?: string | null;
+  smoothness_reason?: string | null;
   route_profile_scores?: {
     family_score?: number;
     history_score?: number;
@@ -386,6 +396,18 @@ export type RouteOperationPolicy = {
   affected_events: OperationEvent[];
 };
 
+export type RouteTopology = {
+  source: string;
+  source_note: string;
+  line_ids: string[];
+  line_names: string[];
+  route_smoothness_score: number;
+  total_walking_minutes: number;
+  backtrack_count: number;
+  sightseeing_bus_suggestion: string | null;
+  topology_explanation: string[];
+};
+
 export type RouteRecommendation = {
   id: string;
   title: string;
@@ -412,6 +434,7 @@ export type RouteRecommendation = {
     stop_quality: number;
   };
   decision_trace: string[];
+  route_topology?: RouteTopology;
   operation_policy?: RouteOperationPolicy;
   operation_events_summary?: RouteOperationPolicy;
   crowd_policy: {

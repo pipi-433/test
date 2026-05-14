@@ -12,6 +12,7 @@ from app.core.errors import ApiError
 from app.repositories.content_repository import get_attraction, list_attractions
 from app.services.crowd_service import CROWD_SOURCE, get_crowd_record
 from app.services.operation_service import get_active_operation_events
+from app.services.scenic_graph_service import enrich_route_with_topology
 
 
 DEFAULT_THEME = "family"
@@ -1295,6 +1296,7 @@ def recommend_route(
         stops=stops,
         operation_events_by_attraction=operation_events_map,
     )
+    stops, route_topology = enrich_route_with_topology(stops)
     estimated = _estimated_minutes(stops)
     template = ROUTE_TEMPLATES[chosen_theme]
     score_breakdown = _score_route(
@@ -1309,6 +1311,11 @@ def recommend_route(
         tolerance=tolerance,
     )
     recommendation_score = _overall_score(score_breakdown)
+    topology_score = int(route_topology.get("route_smoothness_score") or 0)
+    topology_adjustment = max(-8, min(6, round((topology_score - 76) / 5)))
+    if route_topology.get("sightseeing_bus_suggestion") and topology_adjustment < 6:
+        topology_adjustment += 1
+    recommendation_score = max(0, min(100, recommendation_score + topology_adjustment))
     high_stops = [stop for stop in stops if stop.get("crowd_level") == "high"]
     assumptions = [
         f"按{THEME_LABELS[chosen_theme]}偏好生成",
@@ -1371,6 +1378,11 @@ def recommend_route(
     else:
         decision_trace.append("当前候选路线没有 high 拥挤站点，整体舒适度较好。")
     decision_trace.append("mock_simulation 仅用于比赛演示，不代表实时客流。")
+    decision_trace.extend(route_topology.get("topology_explanation", [])[:3])
+    decision_trace.append(
+        f"导览图拓扑顺路指数 {route_topology.get('route_smoothness_score')} 分，"
+        f"本次对推荐分做 {topology_adjustment:+d} 分轻量修正。"
+    )
     result = {
         "id": route_id,
         "title": template["title"],
@@ -1391,6 +1403,7 @@ def recommend_route(
         "recommendation_score": recommendation_score,
         "score_breakdown": score_breakdown,
         "decision_trace": decision_trace,
+        "route_topology": route_topology,
         "operation_policy": operation_policy,
         "operation_events_summary": operation_policy,
         "crowd_policy": {
