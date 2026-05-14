@@ -545,7 +545,28 @@ MVP 不做复杂 3D 建模，做稳定、漂亮、可控的 2D 数字人：
 - 图表：标题、单位、时间范围、空状态。
 - 图标：统一 SVG 图标，不用 emoji 做结构图标。
 
-## 9. NOT in scope
+## 9. 当前完成状态与下一步迁移
+
+截至 2026-05-15，项目已经从“可运行 demo”进入“国一收口打磨”阶段。已完成的核心闭环包括：
+
+- 可信导览：资料包解析、22 个景点、RAG 切片、本地 lexical retrieval、Query Understanding Gate、自然语言能力矩阵、低置信/资料外兜底和 sources 溯源。
+- 多模态识景：mock 识景、Top3 候选确认、确认后讲解，失败时不编造景点。
+- 路线分流：5 类主题路线、全量 22 景点候选池、必去/可选/避开约束、Route Memory Agent、拥挤度分流、运营事件影响、Kiosk 二维码带走和分享页复取。
+- 景区拓扑：`data/processed/scenic_graph.json` 已基于三张导览/地图资料抽象出中轴线、宝藏东线、愿心西线、出口线和拈花湾环线，22 个景点全部映射到拓扑节点；路线结果可返回顺路指数、步行估算、回头路风险和观光车建议。该能力是导览图人工拓扑，不是真实 GPS 导航。
+- 运营闭环：本地交互日志、反馈、Analytics overview、运营事件控制台、知识缺口、FAQ 草稿、加入评测集和评测看板。
+- 游客 UI：`/` 已改为五 tab 移动 App 结构，推荐 tab 与底部 PNG 导航基本通过；字体分层已落地，文化标题/景点名使用宋刻本风格，正文和输入仍保留可读字体。
+- 数字人：当前为前端 2D mock 数字人 + 浏览器 SpeechSynthesis/SpeechRecognition 降级；OpenAvatarChat + LiteAvatar 只作为后续 sidecar 预研，不接管业务大脑。
+
+下一步优先级：
+
+1. Task UI-06：路线拓扑能力前端展示。游客端路线 tab 和分享页必须展示 `route_topology`、每站 `walking_minutes_to_next`、游线名称、顺路指数、观光车建议和非 GPS 导航说明。
+2. Task DOC/DEMO：把拓扑路线规划加入 `docs/DEMO_SCRIPT.md` 和 `docs/TECHNICAL_STORY.md`，让 7 分钟演示从“模板路线”升级为“导览图拓扑 + 拥挤分流 + Kiosk 接力”。
+3. Task 07.6：OpenAvatarChat + LiteAvatar sidecar 技术预研。只验证可启动、可嵌入、可 fallback；不允许绕过当前 FastAPI 后端的 RAG、Route Planner 和 Vision 流程。
+4. Task UI-数字人：如果 sidecar 稳定，再替换当前 mock 数字人的表现层；否则保留现有 mock 数字人作为演示兜底。
+
+新对话接力请先读 `docs/NEXT_CONTEXT_HANDOFF.md`，再运行 `git status --short`。如果工作区有未提交 UI 改动，先确认来源，不要覆盖。
+
+## 10. NOT in scope
 
 | 项 | 暂不做原因 |
 |----|------------|
@@ -557,7 +578,7 @@ MVP 不做复杂 3D 建模，做稳定、漂亮、可控的 2D 数字人：
 | 多景区租户 SaaS | 初赛重点是示范景区闭环，不是商业平台化 |
 | 完整离线大模型 | 可以有 mock/FAQ 降级，不训练或部署大模型 |
 
-## 10. What already exists
+## 11. What already exists
 
 | 已有资料 | 用途 |
 |----------|------|
@@ -567,7 +588,7 @@ MVP 不做复杂 3D 建模，做稳定、漂亮、可控的 2D 数字人：
 | `SOFTBEI_A5_PLAN.md` | 战略、架构、里程碑、风险 |
 | `SOFTBEI_A5_PRD.md` | PRD、API、数据模型、任务切片 |
 
-## 11. GSTACK REVIEW REPORT
+## 12. GSTACK REVIEW REPORT
 
 | Review | Trigger | Status | Findings |
 |--------|---------|--------|----------|
@@ -580,7 +601,7 @@ MVP 不做复杂 3D 建模，做稳定、漂亮、可控的 2D 数字人：
 
 **VERDICT:** 可以进入 Task 01。先做项目骨架、资料解析、三端布局壳和 mock provider。
 
-## 12. 评审决策记录
+## 13. 评审决策记录
 
 本次评审读取了用户授权的 gstack review 技能与 `ui-ux-pro-max` 技能说明。`ui-ux-pro-max` 的搜索脚本在当前安装中是外部相对路径占位，未继续越界读取其真实脚本目录。
 
