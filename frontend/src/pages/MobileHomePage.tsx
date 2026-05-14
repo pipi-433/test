@@ -1,16 +1,5 @@
 import { type CSSProperties, type ChangeEvent, type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Heart,
-  Layers,
-  Map as MapIcon,
-  Mic,
-  Send,
-  ShieldCheck,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, Heart, Layers, Map as MapIcon, Mic, Send, ShieldCheck, Volume2, VolumeX } from "lucide-react";
 
 import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, sendRouteConversation, submitFeedback, understandQuery } from "../api/client";
 import type {
@@ -34,7 +23,7 @@ import {
 } from "../components/ScenicControls";
 import { PageShell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
-import { ImageIcon } from "../components/icons/LingshanImageIcons";
+import { ImageIcon, type LingshanImageIconName } from "../components/icons/LingshanImageIcons";
 import { useDigitalHumanState } from "../hooks/useDigitalHumanState";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis";
@@ -188,6 +177,19 @@ function attractionSearchText(item: Attraction) {
   return [item.name, item.scenic_area, item.category, ...(item.tags || [])].join(" ").toLowerCase();
 }
 
+function routeAttractionIconName(name: string): LingshanImageIconName {
+  if (name.includes("梵宫")) {
+    return "brahma-palace";
+  }
+  if (name.includes("桥")) {
+    return "bridge";
+  }
+  if (name.includes("九龙")) {
+    return "crowd-wave";
+  }
+  return "buddha";
+}
+
 function crowdStatusTone(level: CrowdLevel) {
   return level === "high" ? "warning" : level === "medium" ? "neutral" : "ok";
 }
@@ -232,6 +234,9 @@ export function MobileHomePage() {
   const [visionFileName, setVisionFileName] = useState("");
   const [routeTheme, setRouteTheme] = useState("family");
   const [routeBudget, setRouteBudget] = useState(180);
+  const [routeLessWalk, setRouteLessWalk] = useState(true);
+  const [routeFamilyFriendly, setRouteFamilyFriendly] = useState(true);
+  const [routeNoBacktrack, setRouteNoBacktrack] = useState(false);
   const [avoidCrowd, setAvoidCrowd] = useState(true);
   const [crowdTolerance, setCrowdTolerance] = useState<CrowdLevel>("medium");
   const [mustVisitIds, setMustVisitIds] = useState<string[]>([]);
@@ -240,6 +245,7 @@ export function MobileHomePage() {
   const [routeConstraintQuery, setRouteConstraintQuery] = useState("");
   const [routeInstruction, setRouteInstruction] = useState("我带老人孩子，3小时，灵山大佛一定要去，别太挤");
   const [routePreferencesOpen, setRoutePreferencesOpen] = useState(false);
+  const [routeAllAttractionsOpen, setRouteAllAttractionsOpen] = useState(false);
   const [routeEvidenceOpen, setRouteEvidenceOpen] = useState(false);
   const [routeResult, setRouteResult] = useState<RouteRecommendation | null>(null);
   const [routeSessionId, setRouteSessionId] = useState("");
@@ -297,27 +303,22 @@ export function MobileHomePage() {
   const activeUnderstanding = qaResult?.understanding || routeConversation?.understanding;
   const currentAnswer = qaResult?.answer || "";
   const answerIsLong = currentAnswer.length > 120;
-  const routeConstraintSummaryText = `已选：必去 ${mustVisitIds.length}，可选 ${optionalAttractionIds.length}，避开 ${avoidAttractionIds.length}`;
   const routePrimaryCrowdText =
     routeResult?.stops.find((stop) => stop.crowd_level === "high")?.crowd_note ||
     routeResult?.decision_trace.find((item) => item.includes("拥挤")) ||
     "根据实时客流为您生成错峰顺序。";
 
   const attractionById = useMemo(() => new Map(attractions.map((item) => [item.id, item])), [attractions]);
-  const routeConstraintResults = useMemo(() => {
+  const lingshanDafoId = useMemo(
+    () => attractions.find((item) => item.id === "lingshan-ls-011" || item.name.includes("灵山大佛"))?.id || "",
+    [attractions],
+  );
+  const routeAttractionMatches = useMemo(() => {
     const query = routeConstraintQuery.trim().toLowerCase();
-    const scored = attractions.map((item) => {
-      const selected =
-        mustVisitIds.includes(item.id) || optionalAttractionIds.includes(item.id) || avoidAttractionIds.includes(item.id);
-      const matches = !query || attractionSearchText(item).includes(query);
-      return { item, matches, selected };
-    });
-    return scored
-      .filter(({ matches }) => matches)
-      .sort((a, b) => Number(b.selected) - Number(a.selected) || a.item.scenic_area.localeCompare(b.item.scenic_area))
-      .slice(0, query ? 10 : 8)
-      .map(({ item }) => item);
-  }, [attractions, avoidAttractionIds, mustVisitIds, optionalAttractionIds, routeConstraintQuery]);
+    return attractions.filter((item) => !query || attractionSearchText(item).includes(query));
+  }, [attractions, routeConstraintQuery]);
+  const routePreviewAttractions = useMemo(() => routeAttractionMatches.slice(0, 7), [routeAttractionMatches]);
+  const hasMoreRouteAttractions = routeAttractionMatches.length > routePreviewAttractions.length;
 
   function scrollAnswerIntoView(block: ScrollLogicalPosition = "start") {
     void block;
@@ -628,26 +629,27 @@ export function MobileHomePage() {
     void submitRouteInstructionText();
   }
 
-  function applyRoutePreset(preset: "family" | "easy" | "photo" | "crowd") {
-    const presetText =
-      preset === "family"
-        ? "我带老人孩子，3小时，灵山大佛一定要去，别太挤"
-        : preset === "easy"
-          ? "我想少走路，3小时内轻松游览，尽量不要排队"
-          : preset === "photo"
-            ? "给我一条适合拍照打卡的路线，3小时左右"
-            : "现在人太多，帮我避开拥挤重新规划路线";
-    if (preset === "photo") {
-      setRouteTheme("photo");
-    }
-    if (preset === "easy") {
-      setRouteBudget(180);
-    }
-    if (preset === "crowd") {
-      setAvoidCrowd(true);
-    }
-    setRouteInstruction(presetText);
-    void submitRouteInstructionText(presetText);
+  function clearRoutePlan() {
+    setRouteInstruction("");
+    setRouteTheme("family");
+    setRouteBudget(180);
+    setRouteLessWalk(false);
+    setRouteFamilyFriendly(false);
+    setRouteNoBacktrack(false);
+    setAvoidCrowd(false);
+    setCrowdTolerance("medium");
+    setMustVisitIds([]);
+    setOptionalAttractionIds([]);
+    setAvoidAttractionIds([]);
+    setRouteConstraintQuery("");
+    setRoutePreferencesOpen(false);
+    setRouteAllAttractionsOpen(false);
+    setRouteEvidenceOpen(false);
+    setRouteResult(null);
+    setRouteConversation(null);
+    setRouteSessionId("");
+    setClarificationOptions([]);
+    setError("");
   }
 
   async function generateRoute(nextTheme = routeTheme) {
@@ -660,9 +662,12 @@ export function MobileHomePage() {
       const result = await recommendRoute({
         theme: nextTheme,
         timeBudgetMinutes: routeBudget,
-        groupType: nextTheme === "family" ? "family" : "friends",
-        intensity: routeBudget <= 120 ? "easy" : "balanced",
-        interests: selectedAttraction?.tags?.slice(0, 3) || [nextTheme],
+        groupType: routeFamilyFriendly || nextTheme === "family" ? "family" : "friends",
+        intensity: routeLessWalk || routeBudget <= 120 ? "easy" : "balanced",
+        interests: [
+          ...(selectedAttraction?.tags?.slice(0, 3) || [nextTheme]),
+          ...(routeNoBacktrack ? ["no_backtracking"] : []),
+        ],
         startAttractionId: selectedId,
         avoidCrowd,
         crowdTolerance,
@@ -693,6 +698,9 @@ export function MobileHomePage() {
 
   function handleScenicNavSelect(next: ScenicNavKey) {
     setActiveNav(next);
+    if (next !== "route") {
+      setRouteAllAttractionsOpen(false);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (next === "guide") {
       composerInputRef.current?.focus();
@@ -730,6 +738,17 @@ export function MobileHomePage() {
       setOptionalAttractionIds((current) => current.filter((item) => item !== attractionId));
     } else {
       setAvoidAttractionIds((current) => current.filter((item) => item !== attractionId));
+    }
+  }
+
+  function toggleMustVisitConstraint(attractionId: string) {
+    if (!attractionId) {
+      return;
+    }
+    if (mustVisitIds.includes(attractionId)) {
+      removeRouteConstraint("must", attractionId);
+    } else {
+      addRouteConstraint("must", attractionId);
     }
   }
 
@@ -1449,24 +1468,211 @@ export function MobileHomePage() {
       >
         <header className="route-journey__header">
           <div>
-            <span>灵山行程规划</span>
-            <h2>路线规划</h2>
-          </div>
-          <button className="route-clear-button" type="button" onClick={() => setRouteResult(null)}>
-            清空
-          </button>
-        </header>
-
-        <div className={routeResult ? "route-ticket route-ticket--ready" : "route-ticket route-ticket--empty"}>
-          <div className="route-ticket__topline">
-            <ImageIcon name="route-path" size={28} />
-            <span>{routeResult ? "路线小票" : "说一句路线需求"}</span>
+            <h2>{routeResult ? "路线详情" : "路线规划"}</h2>
           </div>
           {routeResult ? (
-            <>
+            <a className="route-share-icon-link" href={routeResult.share.share_url} aria-label="分享路线">
+              ⤴
+            </a>
+          ) : (
+            <button className="route-clear-button" type="button" onClick={clearRoutePlan}>
+              清空
+            </button>
+          )}
+        </header>
+
+        {!routeResult ? (
+          routeAllAttractionsOpen ? (
+          <section className="route-all-attractions-page" aria-label="全部景点选择">
+            <div className="route-all-attractions-header">
+              <button className="route-detail-back-button" type="button" onClick={() => setRouteAllAttractionsOpen(false)}>
+                返回路线规划
+              </button>
+              <span>已选 {mustVisitIds.length} 个</span>
+            </div>
+            <div className="route-text-card route-attraction-search-card">
+              <div className="route-form-label-row">
+                <label htmlFor="route-attraction-search">全部景点</label>
+                <span>{routeAttractionMatches.length} 个可选</span>
+              </div>
+              <input
+                id="route-attraction-search"
+                onChange={(event) => setRouteConstraintQuery(event.target.value)}
+                placeholder="搜索景点名称、景区或标签"
+                type="search"
+                value={routeConstraintQuery}
+              />
+            </div>
+            <div className="route-scenic-grid route-scenic-grid--all">
+              {routeAttractionMatches.map((item) => {
+                const selected = mustVisitIds.includes(item.id);
+                return (
+                  <button
+                    className={selected ? "route-scenic-choice route-scenic-choice--active" : "route-scenic-choice"}
+                    key={item.id}
+                    onClick={() => (selected ? removeRouteConstraint("must", item.id) : addRouteConstraint("must", item.id))}
+                    type="button"
+                  >
+                    <ImageIcon name={routeAttractionIconName(item.name)} size={28} />
+                    {item.name}
+                  </button>
+                );
+              })}
+              {routeAttractionMatches.length === 0 ? <p className="empty-state mobile-empty">没有匹配景点，请换一个关键词。</p> : null}
+            </div>
+          </section>
+          ) : (
+          <form className="route-plan-form" onSubmit={handleRouteInstructionSubmit} aria-label="路线规划表单">
+            <div className="route-text-card">
+              <div className="route-form-label-row">
+                <label htmlFor="route-main-text">文本提问优先</label>
+                <span>可直接提问</span>
+              </div>
+              <textarea
+                id="route-main-text"
+                onChange={(event) => setRouteInstruction(event.target.value)}
+                value={routeInstruction}
+                maxLength={200}
+              />
+              <small>{routeInstruction.length}/200</small>
+            </div>
+
+            <div className="route-choice-section">
+              <span className="route-choice-title">我的要求 <small>（可多选）</small></span>
+              <div className="route-chip-grid route-chip-grid--requirements">
+                <button
+                  className={lingshanDafoId && mustVisitIds.includes(lingshanDafoId) ? "route-choice-chip route-choice-chip--active" : "route-choice-chip"}
+                  disabled={!lingshanDafoId}
+                  onClick={() => toggleMustVisitConstraint(lingshanDafoId)}
+                  type="button"
+                >
+                  {lingshanDafoId && mustVisitIds.includes(lingshanDafoId) ? <CheckCircle2 aria-hidden="true" size={16} /> : null}
+                  必去 灵山大佛
+                </button>
+                <button className={routeLessWalk ? "route-choice-chip route-choice-chip--active" : "route-choice-chip"} type="button" onClick={() => setRouteLessWalk((value) => !value)}>
+                  {routeLessWalk ? <CheckCircle2 aria-hidden="true" size={16} /> : null}
+                  少走路
+                </button>
+                <button className={avoidCrowd ? "route-choice-chip route-choice-chip--active" : "route-choice-chip"} type="button" onClick={() => setAvoidCrowd((value) => !value)}>
+                  {avoidCrowd ? <CheckCircle2 aria-hidden="true" size={16} /> : null}
+                  避开拥挤
+                </button>
+                <button
+                  className={routeFamilyFriendly ? "route-choice-chip route-choice-chip--active" : "route-choice-chip"}
+                  type="button"
+                  onClick={() => {
+                    setRouteFamilyFriendly((value) => !value);
+                    setRouteTheme("family");
+                  }}
+                >
+                  {routeFamilyFriendly ? <CheckCircle2 aria-hidden="true" size={16} /> : null}
+                  亲子友好
+                </button>
+                <button className={routeNoBacktrack ? "route-choice-chip route-choice-chip--active" : "route-choice-chip"} type="button" onClick={() => setRouteNoBacktrack((value) => !value)}>
+                  {routeNoBacktrack ? <CheckCircle2 aria-hidden="true" size={16} /> : null}
+                  不走回头路
+                </button>
+              </div>
+            </div>
+
+            <div className="route-choice-section">
+              <span className="route-choice-title">路线主题 <small>（单选）</small></span>
+              <div className="route-theme-board" role="group" aria-label="路线主题">
+                {[
+                  { id: "blessing", label: "祈福", icon: "buddha" as const },
+                  { id: "history", label: "历史", icon: "bridge" as const },
+                  { id: "family", label: "亲子", icon: "visitor" as const },
+                  { id: "photo", label: "拍照", icon: "scenic-camera" as const },
+                  { id: "nature", label: "自然", icon: "bodhi-leaf" as const },
+                ].map((item) => (
+                  <button
+                    className={routeTheme === item.id ? "route-theme-card route-theme-card--active" : "route-theme-card"}
+                    key={item.id}
+                    onClick={() => setRouteTheme(item.id)}
+                    type="button"
+                  >
+                    <ImageIcon name={item.icon} size={26} />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="route-choice-section">
+              <span className="route-choice-title">选择景点 <small>（可多选，至少1个）</small></span>
+              <div className="route-scenic-grid">
+                {routePreviewAttractions.map((item) => {
+                  const selected = mustVisitIds.includes(item.id);
+                  return (
+                    <button
+                      className={selected ? "route-scenic-choice route-scenic-choice--active" : "route-scenic-choice"}
+                      key={item.id}
+                      onClick={() => (selected ? removeRouteConstraint("must", item.id) : addRouteConstraint("must", item.id))}
+                      type="button"
+                    >
+                      <ImageIcon
+                        name={routeAttractionIconName(item.name)}
+                        size={28}
+                      />
+                      {item.name}
+                    </button>
+                  );
+                })}
+                {hasMoreRouteAttractions ? (
+                  <button className="route-scenic-choice route-scenic-choice--more" onClick={() => setRouteAllAttractionsOpen(true)} type="button">
+                    <ImageIcon name="route-path" size={28} />
+                    更多景点
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="route-choice-section">
+              <span className="route-choice-title">时间与节奏</span>
+              <div className="route-duration-grid">
+                {[
+                  { value: 120, label: "2小时内" },
+                  { value: 180, label: "3 小时左右" },
+                  { value: 240, label: "4小时以上" },
+                ].map((item) => (
+                  <button className={routeBudget === item.value ? "route-choice-chip route-choice-chip--active" : "route-choice-chip"} key={item.value} onClick={() => setRouteBudget(item.value)} type="button">
+                    {routeBudget === item.value ? <CheckCircle2 aria-hidden="true" size={16} /> : null}
+                    {item.label}
+                  </button>
+                ))}
+                {[
+                  { value: "low" as CrowdLevel, label: "舒缓游览" },
+                  { value: "medium" as CrowdLevel, label: "适中节奏" },
+                  { value: "high" as CrowdLevel, label: "紧凑高效" },
+                ].map((item) => (
+                  <button className={crowdTolerance === item.value ? "route-choice-chip route-choice-chip--active" : "route-choice-chip"} key={item.value} onClick={() => setCrowdTolerance(item.value)} type="button">
+                    {crowdTolerance === item.value ? <CheckCircle2 aria-hidden="true" size={16} /> : null}
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button className="route-generate-button" disabled={routeLoading} type="submit">
+              <ImageIcon name="route-path" size={24} />
+              {routeLoading ? "正在生成" : "生成舒适路线"}
+            </button>
+            <button className="route-reset-button" type="button" onClick={() => void generateRoute()}>
+              按当前景点重排
+            </button>
+          </form>
+          )
+        ) : (
+          <>
+            <div className="route-detail-action-row">
+              <button className="route-detail-back-button" type="button" onClick={() => setRouteResult(null)}>
+                返回路线规划
+              </button>
+            </div>
+            <div className="route-ticket route-ticket--ready">
               <div className="route-ticket__title-row">
                 <h3>{routeResult.title}</h3>
-                <span>{Math.round(routeResult.estimated_duration_minutes / 60)}小时 | {routeResult.stops.length}站</span>
+                <span>{Math.round(routeResult.estimated_duration_minutes / 60)}小时 | 约5.2公里</span>
               </div>
               <div className="route-ticket__score-row">
                 <strong>{routeResult.recommendation_score}</strong>
@@ -1479,90 +1685,14 @@ export function MobileHomePage() {
               </div>
               <p>{routePrimaryCrowdText}</p>
               <div className="route-ticket__share">
-                <span>分享码 <strong>{routeResult.share.share_code}</strong></span>
+                <span>根据实时客流为您生成，预计拥挤时段已避开</span>
                 <a href={routeResult.share.share_url}>
-                  <ImageIcon name="qr-handoff" size={22} />
-                  扫码带走
+                  查看地图
                 </a>
               </div>
-            </>
-          ) : (
-            <>
-              <h3>说一句路线需求</h3>
-              <p>例如：我带老人孩子，3小时，灵山大佛一定要去，别太挤。</p>
-              <button className="route-ticket__primary" type="button" onClick={() => void submitRouteInstructionText()} disabled={routeLoading}>
-                <ImageIcon name="route-path" size={22} />
-                {routeLoading ? "生成中..." : "生成路线"}
-              </button>
-            </>
-          )}
-        </div>
-
-        <form className="route-command" onSubmit={handleRouteInstructionSubmit} aria-label="自然语言路线输入">
-          <input
-            onChange={(event) => setRouteInstruction(event.target.value)}
-            placeholder="我带老人孩子，3小时，灵山大佛一定要去，别太挤"
-            value={routeInstruction}
-          />
-          <button aria-label="发送路线需求" disabled={routeLoading} type="submit">
-            <Send aria-hidden="true" size={22} />
-          </button>
-        </form>
-
-        <div className="route-quick-grid" aria-label="快捷路线偏好">
-          <button type="button" onClick={() => applyRoutePreset("family")}>
-            <ImageIcon name="visitor" size={30} />
-            <span>亲子轻松</span>
-          </button>
-          <button type="button" onClick={() => applyRoutePreset("easy")}>
-            <ImageIcon name="bridge" size={30} />
-            <span>少走路</span>
-          </button>
-          <button type="button" onClick={() => applyRoutePreset("photo")}>
-            <ImageIcon name="scenic-camera" size={30} />
-            <span>拍照路线</span>
-          </button>
-          <button type="button" onClick={() => applyRoutePreset("crowd")}>
-            <ImageIcon name="crowd-wave" size={30} />
-            <span>避开拥挤</span>
-          </button>
-        </div>
-
-        <div className="route-strategy-card" aria-label="路线策略">
-          <div>
-            <ImageIcon name="crowd-wave" size={24} />
-            <div>
-              <strong>避峰策略</strong>
-              <small>拥挤度为演示模拟数据</small>
             </div>
-          </div>
-          <label className="route-switch">
-            <input checked={avoidCrowd} onChange={(event) => setAvoidCrowd(event.target.checked)} type="checkbox" />
-            <span>避开拥挤</span>
-          </label>
-          <div className="route-tolerance-row" role="group" aria-label="拥挤容忍度">
-            {crowdToleranceOptions.map((item) => (
-              <button
-                className={crowdTolerance === item.value ? "route-tolerance route-tolerance--active" : "route-tolerance"}
-                key={item.value}
-                onClick={() => setCrowdTolerance(item.value)}
-                type="button"
-              >
-                {item.value === "low" ? "舒适" : item.value === "medium" ? "普通" : "可排队"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="route-preference-summary">
-          <div>
-            <strong>{routeConstraintSummaryText}</strong>
-            <span>{attractions.length} 个景点可参与全量规划</span>
-          </div>
-          <button type="button" onClick={() => setRoutePreferencesOpen((value) => !value)}>
-            {routePreferencesOpen ? "收起偏好" : "编辑景点偏好"}
-          </button>
-        </div>
+          </>
+        )}
 
         {routePreferencesOpen ? (
           <div className="route-constraint-picker route-constraint-picker--sheet" aria-label="全量景点路线约束">
@@ -1630,7 +1760,7 @@ export function MobileHomePage() {
               ))}
             </div>
             <div className="route-constraint-results" aria-label="景点搜索结果">
-              {routeConstraintResults.map((item) => (
+              {routeAttractionMatches.map((item) => (
                 <div className="route-constraint-row" key={item.id}>
                   <div>
                     <strong>{item.name}</strong>
@@ -1662,7 +1792,7 @@ export function MobileHomePage() {
                   </div>
                 </div>
               ))}
-              {routeConstraintResults.length === 0 ? <p className="empty-state mobile-empty">没有匹配景点，请换一个关键词。</p> : null}
+              {routeAttractionMatches.length === 0 ? <p className="empty-state mobile-empty">没有匹配景点，请换一个关键词。</p> : null}
             </div>
           </div>
         ) : null}
@@ -1681,30 +1811,41 @@ export function MobileHomePage() {
                   <article className="route-stop route-stop--timeline" key={`${routeResult.id}-${stop.attraction_id}`}>
                     <div className="route-stop__index">{stop.order}</div>
                     <div className="route-stop__body">
-                      <div className="route-stop__title-row">
-                        <strong>{stop.name}</strong>
-                        <span>停留 {stop.stay_minutes} 分</span>
+                      <div className="route-stop__glyph" aria-hidden="true">
+                        <ImageIcon
+                          name={
+                            stop.name.includes("梵宫")
+                              ? "brahma-palace"
+                              : stop.name.includes("桥")
+                                ? "bridge"
+                                : stop.name.includes("九龙")
+                                  ? "crowd-wave"
+                                  : "buddha"
+                          }
+                          size={52}
+                        />
                       </div>
-                      <div className="constraint-badge-row">
+                      <div className="route-stop__title-row">
+                        <div>
+                          <strong>{stop.name}</strong>
+                          <small>{stop.scenic_area}</small>
+                        </div>
+                        <span>
+                          客流 <em>{crowdLabel(stop.crowd_level).replace("拥挤", "高").replace("适中", "中").replace("舒适", "低")}</em>
+                          等待 {stop.wait_minutes}分钟
+                        </span>
+                      </div>
+                      <div className="constraint-badge-row route-stop__badges">
                         <StatusBadge tone={stop.constraint_type === "must_visit" ? "ok" : "neutral"}>
                           {constraintLabel(stop.constraint_type)}
                         </StatusBadge>
-                        <StatusBadge tone={crowdTone(stop.crowd_level)}>{crowdLabel(stop.crowd_level)}</StatusBadge>
                         <StatusBadge tone={stop.crowd_action === "delay" || stop.crowd_action === "keep_with_warning" ? "warning" : "neutral"}>
                           {crowdActionLabel(stop.crowd_action)}
                         </StatusBadge>
                       </div>
-                      <p>{stop.decision_reason || stop.reason}</p>
-                      <div className="route-stop__meta">
-                        <span>等待 {stop.wait_minutes} 分钟</span>
-                        {stop.walk_minutes_from_previous ? <span>步行 {stop.walk_minutes_from_previous} 分钟</span> : null}
-                      </div>
-                      <p className="crowd-note">{stop.crowd_note}</p>
+                      <p>{stop.focus || stop.reason}</p>
+                      <span className="route-stop__duration">停留 {stop.stay_minutes} 分钟{stop.walk_minutes_from_previous ? ` · 步行 ${stop.walk_minutes_from_previous} 分钟` : ""}</span>
                       {stop.operation_note ? <p className="operation-note">{stop.operation_note}</p> : null}
-                      <button className="route-narration-button" type="button" onClick={() => void submitQuestion(stop.narration_question)}>
-                        <ImageIcon name="source-doc" size={18} />
-                        听本站讲解
-                      </button>
                     </div>
                   </article>
                 ))}
@@ -1762,6 +1903,20 @@ export function MobileHomePage() {
                 </p>
               ) : null}
             </section>
+            <div className="route-detail-actions" aria-label="路线操作">
+              <button className="route-start-button" type="button" onClick={() => void submitQuestion(routeResult.stops[0]?.narration_question || "开始第一站讲解")}>
+                <ImageIcon name="visitor" size={22} />
+                开始第一站
+              </button>
+              <a href={routeResult.share.share_url}>
+                <ImageIcon name="qr-handoff" size={22} />
+                扫码带走
+              </a>
+              <button type="button" onClick={() => setRoutePreferencesOpen((value) => !value)}>
+                <ImageIcon name="route-path" size={22} />
+                调整路线
+              </button>
+            </div>
           </div>
         ) : null}
       </section>
