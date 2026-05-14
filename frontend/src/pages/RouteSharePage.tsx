@@ -13,6 +13,7 @@ import {
   RoutePathIcon,
   ScenicCameraIcon,
 } from "../components/icons/LingshanIcons";
+import { RouteTopologySummary, StopTopologyMeta } from "../components/visitor/RouteTopologyCards";
 
 function formatExpiresAt(isoString: string | null | undefined): string {
   if (!isoString) {
@@ -253,6 +254,8 @@ export function RouteSharePage() {
         </div>
       </section>
 
+      <RouteTopologySummary route={route} compact />
+
       <section className="decision-trace" aria-label="路线决策摘要">
         <strong>为什么这样走</strong>
         <ul>
@@ -279,6 +282,7 @@ export function RouteSharePage() {
                   {crowdLabel(stop.crowd_level)} {stop.crowd_score}
                 </StatusBadge>
               </div>
+              <StopTopologyMeta stop={stop} compact />
               <p>{stop.focus}：{stop.reason}</p>
               <div className="share-crowd-row">
                 <MapPinned aria-hidden="true" size={16} />

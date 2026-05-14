@@ -332,10 +332,11 @@ export type RouteStop = {
   crowd_source?: string;
   operation_events?: OperationEvent[];
   operation_note?: string | null;
-  constraint_type?: "must_visit" | "optional" | "recommended" | "alternative";
+  constraint_type?: "must_visit" | "optional" | "recommended" | "alternative" | "avoid" | "none" | string;
   constraint_reason?: string;
   crowd_action?: "keep" | "delay" | "replace" | "avoid" | "skip" | "keep_with_warning";
   decision_reason?: string;
+  narration_focus?: string;
   selection_source?: "must_visit" | "template_seed" | "full_pool" | "optional_boost" | "start_context" | string;
   profile_match_reason?: string;
   theme_score?: number;

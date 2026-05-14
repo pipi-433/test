@@ -24,6 +24,7 @@ import {
 import { PageShell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
 import { ImageIcon, type LingshanImageIconName } from "../components/icons/LingshanImageIcons";
+import { RouteTopologySummary, StopTopologyMeta } from "../components/visitor/RouteTopologyCards";
 import { useDigitalHumanState } from "../hooks/useDigitalHumanState";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis";
@@ -1691,6 +1692,7 @@ export function MobileHomePage() {
                 </a>
               </div>
             </div>
+            <RouteTopologySummary route={routeResult} />
           </>
         )}
 
@@ -1843,6 +1845,7 @@ export function MobileHomePage() {
                           {crowdActionLabel(stop.crowd_action)}
                         </StatusBadge>
                       </div>
+                      <StopTopologyMeta stop={stop} />
                       <p>{stop.focus || stop.reason}</p>
                       <span className="route-stop__duration">停留 {stop.stay_minutes} 分钟{stop.walk_minutes_from_previous ? ` · 步行 ${stop.walk_minutes_from_previous} 分钟` : ""}</span>
                       {stop.operation_note ? <p className="operation-note">{stop.operation_note}</p> : null}

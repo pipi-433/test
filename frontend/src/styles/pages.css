@@ -2619,6 +2619,149 @@
   font-weight: 800;
 }
 
+.route-topology-card {
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid rgb(184 154 94 / 38%);
+  border-radius: 12px;
+  padding: 13px;
+  background:
+    linear-gradient(180deg, rgb(255 253 248 / 96%), rgb(250 247 239 / 94%)),
+    linear-gradient(90deg, rgb(31 91 74 / 9%), transparent 48%);
+  box-shadow: 0 8px 20px rgb(65 52 32 / 5%);
+}
+
+.route-topology-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.route-topology-card__header h3 {
+  margin: 2px 0 0;
+  color: var(--color-ink-900);
+  font-family: var(--font-cultural);
+  font-size: 18px;
+}
+
+.route-topology-card__score {
+  display: grid;
+  place-items: center;
+  min-width: 76px;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--color-primary-700);
+  color: var(--color-lingshan-ivory);
+}
+
+.route-topology-card__score strong {
+  font-family: var(--font-numeric);
+  font-size: 31px;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+.route-topology-card__score span {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.route-topology-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 8px;
+}
+
+.route-topology-metrics span {
+  min-width: 0;
+  border: 1px solid rgb(31 91 74 / 16%);
+  border-radius: 9px;
+  padding: 8px;
+  background: rgb(255 253 248 / 78%);
+}
+
+.route-topology-metrics small,
+.route-topology-card .eyebrow {
+  display: block;
+  color: var(--color-ink-500);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.route-topology-metrics strong {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--color-primary-700);
+  font-family: var(--font-numeric);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.route-topology-lines,
+.stop-topology__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.route-topology-lines span,
+.stop-topology__chips span {
+  min-width: 0;
+  border: 1px solid rgb(184 154 94 / 36%);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: rgb(255 247 225 / 74%);
+  color: var(--color-accent-700);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.route-topology-explain {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid rgb(184 154 94 / 20%);
+  padding-top: 9px;
+}
+
+.route-topology-explain strong {
+  color: var(--color-ink-900);
+  font-family: var(--font-cultural);
+  font-size: 14px;
+}
+
+.route-topology-explain ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 17px;
+  color: var(--color-ink-700);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.route-topology-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  border-radius: 9px;
+  padding: 8px 9px;
+  background: rgb(31 91 74 / 7%);
+  color: var(--color-ink-650, #54665e);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.route-topology-note .lingshan-image-icon {
+  flex: 0 0 auto;
+  color: var(--color-primary-700);
+}
+
 .route-ticket__primary {
   min-height: 52px;
   border: 0;
@@ -3410,6 +3553,55 @@
   line-height: 1.35;
 }
 
+.stop-topology {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.route-stop__body .stop-topology {
+  grid-column: 2;
+}
+
+.stop-topology__line {
+  background: rgb(31 91 74 / 8%) !important;
+  color: var(--color-primary-700) !important;
+}
+
+.stop-topology__risk--low {
+  border-color: rgb(31 91 74 / 22%) !important;
+  background: var(--color-primary-50) !important;
+  color: var(--color-primary-700) !important;
+}
+
+.stop-topology__risk--high,
+.stop-topology__risk--transfer {
+  border-color: rgb(199 111 98 / 28%) !important;
+  background: rgb(255 247 237 / 86%) !important;
+  color: var(--color-warning) !important;
+}
+
+.stop-topology__leg {
+  display: grid;
+  gap: 2px;
+  border-left: 2px solid rgb(184 154 94 / 54%);
+  padding-left: 8px;
+  color: var(--color-ink-600);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.stop-topology__leg strong {
+  color: var(--color-primary-700);
+  font-family: var(--font-numeric);
+  font-weight: 850;
+}
+
+.stop-topology__leg small {
+  color: var(--color-ink-500);
+  font-size: 12px;
+}
+
 .decision-trace--compact {
   border-radius: 6px;
   padding: 12px;
@@ -3739,6 +3931,18 @@
   background: #fffefa;
 }
 
+.route-share-page .route-topology-card {
+  margin-bottom: var(--space-4);
+}
+
+.route-topology-card--compact .route-topology-card__score {
+  min-width: 68px;
+}
+
+.route-topology-card--compact .route-topology-card__score strong {
+  font-size: 27px;
+}
+
 .share-journey-card__score {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -3894,6 +4098,10 @@
 .share-stop__top p,
 .share-crowd-row {
   font-size: var(--font-sm);
+}
+
+.share-stop .stop-topology {
+  margin: 2px 0;
 }
 
 .share-link-button {
