@@ -236,6 +236,71 @@ fatal: unable to access 'https://github.com/HumanAIGC-Engineering/OpenAvatarChat
 3. 如要真正进入 LiteAvatar 官方 demo，需要确认是否允许下载依赖和模型；当前未下载任何大模型。
 4. 如要跑百炼 LLM/TTS 链路，需要用户明确提供 `DASHSCOPE_API_KEY`，且只能放在本机 `.env`，不得提交。
 
+#### 2026-05-15 继续执行记录：路线 A
+
+用户选择继续路线 A 后，本次继续推进到“源码已获取，依赖安装前置环境未满足”。
+
+新增动作：
+
+- 没有做全局 `uv` 安装。
+- 在工作区内创建 `.sidecar-tools/` 虚拟环境，并通过 `pip --no-cache-dir` 安装本地 `uv`。
+- 已将 `.sidecar-tools/` 加入根 `.gitignore`，避免本地工具环境被提交。
+- 再次尝试 `git clone --depth 1` 获取 OpenAvatarChat，仍超时。
+- 清理 clone 失败留下的半截 `.git` 目录。
+- 改用 GitHub codeload zip 获取源码，成功下载 `external/OpenAvatarChat-main.zip` 并解压为 `external/OpenAvatarChat`。
+- 未下载模型，`external/OpenAvatarChat/models` 只有官方空占位文件。
+- 未安装 OpenAvatarChat 依赖。
+- 未使用真实 `DASHSCOPE_API_KEY`。
+
+当前新增环境结果：
+
+| 项 | 结果 | 判断 |
+| --- | --- | --- |
+| 本地 uv | `.sidecar-tools\Scripts\uv.exe`，`uv 0.11.14` | 可用，且未全局安装 |
+| OpenAvatarChat 源码 | 已通过 codeload zip 获取到 `external/OpenAvatarChat` | 可继续做依赖前检查 |
+| OpenAvatarChat Git 仓库 | zip 解压，无 `.git` | 不影响预研，不能用于 submodule 更新 |
+| OpenAvatarChat 模型 | 未下载，只有 `models/put_models_here.txt` | 符合“不下载大模型”边界 |
+| Python 3.11 | uv 找到 `Python 3.11.6` | 不满足 `>=3.11.7, <3.12` |
+| Python 3.12 | uv 找到 `Python 3.12.0` | 不满足 `>=3.11.7, <3.12` |
+
+关键新 blocker：
+
+```text
+OpenAvatarChat pyproject.toml:
+requires-python = ">=3.11.7, <3.12"
+```
+
+本机现有 Python 版本都不满足该范围：
+
+- `Python 3.11.6` 低于下限。
+- `Python 3.12.0` 高于上限。
+
+因此当前仍不能进入：
+
+```powershell
+uv run install.py --config config/chat_with_openai_compatible_bailian_cosyvoice.yaml
+```
+
+否则 `uv` 会尝试解析或获取满足要求的 Python，并开始依赖安装。这一步可能下载解释器、PyTorch CUDA wheel、ASR/TTS/Avatar 相关依赖，已经超出“轻量预研”。
+
+当前可启动性判断更新：
+
+| 验证项 | 当前结果 | 原因 |
+| --- | --- | --- |
+| 是否能获取 OpenAvatarChat 源码 | 是 | codeload zip 成功，Git clone 仍失败 |
+| 是否能安装 OpenAvatarChat 依赖 | 未执行 | Python 版本不满足，且未授权下载依赖 |
+| 是否能启动 OpenAvatarChat | 否 | 依赖未安装、模型未下载、无 API key |
+| 是否能看到 WebUI | 否 | 服务未启动 |
+| 是否能进入 LiteAvatar 模式 | 否 | 需要 Python 3.11.7+、依赖、模型和通常的 `DASHSCOPE_API_KEY` |
+| 当前主项目 fallback | 保留 | 未修改主前端和业务逻辑 |
+
+继续 Phase 2 的下一步需要二选一：
+
+1. 用户提供或授权安装 Python `3.11.7 <= version < 3.12`，建议 Python 3.11.9/3.11.10/3.11.11。
+2. 明确授权 `uv` 自动获取受支持 Python，并接受它可能写入用户缓存目录。
+
+在这之前，不建议继续安装 OpenAvatarChat 依赖，更不建议接入主前端。
+
 建议新建不提交的大体积目录或明确 gitignore：
 
 - `external/OpenAvatarChat/`

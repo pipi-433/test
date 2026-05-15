@@ -35,10 +35,34 @@ Invoke-Check "python --version" { python --version }
 Invoke-Check "node --version" { node --version }
 Invoke-Check "npm --version" { npm --version }
 Invoke-Check "uv --version" {
+  $LocalUv = Join-Path $ProjectRoot ".sidecar-tools\Scripts\uv.exe"
   if (Get-Command uv -ErrorAction SilentlyContinue) {
     uv --version
+  } elseif (Test-Path -LiteralPath $LocalUv) {
+    & $LocalUv --version
   } else {
     Write-Host "uv is not installed. Do not install globally without workspace/outside-path approval."
+  }
+}
+
+Invoke-Check "OpenAvatarChat Python compatibility" {
+  $LocalUv = Join-Path $ProjectRoot ".sidecar-tools\Scripts\uv.exe"
+  if (-not (Test-Path -LiteralPath $OpenAvatarChatDir)) {
+    Write-Host "external/OpenAvatarChat is missing."
+    return
+  }
+  if (Test-Path -LiteralPath $LocalUv) {
+    Push-Location $OpenAvatarChatDir
+    & $LocalUv python find 3.11
+    & $LocalUv python find 3.12
+    Pop-Location
+  } elseif (Get-Command uv -ErrorAction SilentlyContinue) {
+    Push-Location $OpenAvatarChatDir
+    uv python find 3.11
+    uv python find 3.12
+    Pop-Location
+  } else {
+    Write-Host "uv is unavailable; cannot check pyproject Python requirement."
   }
 }
 
