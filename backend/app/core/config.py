@@ -16,6 +16,9 @@ class Settings(BaseModel):
     embedding_provider: str = "mock"
     vlm_provider: str = "mock"
     tts_provider: str = "mock"
+    avatar_speaker_mode: str = "mock"
+    avatar_sidecar_base_url: str = ""
+    avatar_speaker_timeout_seconds: float = 3
     database_url: str = "sqlite:///./data/app.db"
 
     def sqlite_path(self) -> Path:
@@ -53,5 +56,8 @@ def get_settings() -> Settings:
         embedding_provider=os.getenv("EMBEDDING_PROVIDER", "mock"),
         vlm_provider=os.getenv("VLM_PROVIDER", "mock"),
         tts_provider=os.getenv("TTS_PROVIDER", "mock"),
+        avatar_speaker_mode=os.getenv("AVATAR_SPEAKER_MODE", "mock"),
+        avatar_sidecar_base_url=os.getenv("AVATAR_SIDECAR_BASE_URL", ""),
+        avatar_speaker_timeout_seconds=float(os.getenv("AVATAR_SPEAKER_TIMEOUT_SECONDS", "3")),
         database_url=os.getenv("DATABASE_URL", "sqlite:///./data/app.db"),
     )

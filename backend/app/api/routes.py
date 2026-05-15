@@ -8,6 +8,7 @@ from app.core.errors import ApiError
 from app.core.config import get_settings
 from app.providers import ProviderStatus, get_provider_status
 from app.services.analytics_service import analytics_overview, record_feedback, record_interaction_event
+from app.services.avatar_speaker import enqueue_avatar_speech
 from app.services.content_service import (
     get_attraction_or_error,
     get_attractions,
@@ -162,6 +163,13 @@ class KnowledgeGapUpdateRequest(BaseModel):
     status: str | None = None
 
 
+class AvatarSpeakRequest(BaseModel):
+    text: str
+    emotion: str = "happy"
+    source: str = "system"
+    interrupt: bool = True
+
+
 def _dump_model(payload: BaseModel, *, exclude_unset: bool = False) -> dict[str, Any]:
     return payload.model_dump(exclude_unset=exclude_unset)
 
@@ -257,6 +265,16 @@ def health() -> HealthResponse:
 @router.get("/provider/status", response_model=ProviderStatusResponse)
 def provider_status() -> dict[str, ProviderStatus]:
     return get_provider_status()
+
+
+@router.post("/avatar/speak")
+def avatar_speak(payload: AvatarSpeakRequest) -> dict[str, object]:
+    return enqueue_avatar_speech(
+        text=payload.text,
+        emotion=payload.emotion,
+        source=payload.source,
+        interrupt=payload.interrupt,
+    )
 
 
 @router.get("/attractions")
