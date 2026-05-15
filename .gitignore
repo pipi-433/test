@@ -1,6 +1,8 @@
 .env
 .venv/
 .sidecar-tools/
+.sidecar-python/
+.sidecar-cache/
 node_modules/
 dist/
 .npm-cache/

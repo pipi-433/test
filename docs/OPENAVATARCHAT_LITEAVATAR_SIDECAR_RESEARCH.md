@@ -301,6 +301,62 @@ uv run install.py --config config/chat_with_openai_compatible_bailian_cosyvoice.
 
 在这之前，不建议继续安装 OpenAvatarChat 依赖，更不建议接入主前端。
 
+#### 2026-05-15 继续执行记录：工作区内 managed Python
+
+用户选择授权 `uv` 自动获取支持的 Python。为避免污染用户全局环境，本次没有使用默认用户缓存安装方式，而是把安装目录和缓存都固定在工作区内：
+
+- Python 安装目录：`D:\py\dota\.sidecar-python`
+- uv 缓存目录：`D:\py\dota\.sidecar-cache`
+- 本地 uv：`D:\py\dota\.sidecar-tools\Scripts\uv.exe`
+
+执行结果：
+
+```powershell
+.\.sidecar-tools\Scripts\uv.exe python install 3.11 `
+  --install-dir .\.sidecar-python `
+  --cache-dir .\.sidecar-cache `
+  --no-registry
+```
+
+成功安装：
+
+```text
+Python 3.11.15
+```
+
+该版本满足 OpenAvatarChat 的 `requires-python = ">=3.11.7, <3.12"`。
+
+注意事项：
+
+- `uv` 仍短暂创建了用户目录 shim：`C:\Users\25433\.local\bin\python3.11.exe`。
+- 已删除该 shim，后续只使用工作区内的 Python 绝对路径或 `UV_PYTHON_INSTALL_DIR`。
+- 已将 `.sidecar-python/` 和 `.sidecar-cache/` 加入根 `.gitignore`。
+- `scripts/sidecar_preflight.ps1` 已更新，会优先识别本地 uv 和工作区 managed Python。
+
+当前验证：
+
+```powershell
+$env:UV_PYTHON_INSTALL_DIR='D:\py\dota\.sidecar-python'
+D:\py\dota\.sidecar-tools\Scripts\uv.exe python find 3.11 --managed-python
+```
+
+返回：
+
+```text
+D:\py\dota\.sidecar-python\cpython-3.11-windows-x86_64-none\python.exe
+```
+
+仍未执行：
+
+- 未运行 `uv run install.py --config ...`
+- 未安装 OpenAvatarChat 依赖
+- 未下载模型
+- 未配置或使用 `DASHSCOPE_API_KEY`
+- 未启动 OpenAvatarChat
+- 未接入主前端
+
+下一步如果继续，需要明确授权安装依赖。该步骤预计会下载 PyTorch CUDA 12.8、onnxruntime-gpu、ASR/TTS/Avatar handler 依赖和构建工具，体积和耗时都明显高于当前 preflight。
+
 建议新建不提交的大体积目录或明确 gitignore：
 
 - `external/OpenAvatarChat/`

@@ -6,6 +6,9 @@ $ErrorActionPreference = "Continue"
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ExternalDir = Join-Path $ProjectRoot "external"
 $OpenAvatarChatDir = Join-Path $ExternalDir "OpenAvatarChat"
+$LocalUv = Join-Path $ProjectRoot ".sidecar-tools\Scripts\uv.exe"
+$LocalPythonInstallDir = Join-Path $ProjectRoot ".sidecar-python"
+$LocalUvCacheDir = Join-Path $ProjectRoot ".sidecar-cache"
 
 function Invoke-Check {
   param(
@@ -35,7 +38,6 @@ Invoke-Check "python --version" { python --version }
 Invoke-Check "node --version" { node --version }
 Invoke-Check "npm --version" { npm --version }
 Invoke-Check "uv --version" {
-  $LocalUv = Join-Path $ProjectRoot ".sidecar-tools\Scripts\uv.exe"
   if (Get-Command uv -ErrorAction SilentlyContinue) {
     uv --version
   } elseif (Test-Path -LiteralPath $LocalUv) {
@@ -45,15 +47,32 @@ Invoke-Check "uv --version" {
   }
 }
 
+Invoke-Check "workspace-managed Python 3.11" {
+  if (-not (Test-Path -LiteralPath $LocalUv)) {
+    Write-Host "local uv is missing: $LocalUv"
+    return
+  }
+  $env:UV_PYTHON_INSTALL_DIR = $LocalPythonInstallDir
+  $env:UV_CACHE_DIR = $LocalUvCacheDir
+  & $LocalUv python find 3.11 --managed-python
+  $ManagedPython = Join-Path $LocalPythonInstallDir "cpython-3.11-windows-x86_64-none\python.exe"
+  if (Test-Path -LiteralPath $ManagedPython) {
+    & $ManagedPython --version
+  } else {
+    Write-Host "managed Python shim not found at $ManagedPython"
+  }
+}
+
 Invoke-Check "OpenAvatarChat Python compatibility" {
-  $LocalUv = Join-Path $ProjectRoot ".sidecar-tools\Scripts\uv.exe"
   if (-not (Test-Path -LiteralPath $OpenAvatarChatDir)) {
     Write-Host "external/OpenAvatarChat is missing."
     return
   }
+  $env:UV_PYTHON_INSTALL_DIR = $LocalPythonInstallDir
+  $env:UV_CACHE_DIR = $LocalUvCacheDir
   if (Test-Path -LiteralPath $LocalUv) {
     Push-Location $OpenAvatarChatDir
-    & $LocalUv python find 3.11
+    & $LocalUv python find 3.11 --managed-python
     & $LocalUv python find 3.12
     Pop-Location
   } elseif (Get-Command uv -ErrorAction SilentlyContinue) {
