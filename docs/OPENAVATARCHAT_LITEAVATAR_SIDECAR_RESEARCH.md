@@ -397,6 +397,65 @@ uv run src/demo.py --config config/chat_with_openai_compatible_bailian_cosyvoice
 - 需要 `DASHSCOPE_API_KEY` 才能走官方 LiteAvatar 快速链路中的百炼 LLM/TTS。
 - 如果 GitHub 直连继续失败，应改用压缩包、镜像或手工下载，而不是卡在 clone 上。
 
+#### 2026-05-15 继续执行记录：OpenAvatarChat 依赖安装
+
+用户确认继续后，本轮只推进 sidecar 依赖安装与 import smoke，不下载模型，不配置或使用真实 `DASHSCOPE_API_KEY`，不启动 OpenAvatarChat 服务，不接入主前端。
+
+执行命令：
+
+```powershell
+cd D:\py\dota\external\OpenAvatarChat
+$env:UV_PYTHON_INSTALL_DIR='D:\py\dota\.sidecar-python'
+$env:UV_CACHE_DIR='D:\py\dota\.sidecar-cache'
+$env:PATH='D:\py\dota\.sidecar-tools\Scripts;' + $env:PATH
+D:\py\dota\.sidecar-tools\Scripts\uv.exe run --python 3.11 install.py --config config/chat_with_openai_compatible_bailian_cosyvoice.yaml
+```
+
+第一次执行曾失败一次，原因是 `install.py` 内部调用裸 `uv pip install ...`，而工作区本地 uv 不在当前 `PATH`。处理方式是只在当前命令进程临时追加：
+
+```powershell
+$env:PATH='D:\py\dota\.sidecar-tools\Scripts;' + $env:PATH
+```
+
+随后重跑成功，官方配置 `config/chat_with_openai_compatible_bailian_cosyvoice.yaml` 识别到 7 个 handler：
+
+- `CosyVoice`
+- `InterruptHandler`
+- `LLMOpenAICompatible`
+- `LiteAvatar`
+- `RtcClient`
+- `SenseVoice`
+- `SileroVad`
+
+关键依赖安装与 smoke 结果：
+
+| 项 | 结果 |
+| --- | --- |
+| `torch` | `2.8.0+cu128` |
+| `torch.cuda.is_available()` | `True` |
+| `onnxruntime` | `1.20.2` |
+| `dashscope` | import ok |
+| `transformers` | `4.44.2` |
+| `funasr` | `1.2.9` |
+| `vocos` | import ok |
+
+当前进展判断：
+
+| 验证项 | 当前结果 | 说明 |
+| --- | --- | --- |
+| OpenAvatarChat 源码 | 已获取 | 通过 codeload zip 解压到 `external/OpenAvatarChat`，该目录不提交 |
+| 支持的 Python | 已具备 | 工作区内 managed Python `3.11.15` |
+| OpenAvatarChat 依赖 | 已安装 | `.venv` 位于 ignored 第三方目录内 |
+| CUDA 依赖 smoke | 通过 | PyTorch CUDA wheel 可识别本机 GPU |
+| 模型权重 | 未下载 | 仍未运行 `scripts/download_models.py` |
+| 百炼 API Key | 未配置 | 未使用真实 `DASHSCOPE_API_KEY` |
+| OpenAvatarChat 服务 | 未启动 | 还未进入 WebUI 或 LiteAvatar demo |
+| 主项目接入 | 未做 | 没有修改 RAG、Route Planner、Vision、Analytics 或主前端 |
+
+更新后的 `scripts/sidecar_preflight.ps1` 增加了 OpenAvatarChat dependency smoke，会复查本地 uv、managed Python 与上述关键依赖 import。它仍然只是预检脚本，不会下载模型或启动服务。
+
+下一步如果继续推进，需要单独确认是否允许下载 LiteAvatar / SenseVoice / CosyVoice 等模型文件，并准备仅存放在本机 `.env` 的 `DASHSCOPE_API_KEY`。在这之前，主项目演示仍应保留当前 React/SVG/CSS mock 数字人作为兜底表现层。
+
 ### Phase 3：灵境前端 feature flag 嵌入
 
 只在 sidecar 稳定后做。

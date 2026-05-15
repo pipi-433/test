@@ -85,6 +85,29 @@ Invoke-Check "OpenAvatarChat Python compatibility" {
   }
 }
 
+Invoke-Check "OpenAvatarChat dependency smoke" {
+  if (-not (Test-Path -LiteralPath $OpenAvatarChatDir)) {
+    Write-Host "external/OpenAvatarChat is missing."
+    return
+  }
+  if (-not (Test-Path -LiteralPath $LocalUv)) {
+    Write-Host "local uv is missing: $LocalUv"
+    return
+  }
+  $env:UV_PYTHON_INSTALL_DIR = $LocalPythonInstallDir
+  $env:UV_CACHE_DIR = $LocalUvCacheDir
+  $env:PATH = "$(Split-Path -Parent $LocalUv);$env:PATH"
+  Push-Location $OpenAvatarChatDir
+  & $LocalUv run --python 3.11 python -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"
+  & $LocalUv run --python 3.11 python -c "import onnxruntime; print('onnxruntime', onnxruntime.__version__)"
+  & $LocalUv run --python 3.11 python -c "import dashscope; print('dashscope import ok')"
+  & $LocalUv run --python 3.11 python -c "import transformers; print('transformers', transformers.__version__)"
+  & $LocalUv run --python 3.11 python -c "import funasr; print('funasr', funasr.__version__ if hasattr(funasr, '__version__') else 'ok')"
+  & $LocalUv run --python 3.11 python -c "import vocos; print('vocos import ok')"
+  Write-Host "sidecar dependency smoke ok"
+  Pop-Location
+}
+
 Invoke-Check "external ignore guard" {
   if (Test-Path -LiteralPath (Join-Path $ExternalDir ".gitignore")) {
     Get-Content -LiteralPath (Join-Path $ExternalDir ".gitignore")
