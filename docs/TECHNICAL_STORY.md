@@ -16,7 +16,7 @@
 
 路线规划不是 LLM 自由生成路径。系统使用经典路线模板作为 seed，再结合 22 个已解析景点候选池、必去/可选/避开约束、时间预算、拥挤度、运营事件和人群偏好做规则评分。
 
-每条路线返回 `recommendation_score`、`score_breakdown`、`decision_trace`、`constraint_summary` 和每站的拥挤/运营解释。必去点不会因为拥挤被静默删除；如果受临时关闭或拥挤影响，会保留提示或触发澄清。
+每条路线返回 `recommendation_score`、`score_breakdown`、`decision_trace`、`constraint_summary`、`route_topology` 和每站的拥挤/运营/拓扑解释。必去点不会因为拥挤被静默删除；如果受临时关闭或拥挤影响，会保留提示或触发澄清。
 
 ### 3. 运营改进闭环
 
@@ -77,13 +77,61 @@
 
 后续 LLM 可以增强意图解析，但不能绕过 Route Planner 直接生成路线。
 
+## 景区导览图拓扑路线规划
+
+路线规划在全量 22 个景点候选池之上，增加了 `data/processed/scenic_graph.json`。它不是外部地图服务，而是基于三类资料人工抽象出的半真实游线拓扑：
+
+- 用户提供的灵山胜境线路导览图。
+- 用户提供的手绘观光车图，用于理解观光车站点、观光车线路和出口假日广场关系。
+- Bing 地图截图，用于人工参考景点相对位置、道路/步道布局、湖面和停车场边界。
+
+拓扑线路包括：
+
+- 线路1 中轴线：从入口、五明桥、菩提大道、九龙灌浴、祥符禅寺一路推进到灵山大佛。
+- 线路2 宝藏东线：连接九龙灌浴/百子戏弥勒一带到五印坛城、灵山梵宫、曼飞龙塔等东侧点位。
+- 线路3 愿心西线：覆盖无尽意斋等西侧静心支线。
+- 出口假日广场线：用于解释从中轴/东线回到出口方向的收束路线。
+- 拈花湾禅意小镇环线：覆盖资料包中的拈花湾 6 个景点，作为独立环线处理。
+
+这个拓扑服务给 Route Planner 做三件事：
+
+1. 顺路解释：说明路线为什么沿某条游线推进，哪里属于跨线或跨区。
+2. 步行估算：给出到下一站的大致分钟数，帮助游客理解节奏。
+3. 轻量评分修正：顺路指数高时小幅加分，回头路风险高时小幅扣分，但不覆盖必去/避开/时间/拥挤等核心约束。
+
+路线顶层返回：
+
+- `route_topology.route_smoothness_score`
+- `route_topology.total_walking_minutes`
+- `route_topology.line_names`
+- `route_topology.backtrack_count`
+- `route_topology.sightseeing_bus_suggestion`
+- `route_topology.source_note`
+
+每站返回：
+
+- `stop.topology_line_name`
+- `stop.walking_minutes_to_next`
+- `stop.transport_hint`
+- `stop.backtrack_risk`
+- `stop.smoothness_reason`
+
+工程边界必须讲清楚：
+
+- 这不是 GPS 导航。
+- 这不是地图导航服务。
+- 没有接入高德或百度地图。
+- 不代表实时定位。
+- 不代表现场客流或硬件采集数据。
+- 它只用于顺路解释、步行估算、回头路风险提示、观光车建议和 Route Planner 的轻量评分修正。
+
 ## Mock 数据边界
 
 当前系统明确处于比赛演示 mock/local 模式：
 
 - 无 API Key 也能运行。
 - LLM、Embedding、VLM、TTS provider 默认 mock。
-- 拥挤度来自 `mock_simulation`，不代表真实客流。
+- 拥挤度来自 `mock_simulation`，不代表现场硬件采集数据。
 - 运营事件来源为 `manual_admin` 或 `mock_simulation`，不代表真实硬件。
 - 不接真实闸机、摄像头、Wi-Fi 探针、GPS、IoT。
 - 不记录真实个人身份。
@@ -118,6 +166,8 @@ python .\scripts\eval_query_capability.py
 python .\scripts\eval_vision.py
 python .\scripts\eval_routes.py
 python .\scripts\eval_crowd_routes.py
+python .\scripts\validate_scenic_graph.py
+python .\scripts\eval_route_topology.py
 python .\scripts\eval_route_share.py
 python .\scripts\eval_analytics.py
 python .\scripts\eval_route_conversation.py

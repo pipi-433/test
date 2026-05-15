@@ -14,6 +14,8 @@ python .\scripts\eval_query_capability.py
 python .\scripts\eval_vision.py
 python .\scripts\eval_routes.py
 python .\scripts\eval_crowd_routes.py
+python .\scripts\validate_scenic_graph.py
+python .\scripts\eval_route_topology.py
 python .\scripts\eval_route_share.py
 python .\scripts\eval_analytics.py
 python .\scripts\eval_route_conversation.py
@@ -174,11 +176,14 @@ D:\py\dota\evals\vision_samples\lingshan_dafo_mock.jpg
 - 路线包含综合评分、score_breakdown、decision_trace。
 - 灵山大佛显示“必去”标签。
 - 每站显示 crowd_level、crowd_score、wait_minutes、crowd_note。
-- 页面明确标注 mock_simulation 拥挤度不是实时客流。
+- 出现“导览图拓扑”模块，展示顺路指数、总步行估算、涉及游线、回头路次数和观光车建议。
+- 时间线每站展示所属游线、下一站步行估算、交通方式、回头路风险和顺路原因。
+- 页面明确标注 mock_simulation 拥挤度不是现场硬件采集数据。
+- 路线拓扑说明写明“导览图人工抽象，不是 GPS 导航”。
 
 讲解重点：
 
-Route Memory Agent 只记偏好和约束，真正路线由受约束 Route Planner 评分生成。必去点遇到拥挤不会被静默删除，只会错峰、保留提醒或进入澄清。
+Route Memory Agent 只记偏好和约束，真正路线由受约束 Route Planner 评分生成。路线顺序会读取基于导览图人工抽象的半真实游线拓扑，用来解释为什么沿中轴线、东线或拈花湾环线推进；它不是 GPS 导航。必去点遇到拥挤不会被静默删除，只会错峰、保留提醒或进入澄清。
 
 ## 4:40-5:30 Kiosk 到手机接力
 
@@ -191,6 +196,7 @@ Route Memory Agent 只记偏好和约束，真正路线由受约束 Route Planne
 - Kiosk 大屏生成路线摘要。
 - 显示二维码、短码、手机打开链接。
 - 文案说明分享码 30 分钟后失效。
+- 这条路线仍是同一条受约束路线：包含必去约束、拥挤策略、运营事件和导览图拓扑说明。
 
 复制或打开页面中的 share_url，形如：
 
@@ -202,6 +208,9 @@ http://127.0.0.1:5174/route/{route_id}/share?code={share_code}
 
 - 手机分享页显示同一条路线。
 - 显示站点时间线、评分、拥挤说明、逐站讲解问题。
+- 分享页也展示拓扑摘要：顺路指数、总步行估算、涉及游线和观光车建议。
+- 每站继续展示所属游线、到下一站的步行估算、交通方式和回头路风险。
+- 分享页保留“导览图人工抽象，不是 GPS 导航”的边界说明。
 
 兜底：
 

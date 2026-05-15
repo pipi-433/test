@@ -95,6 +95,9 @@ class RouteConversationRequest(BaseModel):
     session_id: str | None = None
     current_route_id: str | None = None
     selected_attraction_id: str | None = None
+    must_visit_attraction_ids: list[str] | None = None
+    optional_attraction_ids: list[str] | None = None
+    avoid_attraction_ids: list[str] | None = None
     channel: str = "mobile"
 
 
@@ -197,6 +200,24 @@ def _preview_route_constraints(memory: dict[str, Any], intent: dict[str, Any]) -
         avoid_attraction_ids=avoid,
         start_attraction_id=(memory.get("preferences") or {}).get("start_attraction_id"),
     )
+
+
+def _merge_route_constraint_payload(intent: dict[str, Any], payload: RouteConversationRequest) -> dict[str, Any]:
+    return {
+        **intent,
+        "must_visit_attraction_ids": _merge_unique(
+            list(intent.get("must_visit_attraction_ids") or []),
+            payload.must_visit_attraction_ids or [],
+        ),
+        "optional_attraction_ids": _merge_unique(
+            list(intent.get("optional_attraction_ids") or []),
+            payload.optional_attraction_ids or [],
+        ),
+        "avoid_attraction_ids": _merge_unique(
+            list(intent.get("avoid_attraction_ids") or []),
+            payload.avoid_attraction_ids or [],
+        ),
+    }
 
 
 def _route_intent_from_understanding(understanding: dict[str, Any]) -> dict[str, Any]:
@@ -596,8 +617,14 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
         current_route_id=payload.current_route_id or memory.get("current_route_id"),
         memory=memory,
     )
-    if understanding.get("domain") == "out_of_scope" or (
-        not understanding.get("should_route") and intent_probe.get("intent") != "explanation_style"
+    intent_probe = _merge_route_constraint_payload(intent_probe, payload)
+    has_explicit_route_constraints = bool(
+        payload.must_visit_attraction_ids or payload.optional_attraction_ids or payload.avoid_attraction_ids
+    )
+    if (understanding.get("domain") == "out_of_scope" and not has_explicit_route_constraints) or (
+        not understanding.get("should_route")
+        and intent_probe.get("intent") != "explanation_style"
+        and not has_explicit_route_constraints
     ):
         reply = build_gate_answer(understanding)
         gate_intent = _route_intent_from_understanding(understanding)
@@ -629,6 +656,7 @@ def routes_conversation(payload: RouteConversationRequest) -> dict[str, object]:
         current_route_id=payload.current_route_id or memory.get("current_route_id"),
         memory=memory,
     )
+    intent = _merge_route_constraint_payload(intent, payload)
     record_interaction_event(
         event_type="route_intent_parse",
         channel=payload.channel,

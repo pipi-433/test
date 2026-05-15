@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-05-13T00:07:20+00:00",
+  "generated_at": "2026-05-15T07:27:28+00:00",
   "mode": "mock",
-  "total": 9,
-  "passed": 9,
+  "total": 10,
+  "passed": 10,
   "failed": 0,
   "accuracy": 1.0,
   "results": [
@@ -47,15 +47,15 @@
       "type": "replan",
       "passed": true,
       "operation": "shorten",
-      "route_id": "route-930837018b",
+      "route_id": "route-ad456f72e9",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",
         "lingshan-ls-009",
-        "nianhuawan-nh-005",
-        "lingshan-ls-006"
+        "lingshan-ls-006",
+        "nianhuawan-nh-003"
       ],
-      "score": 81,
+      "score": 77,
       "operation_ok": true,
       "must_ok": true,
       "score_ok": true,
@@ -70,7 +70,7 @@
       "type": "replan",
       "passed": true,
       "operation": "avoid_crowd",
-      "route_id": "route-6dea61b6c6",
+      "route_id": "route-1e8a93c947",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",
@@ -78,7 +78,7 @@
         "lingshan-ls-006",
         "lingshan-ls-013"
       ],
-      "score": 81,
+      "score": 77,
       "operation_ok": true,
       "must_ok": true,
       "score_ok": true,
@@ -93,7 +93,7 @@
       "type": "replan",
       "passed": true,
       "operation": "none",
-      "route_id": "route-2632488cdd",
+      "route_id": "route-440ed16266",
       "stop_ids": [
         "lingshan-ls-011",
         "lingshan-ls-001",
@@ -101,7 +101,7 @@
         "lingshan-ls-006",
         "lingshan-ls-013"
       ],
-      "score": 80,
+      "score": 76,
       "operation_ok": true,
       "must_ok": true,
       "score_ok": true,
@@ -132,6 +132,23 @@
         "九龙灌浴",
         "灵山梵宫",
         "五印坛城"
+      ]
+    },
+    {
+      "id": "explicit-ui-must-visit",
+      "type": "conversation_payload_constraints",
+      "passed": true,
+      "route_id": "route-5a9086a694",
+      "must_visit_attraction_ids": [
+        "nianhuawan-nh-002"
+      ],
+      "stop_ids": [
+        "lingshan-ls-011",
+        "lingshan-ls-001",
+        "lingshan-ls-009",
+        "lingshan-ls-013",
+        "nianhuawan-nh-002",
+        "lingshan-ls-006"
       ]
     }
   ]

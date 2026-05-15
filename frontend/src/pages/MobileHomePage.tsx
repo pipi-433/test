@@ -441,6 +441,9 @@ export function MobileHomePage() {
           sessionId: routeSessionId || undefined,
           currentRouteId: routeResult?.id,
           selectedAttractionId: routeContextAttractionId,
+          mustVisitAttractionIds: mustVisitIds,
+          optionalAttractionIds: optionalAttractionIds,
+          avoidAttractionIds: avoidAttractionIds,
         });
         setRouteConversation(result);
         setRouteSessionId(result.session_id);
@@ -608,6 +611,9 @@ export function MobileHomePage() {
         sessionId: routeSessionId || undefined,
         currentRouteId: routeResult?.id,
         selectedAttractionId: matchedAttraction?.id || selectedId || undefined,
+        mustVisitAttractionIds: mustVisitIds,
+        optionalAttractionIds: optionalAttractionIds,
+        avoidAttractionIds: avoidAttractionIds,
       });
       syncRouteStateFromConversation(result);
       if (result.route) {

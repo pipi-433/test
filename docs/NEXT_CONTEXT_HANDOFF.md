@@ -31,6 +31,7 @@
 - 运营事件：后台可配置 crowd/closed/show/recommendation，路线规划会读取并解释。
 - 路线分享：Kiosk 生成二维码/短码，手机分享页用短期 code 复取同一路线。
 - 景区拓扑：`data/processed/scenic_graph.json` 基于导览图、观光车图和 Bing 地图抽象，22 个景点全部映射。
+- 路线拓扑前端展示：Task UI-06 已完成，提交 `5afc17a style: show scenic route topology`；游客端路线 tab 和分享页展示顺路指数、总步行估算、涉及游线、回头路风险、观光车建议和非 GPS 导航说明。
 - 后台：analytics overview、运营事件、知识缺口、评测看板。
 - 游客 UI：`/` 已改为五 tab，推荐 tab 和底部 PNG 导航基本通过；字体分层已落地。
 - 数字人：当前为 React/SVG/CSS mock 数字人，接浏览器 SpeechSynthesis，可选 SpeechRecognition 降级。
@@ -77,7 +78,7 @@
   - 拈花湾禅意小镇环线
 - 22 个 `attraction_id` 全部映射到 `attraction_node_map`。
 - 路线返回新增 `route_topology` 和每站拓扑字段。
-- 明确边界：这是导览图人工抽象拓扑，不是真实 GPS 导航，不代表真实地图导航或实测步行时间。
+- 明确边界：这是导览图人工抽象拓扑，不是 GPS 导航，不是地图导航服务，也不代表实测步行时间。
 
 ## 数字人策略
 
@@ -93,7 +94,7 @@
 - 不修改 `示范景区公开资料包/`。
 - mock 模式必须无 API Key 可运行。
 - 前端只调用后端 API，不直连模型厂商。
-- 不声称真实客流、真实 GPS、真实地图导航、真实硬件接入。
+- 不声称现场客流数据、GPS 导航、地图导航服务或硬件接入。
 - 行为数据是公开样例/行业画像，不能声称为灵山或拈花湾真实运营数据。
 - Route Planner 是受约束规则评分器，LLM 只能用于结构化意图解析和表达润色，不能自由决定路线点位。
 
@@ -101,13 +102,10 @@
 
 优先执行：
 
-1. Task UI-06：路线拓扑能力前端展示。
-   - 游客端路线 tab 展示顺路指数、总步行估算、涉及游线、非 GPS 导航说明。
-   - 每站展示下一段步行分钟、游线标签、回头路风险、观光车建议。
-   - 分享页同步展示拓扑摘要。
-2. Task DOC/DEMO：把拓扑能力加入 `docs/DEMO_SCRIPT.md` 和 `docs/TECHNICAL_STORY.md`。
+1. Task DOC-02 完成后做 Task QA-UI。
+2. Task QA-UI：完整走游客端 `/`、Kiosk、Admin、分享页演示流程，记录演示风险。
 3. Task 07.6：OpenAvatarChat + LiteAvatar sidecar 预研。
-4. Task UI-数字人：sidecar 成功后再替换 mock 数字人表现层。
+4. 必要时再做局部 UI 细修。
 
 ## 启动命令
 
@@ -171,4 +169,4 @@ npm --prefix .\frontend run build
 1. 先读 `AGENTS.md`、`SOFTBEI_A5_PLAN.md`、`SOFTBEI_A5_PRD.md`、`README.md`、`docs/NEXT_CONTEXT_HANDOFF.md`。
 2. 运行 `git status --short`。
 3. 如果有未提交 UI 改动，先确认来源，不要覆盖。
-4. 优先执行 Task UI-06：路线拓扑能力前端展示。
+4. 优先执行 Task QA-UI：真实走完 7 分钟演示流程，并记录风险和局部细修项。

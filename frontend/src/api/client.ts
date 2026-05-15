@@ -861,11 +861,17 @@ export async function sendRouteConversation({
   sessionId,
   currentRouteId,
   selectedAttractionId,
+  mustVisitAttractionIds,
+  optionalAttractionIds,
+  avoidAttractionIds,
 }: {
   message: string;
   sessionId?: string;
   currentRouteId?: string;
   selectedAttractionId?: string;
+  mustVisitAttractionIds?: string[];
+  optionalAttractionIds?: string[];
+  avoidAttractionIds?: string[];
 }): Promise<RouteConversationResponse> {
   return requestJson<RouteConversationResponse>("/api/routes/conversation", {
     body: JSON.stringify({
@@ -873,6 +879,9 @@ export async function sendRouteConversation({
       session_id: sessionId || null,
       current_route_id: currentRouteId || null,
       selected_attraction_id: selectedAttractionId || null,
+      must_visit_attraction_ids: mustVisitAttractionIds || [],
+      optional_attraction_ids: optionalAttractionIds || [],
+      avoid_attraction_ids: avoidAttractionIds || [],
       channel: "mobile",
     }),
     method: "POST",

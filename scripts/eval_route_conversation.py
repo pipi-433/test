@@ -126,11 +126,41 @@ def check_clarification_case(case: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def check_explicit_constraint_case() -> dict[str, Any]:
+    must_id = "nianhuawan-nh-002"
+    response = routes_conversation(
+        RouteConversationRequest(
+            message="按我在页面选择的景点生成",
+            session_id="mock-eval-route-ui-constraints",
+            selected_attraction_id="lingshan-ls-011",
+            must_visit_attraction_ids=[must_id],
+        )
+    )
+    route = response.get("route") or {}
+    stop_ids = [stop.get("attraction_id") for stop in route.get("stops", [])]
+    must_ids = (response.get("memory") or {}).get("constraints", {}).get("must_visit_attraction_ids", [])
+    stop_by_id = {stop.get("attraction_id"): stop for stop in route.get("stops", [])}
+    passed = (
+        must_id in must_ids
+        and must_id in stop_ids
+        and (stop_by_id.get(must_id) or {}).get("constraint_type") == "must_visit"
+    )
+    return {
+        "id": "explicit-ui-must-visit",
+        "type": "conversation_payload_constraints",
+        "passed": passed,
+        "route_id": route.get("id"),
+        "must_visit_attraction_ids": must_ids,
+        "stop_ids": stop_ids,
+    }
+
+
 def main() -> int:
     results: list[dict[str, Any]] = []
     results.extend(check_intent_case(case) for case in load_jsonl(INTENT_PATH))
     results.extend(check_replan_case(case, index) for index, case in enumerate(load_jsonl(REPLAN_PATH), start=1))
     results.extend(check_clarification_case(case) for case in load_jsonl(CLARIFICATION_PATH))
+    results.append(check_explicit_constraint_case())
     passed = sum(1 for result in results if result["passed"])
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
