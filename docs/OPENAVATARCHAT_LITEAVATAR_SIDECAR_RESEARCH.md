@@ -180,6 +180,62 @@ flowchart LR
 
 ### Phase 2：最小可启动验证
 
+#### 2026-05-15 执行记录
+
+本次只做 sidecar 最小可启动验证，不接入主前端，不下载大模型，不使用真实 `DASHSCOPE_API_KEY`，不修改 RAG、Route Planner、Vision、Analytics 业务逻辑。
+
+执行环境结果：
+
+| 项 | 结果 | 判断 |
+| --- | --- | --- |
+| Git | `git version 2.53.0.windows.2` | 可用 |
+| git-lfs | `git-lfs/3.7.1` | 可用 |
+| Docker | `Docker version 28.5.1` | 可用 |
+| Docker Compose | `Docker Compose version v2.40.2-desktop.1` | 可用 |
+| GPU | `NVIDIA GeForce RTX 3060 Laptop GPU, 6144 MiB` | 可做轻量预研，显存不富裕 |
+| NVIDIA driver / CUDA runtime | `591.44` / `CUDA Version: 13.1` from `nvidia-smi` | 驱动侧满足 OpenAvatarChat 文档的 CUDA `>= 12.8` 要求 |
+| Python | `Python 3.12.0` | 与 LiteAvatar 推荐 Python 3.10 不完全匹配，后续建议单独 Python 3.10/3.11 环境 |
+| Node / npm | `v24.14.0` / `11.13.0` | 当前主前端构建可用 |
+| uv | 未安装，`uv` 命令不可识别 | 阻塞官方 `uv run ...` 安装/启动链路；未做全局安装 |
+
+sidecar 工作区准备：
+
+- 已创建 `external/`。
+- 已新增 `external/.gitignore`，内容只允许提交该忽略文件本身，第三方源码、模型目录、`.env` 和构建产物默认不会进入主仓库。
+- 已新增轻量检查脚本 `scripts/sidecar_preflight.ps1`，用于复跑环境检查；带 `-TryClone` 时只做一次 OpenAvatarChat clone 尝试，不安装依赖、不下载模型。
+
+源码获取尝试：
+
+```powershell
+git clone --depth 1 https://github.com/HumanAIGC-Engineering/OpenAvatarChat.git external\OpenAvatarChat
+```
+
+结果：失败。
+
+具体原因：
+
+```text
+fatal: unable to access 'https://github.com/HumanAIGC-Engineering/OpenAvatarChat.git/': Failed to connect to github.com port 443 after 21074 ms: Could not connect to server
+```
+
+当前可启动性判断：
+
+| 验证项 | 当前结果 | 原因 |
+| --- | --- | --- |
+| 是否能获取 OpenAvatarChat 源码 | 否 | GitHub 直连 443 连接失败 |
+| 是否能安装 OpenAvatarChat 依赖 | 未执行 | 源码未获取，且 `uv` 未安装 |
+| 是否能启动 OpenAvatarChat | 否 | 缺源码、缺 `uv`，且未下载依赖/模型 |
+| 是否能看到 WebUI | 否 | 服务未启动 |
+| 是否能进入 LiteAvatar 模式 | 否 | 官方 LiteAvatar 快速链路需要源码、`uv`、依赖/模型，并通常需要 `DASHSCOPE_API_KEY` |
+| 当前主项目 fallback | 保留 | 未修改主前端和业务逻辑，当前 React/SVG/CSS mock 数字人仍是默认兜底 |
+
+下一步需要的授权或依赖：
+
+1. 安装 `uv`。如果需要安装到用户或系统路径，需要用户明确授权；当前未做全局安装。
+2. 解决 GitHub 源码获取问题，例如允许使用镜像、压缩包或手工下载到 `D:\py\dota\external\OpenAvatarChat`。
+3. 如要真正进入 LiteAvatar 官方 demo，需要确认是否允许下载依赖和模型；当前未下载任何大模型。
+4. 如要跑百炼 LLM/TTS 链路，需要用户明确提供 `DASHSCOPE_API_KEY`，且只能放在本机 `.env`，不得提交。
+
 建议新建不提交的大体积目录或明确 gitignore：
 
 - `external/OpenAvatarChat/`
