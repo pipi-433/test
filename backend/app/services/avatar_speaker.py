@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from time import perf_counter
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from fastapi import status
@@ -14,6 +15,7 @@ from app.core.errors import ApiError
 MAX_SPEAK_TEXT_CHARS = 300
 ALLOWED_EMOTIONS = {"welcome", "thinking", "speaking", "comforting", "error", "happy", "neutral"}
 ALLOWED_SOURCES = {"qa", "route", "vision", "clarification", "feedback", "kiosk", "share", "system"}
+ALLOWED_SIDECAR_ADAPTERS = {"readiness", "http_json"}
 
 
 def _check_sidecar_ready(base_url: str, timeout_seconds: float) -> tuple[bool, str | None]:
@@ -32,6 +34,78 @@ def _check_sidecar_ready(base_url: str, timeout_seconds: float) -> tuple[bool, s
         return False, "sidecar_readiness_timeout"
     except OSError as exc:
         return False, f"sidecar_readiness_error: {exc}"
+
+
+def _public_base_url(base_url: str) -> str:
+    parsed = urlparse(base_url)
+    if not parsed.scheme or not parsed.netloc:
+        return base_url.rstrip("/")
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _sidecar_speak_url(base_url: str, speak_path: str) -> str:
+    if speak_path.startswith("http://") or speak_path.startswith("https://"):
+        return speak_path
+    if not speak_path:
+        raise ValueError("AVATAR_SIDECAR_SPEAK_PATH is empty")
+    return urljoin(base_url.rstrip("/") + "/", speak_path.lstrip("/"))
+
+
+def _post_sidecar_text(
+    *,
+    base_url: str,
+    speak_path: str,
+    timeout_seconds: float,
+    text: str,
+    emotion: str,
+    source: str,
+    interrupt: bool,
+) -> tuple[bool, str | None, dict[str, object]]:
+    try:
+        speak_url = _sidecar_speak_url(base_url, speak_path)
+    except ValueError as exc:
+        return False, str(exc), {}
+
+    payload = {
+        "text": text,
+        "emotion": emotion,
+        "source": source,
+        "interrupt": interrupt,
+        "policy": "trusted_backend_text_only",
+    }
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = Request(
+        speak_url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            raw = response.read()
+            parsed: dict[str, object] = {}
+            if raw:
+                try:
+                    loaded = json.loads(raw.decode("utf-8"))
+                    if isinstance(loaded, dict):
+                        parsed = loaded
+                except json.JSONDecodeError:
+                    parsed = {"raw_response": raw.decode("utf-8", errors="replace")[:200]}
+            accepted = parsed.get("accepted")
+            if accepted is False:
+                reason = str(parsed.get("message") or parsed.get("error") or "sidecar_text_rejected")
+                return False, reason, parsed
+            if 200 <= response.status < 300:
+                return True, None, parsed
+            return False, f"sidecar_speak_status_{response.status}", parsed
+    except HTTPError as exc:
+        return False, f"sidecar_speak_http_{exc.code}", {}
+    except URLError as exc:
+        return False, f"sidecar_speak_unreachable: {exc.reason}", {}
+    except TimeoutError:
+        return False, "sidecar_speak_timeout", {}
+    except OSError as exc:
+        return False, f"sidecar_speak_error: {exc}", {}
 
 
 def enqueue_avatar_speech(
@@ -77,21 +151,51 @@ def enqueue_avatar_speech(
 
     settings = get_settings()
     requested_mode = (settings.avatar_speaker_mode or "mock").strip().lower()
+    adapter = (settings.avatar_sidecar_adapter or "readiness").strip().lower()
     mode = "mock"
     fallback_reason = None
+    adapter_metadata: dict[str, object] = {}
     started_at = perf_counter()
 
     if requested_mode == "sidecar":
         base_url = settings.avatar_sidecar_base_url.strip()
         if not base_url:
             fallback_reason = "AVATAR_SIDECAR_BASE_URL is empty; using mock speaker queue."
+        elif adapter not in ALLOWED_SIDECAR_ADAPTERS:
+            fallback_reason = (
+                f"Unsupported AVATAR_SIDECAR_ADAPTER '{adapter}'; "
+                f"supported values: {', '.join(sorted(ALLOWED_SIDECAR_ADAPTERS))}."
+            )
         else:
             ready, reason = _check_sidecar_ready(base_url, settings.avatar_speaker_timeout_seconds)
             if ready:
-                # OpenAvatarChat 0.6.x exposes health/WebUI/WebRTC flows, but this project has
-                # not yet installed a stable trusted-text injection endpoint. Keep the API
-                # accepted and fall back until the adapter is explicitly implemented.
-                fallback_reason = "sidecar is ready, but trusted text injection adapter is not implemented."
+                if adapter == "http_json":
+                    ok, inject_reason, response_metadata = _post_sidecar_text(
+                        base_url=base_url,
+                        speak_path=settings.avatar_sidecar_speak_path.strip(),
+                        timeout_seconds=settings.avatar_speaker_timeout_seconds,
+                        text=normalized_text,
+                        emotion=emotion,
+                        source=source,
+                        interrupt=interrupt,
+                    )
+                    adapter_metadata = {
+                        "adapter": "http_json",
+                        "sidecar_url": _public_base_url(base_url),
+                        "sidecar_response": response_metadata,
+                    }
+                    if ok:
+                        mode = "sidecar"
+                    else:
+                        fallback_reason = inject_reason or "sidecar_text_injection_failed"
+                else:
+                    # OpenAvatarChat 0.6.x exposes health/WebUI/WebRTC flows. Its WebUI
+                    # SendHumanText message is user input for the chat engine, not a trusted
+                    # "speak this backend answer" endpoint; mapping to it would re-enter LLM.
+                    fallback_reason = (
+                        "sidecar is ready, but no trusted text speaker bridge is configured; "
+                        "using mock speaker queue."
+                    )
             else:
                 fallback_reason = reason or "sidecar_not_ready"
 
@@ -109,5 +213,6 @@ def enqueue_avatar_speech(
             "text_chars": len(normalized_text),
             "latency_ms": latency_ms,
             "policy": "trusted_backend_text_only",
+            **adapter_metadata,
         },
     }

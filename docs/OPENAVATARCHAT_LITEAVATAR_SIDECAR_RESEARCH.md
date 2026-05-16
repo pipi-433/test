@@ -537,7 +537,7 @@ $env:UV_CACHE_DIR='D:\py\dota\.sidecar-cache'
 $env:PYTHONUTF8='1'
 $env:PYTHONIOENCODING='utf-8'
 $env:PATH='D:\py\dota\external\OpenAvatarChat\.runtime-dll;D:\py\dota\.sidecar-tools\Scripts;' + $env:PATH
-$env:DASHSCOPE_API_KEY='<local test key>'
+$env:DASHSCOPE_API_KEY=<only set in the current local shell; value omitted>
 ```
 
 启动命令：
@@ -629,6 +629,46 @@ http://127.0.0.1:8282/ui/index.html
 - 因为当前是 HTTP，本地浏览器访问必须使用 `127.0.0.1` 或 `localhost`，非本机访问仍需要证书。
 - WebUI/sidecar 仍只作为表现层预研，不接管 `灵境导游` 主业务。
 
+#### 2026-05-15 继续执行记录：Task 07.6C 可信文本注入 adapter spike
+
+本轮目标是验证“灵境后端可信短文本 -> OpenAvatarChat/LiteAvatar sidecar 播报”的最小 adapter，不让 sidecar 接管 RAG、Route Planner、Vision 或 Analytics。
+
+协议调查结论：
+
+| 调查点 | 结论 |
+| --- | --- |
+| WebUI 初始化 | 前端调用 `/openavatarchat/initconfig`，当前 LiteAvatar probe 默认 `chat_mode` 为 `webrtc` |
+| 会话建立 | WebUI 调用 `/webrtc/offer` 建立 WebRTC，会创建 `RTCDataChannel('text')` |
+| 文本发送 | WebUI `sendText()` 发送 `SendHumanText` JSON |
+| 后端接收 | `RtcStream.set_channel()` 收到 `SendHumanText` 后写入 `EngineChannelType.TEXT` |
+| 语义类型 | 该文本被映射为 `ChatDataType.HUMAN_TEXT` |
+| 风险 | 在当前 `local_sidecar_probe.yaml` 中，`HUMAN_TEXT` 后续会进入 LLM/TTS/Avatar 链路，不是“直接播报后端文本” |
+| 稳定 HTTP 注入点 | 当前未发现官方 `HTTP POST text -> avatar speak` endpoint |
+
+因此，本轮没有把 `/api/avatar/speak` 映射到 WebUI DataChannel 的 `SendHumanText`。那会把灵境后端已经生成的可信回答重新作为用户输入交给 OpenAvatarChat LLM，违反“sidecar 只做表现层”的边界。
+
+本轮主项目新增的安全 adapter 行为：
+
+- `AVATAR_SIDECAR_ADAPTER=readiness`：默认值。sidecar ready 时仍降级 mock，并明确说明未配置可信 speaker bridge。
+- `AVATAR_SIDECAR_ADAPTER=http_json`：仅调用 `AVATAR_SIDECAR_SPEAK_PATH` 指向的本地 bridge HTTP JSON 端点。该 bridge 必须由后续单独实现，并保证只做 TTS/口型/表情，不调用 LLM 生成答案。
+- bridge 注入成功时，`POST /api/avatar/speak` 可返回 `mode="sidecar"`、`accepted=true`，metadata 包含 adapter、sidecar URL、latency。
+- bridge 不存在、sidecar 不在线、注入失败或超时时，接口不返回 500，仍降级 mock。
+
+新增脚本：
+
+```powershell
+python .\scripts\avatar_sidecar_protocol_probe.py --base-url http://127.0.0.1:8282
+python .\scripts\avatar_sidecar_protocol_probe.py --print-send-human-text-sample
+```
+
+该脚本只读取 sidecar 健康和 initconfig，或打印 WebUI `SendHumanText` payload 形状；不会发送文本，不会下载模型，也不会触碰模型厂商 API。
+
+当前能否真实触发 LiteAvatar/OpenAvatarChat 播报：
+
+- 通过当前主项目 `/api/avatar/speak`：不能。因为没有可信 speaker bridge endpoint。
+- 通过 WebUI 手动输入：理论上会走 OpenAvatarChat 全链路，但这是“用户对话输入”，不是可信文本注入，不应作为灵境导游主流程。
+- 当前比赛主线仍保留 React/SVG/CSS mock 数字人和浏览器 TTS fallback。
+
 ### Phase 3：灵境前端 feature flag 嵌入
 
 只在 sidecar 稳定后做。
@@ -681,3 +721,68 @@ VITE_AVATAR_SIDECAR_URL=
 5. 成功后再做前端 feature flag iframe 嵌入。
 
 比赛主线仍应使用当前 mock 数字人兜底。它已经能跟 RAG、识景、路线、反馈状态机稳定联动，这比一个不稳定的真实 sidecar 更重要。
+
+## 2026-05-16 Task 07.6D2: trusted AVATAR_TEXT lip-sync endpoint spike
+
+Current status:
+
+- An ignored spike patch was added under `external/OpenAvatarChat/src/handlers/client/rtc_client/client_handler_rtc.py`.
+- The patch exposes `GET /lingjing/avatar/sessions` and `POST /lingjing/avatar/speak`.
+- The speak endpoint submits backend trusted text as `ChatDataType.AVATAR_TEXT`.
+- It deliberately avoids WebUI `SendHumanText`, `ChatDataType.HUMAN_TEXT`, and the LLM branch.
+- The patch passed `python -m py_compile`.
+
+Verification blocker:
+
+- The patched OpenAvatarChat service could not be restarted to a listening state.
+- Startup reproduced the known LiteAvatar Windows multiprocessing error:
+
+```text
+PermissionError: [WinError 5] 拒绝访问。
+```
+
+Therefore, this run did not verify real LiteAvatar video speech + lip-sync. The current proven state remains: Lingjing backend mock mode and `http_json` adapter fallback are stable; the D2 LiteAvatar `AVATAR_TEXT` endpoint exists only as an ignored sidecar spike until OpenAvatarChat can start reliably. See `docs/AVATAR_LITEAVATAR_LIPSYNC_SPIKE_RESULT.md` for the detailed chain and commands.
+
+## 2026-05-16 Task 07.6D3: LiteAvatar worker startup unblocked
+
+D3 root cause: the previous `PermissionError: [WinError 5]` was a secondary multiprocessing symptom. The parent OpenAvatarChat process first exited because `LLMOpenAICompatible` required an API key in the official dialogue config. The LiteAvatar child process then failed while duplicating the parent pipe handle during Windows spawn.
+
+Ignored sidecar workaround:
+
+- Added `external/OpenAvatarChat/config/lingjing_trusted_liteavatar_edge_tts.yaml`.
+- Loaded only `RtcClient`, `InterruptHandler`, `Edge_TTS`, and `LiteAvatar`.
+- Did not load OpenAvatarChat LLM/ASR/VAD for trusted speak verification.
+- Installed `edge-tts` only into ignored `external/OpenAvatarChat/.venv`, with cache under `external/.pip-cache`.
+- Kept real API keys out of tracked files.
+
+Verified:
+
+- OpenAvatarChat starts with `/liveness`, `/readiness`, and `/openavatarchat/initconfig` returning 200.
+- LiteAvatar worker reaches `Avatar process is ready`.
+- Local `aiortc` WebRTC session can become active in `/lingjing/avatar/sessions`.
+- Main backend `/api/avatar/speak` in sidecar mode returns `mode=sidecar`, `accepted=true`.
+- The WebRTC receiver observed remote audio/video frames after trusted text injection.
+- Logs show `AVATAR_TEXT -> AVATAR_AUDIO -> AVATAR_VIDEO`; no `HUMAN_TEXT` or LLM path for the trusted speak request.
+
+Remaining risk: after closing a WebRTC test client, the sidecar sometimes becomes slow or times out and may need restart. This is still an ignored sidecar spike, not a main product dependency.
+
+## 2026-05-16 Task 07.6D4: WebUI acceptance boundary and demo SOP
+
+D4 added a tracked healthcheck helper:
+
+```text
+scripts/avatar_sidecar_healthcheck.ps1
+```
+
+It checks sidecar liveness, readiness, initconfig, trusted sessions, optional backend health, and the listening PID. This is intended for demo preparation and does not contain API keys or third-party source.
+
+D4 also attempted WebUI visual acceptance. The default browser was opened to `http://127.0.0.1:8282/ui/index.html`, but no active RTC session is created until a human clicks/connects in the WebUI. The available browser automation in this execution environment could not reliably return screenshot/DOM evidence for the OAC WebUI. Therefore, this run does not claim human visual confirmation.
+
+Programmatic WebRTC verification still passed through the same `/webrtc/offer` path:
+
+- active session observed
+- `/api/avatar/speak` returned `mode=sidecar`
+- remote audio/video frames were received
+- logs showed `AVATAR_TEXT -> AVATAR_AUDIO -> AVATAR_VIDEO`
+
+Manual observation checklist and restart SOP are recorded in `docs/AVATAR_LITEAVATAR_WEBUI_ACCEPTANCE.md`.

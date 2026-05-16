@@ -18,6 +18,10 @@ class Settings(BaseModel):
     tts_provider: str = "mock"
     avatar_speaker_mode: str = "mock"
     avatar_sidecar_base_url: str = ""
+    avatar_sidecar_adapter: str = "readiness"
+    avatar_sidecar_speak_path: str = ""
+    avatar_sidecar_clip_path: str = ""
+    avatar_clip_base_dir: str = ""
     avatar_speaker_timeout_seconds: float = 3
     database_url: str = "sqlite:///./data/app.db"
 
@@ -58,6 +62,10 @@ def get_settings() -> Settings:
         tts_provider=os.getenv("TTS_PROVIDER", "mock"),
         avatar_speaker_mode=os.getenv("AVATAR_SPEAKER_MODE", "mock"),
         avatar_sidecar_base_url=os.getenv("AVATAR_SIDECAR_BASE_URL", ""),
+        avatar_sidecar_adapter=os.getenv("AVATAR_SIDECAR_ADAPTER", "readiness"),
+        avatar_sidecar_speak_path=os.getenv("AVATAR_SIDECAR_SPEAK_PATH", ""),
+        avatar_sidecar_clip_path=os.getenv("AVATAR_SIDECAR_CLIP_PATH", ""),
+        avatar_clip_base_dir=os.getenv("AVATAR_CLIP_BASE_DIR", ""),
         avatar_speaker_timeout_seconds=float(os.getenv("AVATAR_SPEAKER_TIMEOUT_SECONDS", "3")),
         database_url=os.getenv("DATABASE_URL", "sqlite:///./data/app.db"),
     )

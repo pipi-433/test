@@ -123,14 +123,19 @@ Response:
 ```env
 AVATAR_SPEAKER_MODE=mock
 AVATAR_SIDECAR_BASE_URL=
+AVATAR_SIDECAR_ADAPTER=readiness
+AVATAR_SIDECAR_SPEAK_PATH=
 AVATAR_SPEAKER_TIMEOUT_SECONDS=3
 ```
 
 模式说明：
 
 - `AVATAR_SPEAKER_MODE=mock`：默认模式，直接返回 `accepted=true`，不依赖 OpenAvatarChat 或任何模型厂商。
-- `AVATAR_SPEAKER_MODE=sidecar`：未来适配模式。当前实现只检查 sidecar readiness；因为尚未实现可信文本注入 adapter，仍会降级为 mock。
+- `AVATAR_SPEAKER_MODE=sidecar`：sidecar 适配模式。当前不会使用 OpenAvatarChat 的 `SendHumanText` 作为可信播报入口；只有配置了显式本地 bridge 时才会尝试注入。
 - `AVATAR_SIDECAR_BASE_URL`：未来指向 `http://127.0.0.1:8282`。
+- `AVATAR_SIDECAR_ADAPTER=readiness`：默认只检查 `/readiness` 并降级 mock，适合预研和演示兜底。
+- `AVATAR_SIDECAR_ADAPTER=http_json`：调用 `AVATAR_SIDECAR_SPEAK_PATH` 指向的本地 bridge HTTP JSON 端点。该 bridge 必须只播报灵境后端文本，不调用 LLM 生成答案。
+- `AVATAR_SIDECAR_SPEAK_PATH`：bridge 的相对路径或完整 URL，例如 `/lingjing/avatar/speak`；当前 OpenAvatarChat 0.6.x 官方服务没有这个端点。
 - `AVATAR_SPEAKER_TIMEOUT_SECONDS`：sidecar readiness 检查超时，默认 3 秒。
 
 ## 数据流
@@ -155,7 +160,8 @@ flowchart LR
 1. mock 模式：直接接受播报请求，游客端继续使用当前 React/SVG/CSS 数字人和浏览器 TTS。
 2. sidecar base URL 为空：返回 `accepted=true`，`fallback_reason` 说明未配置 sidecar。
 3. sidecar readiness 超时或失败：返回 `accepted=true`，降级 mock，不影响 QA、路线、识景和分享流程。
-4. sidecar ready 但文本注入 adapter 未实现：返回 `accepted=true`，降级 mock，避免假装已经进入 OpenAvatarChat 播放队列。
+4. sidecar ready 但未配置本地 bridge：返回 `accepted=true`，降级 mock，避免假装已经进入 OpenAvatarChat 播放队列。
+5. bridge 注入失败、超时或返回 `accepted=false`：接口不抛 500，返回 `accepted=true` 并说明 `fallback_reason`，主流程继续 mock 播报。
 
 主流程永远不能因为 sidecar 不可用而失败。
 
@@ -190,11 +196,27 @@ Sidecar 只允许：
 
 ### Phase 2：Sidecar adapter spike
 
-目标是在 ignored 实验目录内验证“可信文本注入”：
+目标是在 ignored 实验目录内验证“可信文本注入”。2026-05-15 的协议调查结论：
+
+- 当前 LiteAvatar probe 配置使用 `RtcClient`，WebUI 通过 `/webrtc/offer` 建立 WebRTC session。
+- WebUI 的文本按钮会在已建立的 `RTCDataChannel('text')` 上发送 `SendHumanText`。
+- `SendHumanText` 在 OpenAvatarChat 里被写入 `EngineChannelType.TEXT`，类型是 `HUMAN_TEXT`，后续会进入当前配置的 LLM/TTS/avatar 链路。
+- 因此，`SendHumanText` 是“用户输入”协议，不是“数字人直接播报这段后端可信文本”的稳定接口。
+- 当前官方服务没有发现可直接 `HTTP POST 文本 -> TTS/口型/数字人播报` 的本地 endpoint。
+
+当前最小实现：
+
+- `AVATAR_SIDECAR_ADAPTER=readiness`：只确认 sidecar 存活，仍降级 mock。
+- `AVATAR_SIDECAR_ADAPTER=http_json`：预留给本地 bridge endpoint。bridge 成功时 `/api/avatar/speak` 返回 `mode="sidecar"`；bridge 不存在或失败时降级 mock。
+- 新增 `scripts/avatar_sidecar_protocol_probe.py`，用于检查 `/liveness`、`/readiness`、`/openavatarchat/initconfig` 并输出当前注入面判断；该脚本不会发送文本。
+
+后续可选方案：
 
 - 方案 A：在 OpenAvatarChat 内新增专用 handler，把外部文本视为 avatar 要播报的文本，不调用 LLM。
 - 方案 B：在 sidecar 外层加一个独立 bridge 服务，负责把 `/api/avatar/speak` 队列转换为 OpenAvatarChat WebRTC/data channel 消息。
 - 方案 C：保留 OpenAvatarChat WebUI 只做视觉预览，主流程继续用浏览器 TTS。
+
+当前不采用方案 B 直接向 WebUI `SendHumanText` 发送消息，因为这会把灵境后端已经生成的可信回答重新作为“用户问题”交给 OpenAvatarChat LLM，违反 sidecar 只做表现层的边界。
 
 进入 Phase 2 前必须确认：
 
@@ -226,3 +248,36 @@ Sidecar 只允许：
 - Sidecar 不可用时，QA、路线、识景、Kiosk、Admin、分享页不受影响。
 - 文档和接口都明确：OpenAvatarChat + LiteAvatar 是表现层 sidecar，不是业务大脑。
 - 后续接入 LLM 只能增强结构化理解或表达润色，不能绕过 RAG sources 和受约束 Route Planner。
+
+## 2026-05-16 D2 status: LiteAvatar trusted text lip-sync spike
+
+The preferred future adapter remains an OpenAvatarChat in-process `AVATAR_TEXT` endpoint, not WebUI `SendHumanText`.
+
+Current D2 spike status:
+
+- Ignored patch location: `external/OpenAvatarChat/src/handlers/client/rtc_client/client_handler_rtc.py`.
+- Added endpoint shape: `POST /lingjing/avatar/speak`.
+- Intended route: trusted Lingjing backend text -> `ChatDataType.AVATAR_TEXT` -> TTS -> LiteAvatar audio/video -> WebRTC.
+- LLM boundary: bypassed by design; no `HUMAN_TEXT` submission.
+- Verification status: not yet proven on the WebUI because patched OpenAvatarChat cannot restart past LiteAvatar worker `PermissionError: [WinError 5]`.
+
+Until that worker startup issue is solved, the main product should keep the current React/SVG/CSS mock avatar fallback and use `/api/avatar/speak` only through mock or the local trusted bridge smoke path.
+
+## 2026-05-16 D3 status: programmatic LiteAvatar trusted speak verified
+
+D3 unblocked the patched sidecar startup by replacing the official dialogue config with an ignored pure presentation config:
+
+```text
+external/OpenAvatarChat/config/lingjing_trusted_liteavatar_edge_tts.yaml
+```
+
+That config avoids loading OpenAvatarChat LLM/ASR/VAD and keeps only `RtcClient`, `InterruptHandler`, `Edge_TTS`, and `LiteAvatar`. Trusted backend text is submitted as `AVATAR_TEXT`, then converted to `AVATAR_AUDIO` and `AVATAR_VIDEO` by TTS + LiteAvatar.
+
+Programmatic verification through local `aiortc` WebRTC showed:
+
+- active session visible from `/lingjing/avatar/sessions`
+- main backend `/api/avatar/speak` returned `mode=sidecar`
+- received remote audio/video frames after the trusted text request
+- OAC logs showed `AVATAR_TEXT`, `AVATAR_AUDIO`, and `AVATAR_VIDEO`, with no `HUMAN_TEXT` or LLM branch for this request
+
+This is still a sidecar spike. The default product path remains mock-first, and sidecar timeout/offline behavior must continue to degrade to mock without affecting RAG, Route Planner, Vision, Analytics, visitor UI, Kiosk, or Admin.

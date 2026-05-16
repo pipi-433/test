@@ -8,6 +8,7 @@ from app.core.errors import ApiError
 from app.core.config import get_settings
 from app.providers import ProviderStatus, get_provider_status
 from app.services.analytics_service import analytics_overview, record_feedback, record_interaction_event
+from app.services.avatar_clip_player import play_avatar_clip
 from app.services.avatar_speaker import enqueue_avatar_speech
 from app.services.content_service import (
     get_attraction_or_error,
@@ -170,6 +171,12 @@ class AvatarSpeakRequest(BaseModel):
     interrupt: bool = True
 
 
+class AvatarPlayClipRequest(BaseModel):
+    clip_id: str
+    source: str = "demo"
+    interrupt: bool = True
+
+
 def _dump_model(payload: BaseModel, *, exclude_unset: bool = False) -> dict[str, Any]:
     return payload.model_dump(exclude_unset=exclude_unset)
 
@@ -272,6 +279,15 @@ def avatar_speak(payload: AvatarSpeakRequest) -> dict[str, object]:
     return enqueue_avatar_speech(
         text=payload.text,
         emotion=payload.emotion,
+        source=payload.source,
+        interrupt=payload.interrupt,
+    )
+
+
+@router.post("/avatar/play-clip")
+def avatar_play_clip(payload: AvatarPlayClipRequest) -> dict[str, object]:
+    return play_avatar_clip(
+        clip_id=payload.clip_id,
         source=payload.source,
         interrupt=payload.interrupt,
     )
