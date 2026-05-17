@@ -91,7 +91,7 @@ $summary = [ordered]@{
     listening = $null -ne $listening
     owning_process = $(if ($listening) { $listening.OwningProcess } else { $null })
     checks = $checks
-    restart_hint = "If sidecar endpoints time out, stop only the OpenAvatarChat uv/python process on this port, then restart with config/lingjing_trusted_liteavatar_edge_tts.yaml."
+    restart_hint = "If sidecar endpoints time out, stop only the OpenAvatarChat uv/python process on this port, then restart with config/lingjing_trusted_liteavatar_fast.yaml when available, otherwise config/lingjing_trusted_liteavatar_edge_tts.yaml."
 }
 
 if ($Json) {

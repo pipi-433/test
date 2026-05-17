@@ -43,6 +43,77 @@ def _public_base_url(base_url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
+def _fetch_sidecar_active_session(base_url: str, timeout_seconds: float) -> tuple[str | None, str | None]:
+    sessions_url = urljoin(base_url.rstrip("/") + "/", "lingjing/avatar/sessions")
+    request = Request(sessions_url, method="GET")
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            raw = response.read()
+            if not (200 <= response.status < 300):
+                return None, f"sidecar_sessions_status_{response.status}"
+            if not raw:
+                return None, None
+            loaded = json.loads(raw.decode("utf-8"))
+            if not isinstance(loaded, dict):
+                return None, "sidecar_sessions_payload_not_object"
+            active_session_id = loaded.get("active_session_id")
+            if isinstance(active_session_id, str) and active_session_id.strip():
+                return active_session_id.strip(), None
+            sessions = loaded.get("sessions")
+            if isinstance(sessions, list):
+                for item in sessions:
+                    if isinstance(item, dict):
+                        session_id = item.get("session_id") or item.get("id")
+                        if isinstance(session_id, str) and session_id.strip():
+                            return session_id.strip(), None
+            return None, None
+    except HTTPError as exc:
+        return None, f"sidecar_sessions_http_{exc.code}"
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        return None, f"sidecar_sessions_parse_error: {exc}"
+    except URLError as exc:
+        return None, f"sidecar_sessions_unreachable: {exc.reason}"
+    except TimeoutError:
+        return None, "sidecar_sessions_timeout"
+    except OSError as exc:
+        return None, f"sidecar_sessions_error: {exc}"
+
+
+def get_avatar_status() -> dict[str, object]:
+    settings = get_settings()
+    requested_mode = (settings.avatar_speaker_mode or "mock").strip().lower()
+    base_url = settings.avatar_sidecar_base_url.strip()
+    timeout_seconds = settings.avatar_speaker_timeout_seconds
+
+    if requested_mode != "sidecar" or not base_url:
+        return {
+            "mode": requested_mode or "mock",
+            "sidecar_ready": False,
+            "sidecar_url": "",
+            "active_session_id": None,
+            "fallback_available": True,
+            "message": "mock avatar presentation is available.",
+            "fallback_reason": None if requested_mode != "sidecar" else "AVATAR_SIDECAR_BASE_URL is empty",
+        }
+
+    ready, reason = _check_sidecar_ready(base_url, timeout_seconds)
+    active_session_id = None
+    session_reason = None
+    if ready:
+        active_session_id, session_reason = _fetch_sidecar_active_session(base_url, timeout_seconds)
+
+    return {
+        "mode": "sidecar",
+        "sidecar_ready": ready,
+        "sidecar_url": _public_base_url(base_url) if ready else "",
+        "active_session_id": active_session_id,
+        "fallback_available": True,
+        "message": "sidecar avatar presentation is ready." if ready else "sidecar avatar presentation is not ready.",
+        "fallback_reason": None if ready else reason,
+        "session_status": session_reason,
+    }
+
+
 def _sidecar_speak_url(base_url: str, speak_path: str) -> str:
     if speak_path.startswith("http://") or speak_path.startswith("https://"):
         return speak_path
@@ -66,12 +137,17 @@ def _post_sidecar_text(
     except ValueError as exc:
         return False, str(exc), {}
 
+    # The LiteAvatar trusted endpoint is a presentation-layer bridge, so keep
+    # business provenance in Lingjing metadata and send only the small source
+    # vocabulary the sidecar accepts.
+    sidecar_source = source if source in {"route", "vision", "kiosk", "share", "system"} else "system"
     payload = {
         "text": text,
         "emotion": emotion,
-        "source": source,
+        "source": sidecar_source,
         "interrupt": interrupt,
         "policy": "trusted_backend_text_only",
+        "lingjing_source": source,
     }
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = Request(

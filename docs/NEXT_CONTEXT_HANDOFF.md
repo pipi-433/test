@@ -34,7 +34,7 @@
 - 路线拓扑前端展示：Task UI-06 已完成，提交 `5afc17a style: show scenic route topology`；游客端路线 tab 和分享页展示顺路指数、总步行估算、涉及游线、回头路风险、观光车建议和非 GPS 导航说明。
 - 后台：analytics overview、运营事件、知识缺口、评测看板。
 - 游客 UI：`/` 已改为五 tab，推荐 tab 和底部 PNG 导航基本通过；字体分层已落地。
-- 数字人：当前为 React/SVG/CSS mock 数字人，接浏览器 SpeechSynthesis，可选 SpeechRecognition 降级。
+- 数字人：游客端“游灵山”tab 和 Kiosk 左侧主视觉区已从 07.6H iframe 面板升级为 07.6I 本页 WebRTC 观看播放器。播放器通过 `POST /api/avatar/webrtc/offer` 走灵境后端 signaling 代理，不调用 `getUserMedia`，不请求摄像头/麦克权限，并保留 React/SVG/CSS fallback。游客端和 Kiosk 播报按钮已接入后端 `/api/avatar/speak`、`/api/avatar/play-clip`，本地浏览器 TTS 已关闭。OpenAvatarChat + LiteAvatar sidecar 可播可信短句和白名单预存 wav；Task 07.6G 已修正 clip `AVATAR_AUDIO` finish 语义并默认优先使用 fast 配置，人工确认 clip 流畅度达到演示合格。
 
 ## 当前关键文件
 
@@ -55,6 +55,9 @@
 - 拓扑数据：`data/processed/scenic_graph.json`
 - 拓扑校验：`scripts/validate_scenic_graph.py`
 - 拓扑评测：`scripts/eval_route_topology.py`
+- 数字人启动：`scripts/start_avatar_demo.ps1`
+- 数字人停止：`scripts/stop_avatar_demo.ps1`
+- 数字人性能记录：`docs/AVATAR_LITEAVATAR_PERFORMANCE_TUNING.md`
 
 ## 当前 UI 状态
 
@@ -82,12 +85,18 @@
 
 ## 数字人策略
 
-- 当前数字人用于演示状态机和 TTS，不追求生产级 3D。
-- 用户不满意当前视觉，后续考虑 OpenAvatarChat + LiteAvatar。
+- 当前数字人分为两层：主前端 fallback 状态位，以及 OpenAvatarChat + LiteAvatar sidecar 表现层。
+- 游客端和 Kiosk 的数字人按钮只调用灵境后端 API；实际发声/口型由后端转发到 sidecar，前端不直连模型厂商或 OpenAvatarChat API。
+- 游客端和 Kiosk 的直播式画面使用本页 WebRTC 观看播放器，不再 iframe 嵌入 8282 WebUI；signaling 只走 `POST /api/avatar/webrtc/offer` 后端代理。新增 `GET /api/avatar/status` 只用于判断 sidecar ready/active session 并驱动 fallback。
+- 当前 OAC sidecar 的 FastRTC 路由是 `send-receive/audio-video`；纯 recvonly offer 能拿到 answer 但不会创建 active Lingjing session。07.6I 播放器因此生成静音音轨和空白 canvas 视频轨作为无权限 session bootstrap，不读取真实摄像头或麦克风。
+- OpenAvatarChat + LiteAvatar 已完成本机演示 spike：可信短句和预存 clip 都能驱动发声/口型表现。
+- Task 07.6G 结论：clip 卡顿/无口型的关键修复是 sidecar `AVATAR_AUDIO` 先发音频包 `finish_stream=False`，再发 10ms 静音结束包 `finish_stream=True`；`start_avatar_demo.ps1` 默认优先用 ignored fast 配置并对齐游客端后端端口 `8000`。
 - 正确接法：作为 avatar sidecar/表现层，不接管业务大脑。
 - 业务大脑仍是当前 FastAPI：Query Understanding、RAG、Route Planner、Vision、Analytics。
 - sidecar 失败时必须 fallback 当前 mock 数字人。
 - 不把大模型权重、商业字体、真实 API Key 或大体积第三方源码直接提交主仓库。
+- tracked 提交：`2303ed3 feat: add trusted avatar speech sidecar demo`。
+- ignored sidecar patch、音频、日志仍在 `external/`，不进入 git。
 
 ## 重要边界
 
@@ -102,9 +111,9 @@
 
 优先执行：
 
-1. Task DOC-02 完成后做 Task QA-UI。
-2. Task QA-UI：完整走游客端 `/`、Kiosk、Admin、分享页演示流程，记录演示风险。
-3. Task 07.6：OpenAvatarChat + LiteAvatar sidecar 预研。
+1. Task QA-UI：完整走游客端 `/`、Kiosk、Admin、分享页、数字人 WebUI 演示流程，确认 UI 按钮返回 `mode=sidecar` 且 8282 WebUI 有声音/口型。
+2. Task Voice/Avatar Config：研究音色和数字人模型配置化，但不要在答辩前大改主链路。
+3. Task Docs：提交前同步 README/演示脚本/技术叙事中的 07.6G fast 配置和游客端接入状态。
 4. 必要时再做局部 UI 细修。
 
 ## 启动命令
@@ -128,6 +137,24 @@ npm --prefix .\frontend run dev -- --host 127.0.0.1 --port 5174
 - 游客端：http://127.0.0.1:5174/
 - Kiosk：http://127.0.0.1:5174/kiosk
 - Admin：http://127.0.0.1:5174/admin
+
+数字人表现层：
+
+```powershell
+cd D:\py\dota
+& .\scripts\start_avatar_demo.ps1 -OpenWebUI -OpenVisitor
+```
+
+入口：
+
+- OpenAvatarChat WebUI：http://127.0.0.1:8282
+- 游客端数字人入口：http://127.0.0.1:5174/
+
+停止：
+
+```powershell
+& .\scripts\stop_avatar_demo.ps1
+```
 
 ## 验证命令
 

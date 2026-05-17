@@ -35,17 +35,34 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 npm --prefix .\frontend run dev -- --host 127.0.0.1 --port 5174
 ```
 
+如果演示真实数字人表现层，使用统一启动脚本串起 8282 sidecar、8000 后端和 5174 游客端。脚本会优先使用 Task 07.6G 的 ignored fast 配置：
+
+```powershell
+cd D:\py\dota
+& .\scripts\stop_avatar_demo.ps1
+& .\scripts\start_avatar_demo.ps1 -OpenVisitor
+```
+
+Task 07.6I 后不需要打开 8282 原 WebUI，也不需要点击“开始对话”。游客端和 Kiosk 内置数字人播放器会通过 `POST /api/avatar/webrtc/offer` 建立无摄像头/麦克授权的观看连接。
+
+打开游客端或 Kiosk 后，点击“启动数字人直播”建立观看 session；数字人按钮会通过主后端触发 LiteAvatar。页面不再 iframe 嵌入 8282 WebUI，也不要求演示者在 8282 页面点击“开始对话”。如果 sidecar 未启动或 WebRTC 建连失败，页面会保留 React/CSS fallback，不影响主流程演示。演示结束后：
+
+```powershell
+& .\scripts\stop_avatar_demo.ps1
+```
+
 演示入口：
 
 - 游客端：http://127.0.0.1:5174/
 - Kiosk：http://127.0.0.1:5174/kiosk
 - 管理后台：http://127.0.0.1:5174/admin
+- 数字人 sidecar readiness：http://127.0.0.1:8282/readiness
 
 ## 0:00-0:30 开场
 
 一句话：
 
-灵境导游不是普通聊天机器人，而是“手机游客端 + 景区 Kiosk + 管理后台”的景区 AI 数字人闭环：能问、能拍、能听、能规划路线、能避开拥挤，也能把低置信问题沉淀到后台持续改进。
+灵境导游不是普通聊天机器人，而是“手机游客端 + 景区 Kiosk + 管理后台 + 数字人表现层”的景区 AI 导览闭环：能问、能拍、能听、能规划路线、能避开拥挤，也能把可信后端生成的短句或预存讲解 clip 交给数字人发声和口型表现。
 
 ## 0:30-1:40 可信问答与资料外拦截
 
@@ -216,7 +233,63 @@ http://127.0.0.1:5174/route/{route_id}/share?code={share_code}
 
 如果现场扫码不方便，直接点击 Kiosk 上的链接或复制 share_url 到浏览器地址栏。
 
-## 5:30-6:25 Admin 运营闭环
+## 5:30-6:05 数字人可信播报
+
+不打开 8282 原 WebUI。先在游客端“游灵山”tab 点击“启动数字人直播”，建立观看 session 后在 PowerShell 中检查：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8282/lingjing/avatar/sessions
+```
+
+预期现象：
+
+- `active_session_id` 不为空。
+- 游客端“游灵山”tab 和 Kiosk 左侧主视觉区同屏显示数字人观看画面。
+- 打开游客端/Kiosk 不会出现摄像头或麦克风授权弹窗。
+- 若 sidecar 或 WebRTC 连接不可用，页面显示占位模式，不白屏。
+
+优先用实际 UI 演示：
+
+- 游客端路线 tab 点击 `数字人播报路线`。
+- 游客端识景 tab 确认灵山大佛后点击 `数字人讲解`。
+- 游灵山 tab 点击 `发送给数字人` / `数字人播报`。
+- Kiosk 点击固定景点讲解或 `播报推荐路线`。
+
+PowerShell 直调用作兜底验证短句可信文本播报：
+
+```powershell
+$body = @{
+  text = '您好，我是灵境导游。路线已生成，请跟随我开始游览。'
+  emotion = 'happy'
+  source = 'route'
+  interrupt = $true
+} | ConvertTo-Json -Compress
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/api/avatar/speak `
+  -ContentType 'application/json; charset=utf-8' `
+  -Body $bytes
+```
+
+PowerShell 直调用作兜底验证预存景点讲解 clip：
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/api/avatar/play-clip `
+  -ContentType 'application/json' `
+  -Body '{"clip_id":"lingshan_buddha_intro_45s","source":"attraction","interrupt":true}'
+```
+
+讲解重点：
+
+数字人不是业务大脑。路线、识景、问答和运营分析仍由灵境后端完成；OpenAvatarChat + LiteAvatar 只作为表现层，接收可信短文本或白名单预存音频 clip，负责发声和口型。短句不经过 `SendHumanText`，预存 clip 不经过 LLM，前端也不直连模型厂商。Task 07.6G 后，演示启动脚本默认优先使用 LiteAvatar fast 配置，并把后端端口对齐游客端代理的 `8000`。
+
+兜底：
+
+如果数字人观看面板没有声音或 session 掉线，运行 `scripts/avatar_sidecar_healthcheck.ps1` 检查 8282/8000，再用 `scripts/stop_avatar_demo.ps1` 和 `scripts/start_avatar_demo.ps1 -OpenVisitor` 重启表现层。主游客端、Kiosk 和后台仍可用 mock fallback 完成演示。
+
+## 6:05-6:40 Admin 运营闭环
 
 打开 `/admin`。
 
@@ -237,7 +310,7 @@ http://127.0.0.1:5174/route/{route_id}/share?code={share_code}
 
 后台不是空壳大屏，而是把游客问答、识景、路线、反馈、知识缺口和评测结果汇成运营改进闭环。
 
-## 6:25-7:00 评测可信证明
+## 6:40-7:00 评测可信证明
 
 在 Admin 评测看板展示：
 
@@ -256,7 +329,9 @@ http://127.0.0.1:5174/route/{route_id}/share?code={share_code}
 |------|------|
 | 后端 8000 端口被占用 | 停掉旧 `uvicorn`，或换端口并同步 Vite proxy |
 | 前端 5174 端口被占用 | 停掉旧 Vite，或使用 `--port 5175` |
-| TTS 没声音 | 说明浏览器语音能力受系统语音包/自动播放策略影响，文本和状态机仍可演示 |
+| 数字人 sidecar 打不开 | 运行 `scripts/avatar_sidecar_healthcheck.ps1`；若 8282 无监听，运行 `scripts/stop_avatar_demo.ps1` 清理后再 `scripts/start_avatar_demo.ps1 -OpenVisitor` |
+| 数字人 session 为空 | 在游客端“游灵山”tab 或 Kiosk 左侧面板点击“启动数字人直播”，再查 `/lingjing/avatar/sessions` |
+| TTS 没声音 | 说明浏览器语音能力、WebRTC session 或 sidecar 状态可能受本机环境影响，主流程仍可用 mock fallback 演示 |
 | 图片上传无候选 | 使用 `evals/vision_samples` 的 mock 样例，或展示 `eval_vision.py` 报告 |
 | 分享页 code 无效 | 重新在 Kiosk 生成路线；share_code 是当前进程内 30 分钟 mock 机制 |
 | Admin 计数为空 | 先在游客端完成几次 QA、路线、反馈，或说明当前为本地演示日志 |

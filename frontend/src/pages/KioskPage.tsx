@@ -1,17 +1,36 @@
-import { AlertTriangle, Camera, MapPinned, Mic, QrCode, Route, Sparkles } from "lucide-react";
+import { AlertTriangle, Camera, MapPinned, Mic, QrCode, Route, Sparkles, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
-import { getCrowdSnapshot, getOperationEvents, recommendRoute } from "../api/client";
-import type { CrowdSnapshotItem, OperationEvent, RouteRecommendation } from "../api/client";
+import { getAvatarStatus, getCrowdSnapshot, getOperationEvents, playAvatarClip, recommendRoute, speakAvatarText } from "../api/client";
+import type { AvatarClipId, AvatarStatusResponse, CrowdSnapshotItem, OperationEvent, RouteRecommendation } from "../api/client";
 import { Button } from "../components/Button";
-import { DigitalHumanMock } from "../components/DigitalHumanMock";
 import type { DigitalHumanState } from "../components/DigitalHumanMock";
 import { IconButton } from "../components/IconButton";
 import { PageShell } from "../components/Shell";
 import { RouteStep } from "../components/RouteStep";
 import { StatusBadge } from "../components/StatusBadge";
+import { AvatarLivePanel } from "../components/visitor/AvatarLivePanel";
 import { quickQuestions, routeSteps } from "../data/mock";
+
+const kioskAvatarClips: Array<{ clipId: AvatarClipId; label: string }> = [
+  { clipId: "lingshan_buddha_intro_45s", label: "灵山大佛" },
+  { clipId: "fan_gong_intro_45s", label: "灵山梵宫" },
+  { clipId: "jiulong_guanyu_intro_30s", label: "九龙灌浴" },
+];
+
+const kioskAvatarClipLockMs: Record<AvatarClipId, number> = {
+  fan_gong_intro_45s: 10_000,
+  jiulong_guanyu_intro_30s: 10_000,
+  lingshan_buddha_intro_45s: 8_000,
+};
+
+function kioskRouteSpeakSummary(route: RouteRecommendation) {
+  const firstStop = route.stops[0]?.name ? `首站是${route.stops[0].name}。` : "";
+  const crowdStop = route.stops.find((stop) => stop.crowd_level === "high");
+  const crowdText = crowdStop ? `${crowdStop.name}为模拟高拥挤点，建议按页面提示错峰。` : "路线节奏较舒缓。";
+  return `您好，我是灵境导游。${route.title}已生成，共${route.stops.length}站，预计${route.estimated_duration_minutes}分钟。${firstStop}${crowdText}请扫码带走或在终端查看路线摘要。`;
+}
 
 export function KioskPage() {
   const [crowdItems, setCrowdItems] = useState<CrowdSnapshotItem[]>([]);
@@ -19,6 +38,25 @@ export function KioskPage() {
   const [routeResult, setRouteResult] = useState<RouteRecommendation | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState("");
+  const [avatarActionLoading, setAvatarActionLoading] = useState<"route" | AvatarClipId | null>(null);
+  const [avatarActionMessage, setAvatarActionMessage] = useState("");
+  const [avatarStatus, setAvatarStatus] = useState<AvatarStatusResponse | null>(null);
+  const [avatarPlaybackLockedUntil, setAvatarPlaybackLockedUntil] = useState(0);
+  const [avatarPlaybackTick, setAvatarPlaybackTick] = useState(0);
+
+  useEffect(() => {
+    if (!avatarPlaybackLockedUntil) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      setAvatarPlaybackTick(Date.now());
+      if (Date.now() >= avatarPlaybackLockedUntil) {
+        setAvatarPlaybackLockedUntil(0);
+        setAvatarActionLoading(null);
+      }
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [avatarPlaybackLockedUntil]);
 
   useEffect(() => {
     getCrowdSnapshot()
@@ -27,17 +65,48 @@ export function KioskPage() {
     getOperationEvents()
       .then((payload) => setOperationEvents(payload.items.slice(0, 4)))
       .catch(() => setOperationEvents([]));
+    getAvatarStatus()
+      .then((status) => setAvatarStatus(status))
+      .catch(() =>
+        setAvatarStatus({
+          mode: "mock",
+          sidecar_ready: false,
+          sidecar_url: "",
+          active_session_id: null,
+          fallback_available: true,
+          message: "avatar status unavailable",
+        }),
+      );
   }, []);
 
   const shareUrl = routeResult ? `${window.location.origin}${routeResult.share.share_url}` : "";
-  const kioskHumanState: DigitalHumanState = routeLoading ? "thinking" : routeError ? "error" : routeResult ? "happy" : "welcome";
+  const avatarPlaybackRemainingMs = Math.max(0, avatarPlaybackLockedUntil - Math.max(Date.now(), avatarPlaybackTick));
+  const avatarPlaybackLocked = avatarPlaybackRemainingMs > 0;
+  const avatarPlaybackRemainingSeconds = Math.ceil(avatarPlaybackRemainingMs / 1000);
+  const kioskHumanState: DigitalHumanState = avatarActionLoading || avatarPlaybackLocked ? "speaking" : routeLoading ? "thinking" : routeError ? "error" : routeResult ? "happy" : "welcome";
   const kioskHumanCaption = routeLoading
     ? "正在根据亲子轻松偏好和模拟拥挤度生成路线。"
+    : avatarActionLoading || avatarPlaybackLocked
+      ? "数字人正在讲解，请稍候再发送新的播报。"
     : routeError
       ? "路线生成遇到问题，终端仍可展示热门问题和重新尝试。"
       : routeResult
         ? `已生成${routeResult.title}，扫码可在手机继续查看。`
         : "欢迎来到灵境导游终端，生成路线后可以扫码带走。";
+
+  function lockAvatarPlayback(kind: "route" | AvatarClipId, durationMs: number) {
+    setAvatarActionLoading(kind);
+    setAvatarPlaybackLockedUntil(Date.now() + durationMs);
+    setAvatarPlaybackTick(Date.now());
+  }
+
+  function unlockAvatarPlaybackSoon(delayMs = 900) {
+    window.setTimeout(() => {
+      setAvatarPlaybackLockedUntil(0);
+      setAvatarActionLoading(null);
+      setAvatarPlaybackTick(Date.now());
+    }, delayMs);
+  }
 
   async function generateKioskRoute() {
     setRouteLoading(true);
@@ -55,11 +124,70 @@ export function KioskPage() {
         channel: "kiosk",
       });
       setRouteResult(result);
+      setAvatarActionMessage("");
     } catch (cause) {
       setRouteError(cause instanceof Error ? cause.message : "路线生成失败，请稍后重试。");
     } finally {
       setRouteLoading(false);
     }
+  }
+
+  async function speakKioskRoute() {
+    if (!routeResult) {
+      setAvatarActionMessage("请先生成推荐路线，再发送给数字人播报。");
+      return;
+    }
+    if (avatarPlaybackLocked) {
+      setAvatarActionMessage(`数字人正在讲解，请 ${avatarPlaybackRemainingSeconds} 秒后再试。`);
+      return;
+    }
+    lockAvatarPlayback("route", 5_000);
+    setAvatarActionMessage("");
+    try {
+      const result = await speakAvatarText({
+        text: kioskRouteSpeakSummary(routeResult),
+        emotion: "happy",
+        source: "route",
+        interrupt: true,
+      });
+      setAvatarActionMessage(result.accepted ? "已发送给数字人播报。" : "已切换为文本播报/稍后重试。");
+      if (!result.accepted) {
+        unlockAvatarPlaybackSoon();
+      }
+    } catch {
+      setAvatarActionMessage("已切换为文本播报/稍后重试。");
+      unlockAvatarPlaybackSoon();
+    }
+  }
+
+  async function playKioskClip(clipId: AvatarClipId, label: string) {
+    if (avatarPlaybackLocked) {
+      setAvatarActionMessage(`数字人正在讲解，请 ${avatarPlaybackRemainingSeconds} 秒后再试。`);
+      return;
+    }
+    lockAvatarPlayback(clipId, kioskAvatarClipLockMs[clipId] || 10_000);
+    setAvatarActionMessage("");
+    try {
+      const result = await playAvatarClip({
+        clip_id: clipId,
+        source: "attraction",
+        interrupt: true,
+      });
+      setAvatarActionMessage(result.accepted ? `已发送${label}数字人讲解。` : "已切换为文本播报/稍后重试。");
+      if (!result.accepted) {
+        unlockAvatarPlaybackSoon();
+      }
+    } catch {
+      setAvatarActionMessage("已切换为文本播报/稍后重试。");
+      unlockAvatarPlaybackSoon();
+    }
+  }
+
+  function stopKioskAvatarBroadcast() {
+    setAvatarPlaybackLockedUntil(0);
+    setAvatarActionLoading(null);
+    setAvatarPlaybackTick(Date.now());
+    setAvatarActionMessage("已停止页面播报状态。");
   }
 
   return (
@@ -74,7 +202,18 @@ export function KioskPage() {
 
       <section className="kiosk-grid">
         <div className="kiosk-avatar-panel">
-          <DigitalHumanMock caption={kioskHumanCaption} state={kioskHumanState} className="kiosk-avatar" />
+          <AvatarLivePanel
+            broadcastDisabled={avatarActionLoading !== null || (!routeResult && avatarPlaybackLocked)}
+            broadcasting={avatarPlaybackLocked || avatarActionLoading !== null}
+            caption={kioskHumanCaption}
+            onStartBroadcast={() => (routeResult ? void speakKioskRoute() : void playKioskClip("lingshan_buddha_intro_45s", "灵山大佛"))}
+            onStopBroadcast={stopKioskAvatarBroadcast}
+            sidecarUrl={avatarStatus?.sidecar_url || undefined}
+            state={kioskHumanState}
+            status={avatarStatus}
+            title="灵境数字人"
+            variant="kiosk"
+          />
           <div className="kiosk-primary-actions" aria-label="终端主要操作">
             <Button size="kiosk" icon={<Mic size={26} />}>
               开始语音咨询
@@ -113,6 +252,27 @@ export function KioskPage() {
             <IconButton icon={Mic} label="语音讲解" size="kiosk" />
           </section>
 
+          <section className="kiosk-section kiosk-avatar-actions" aria-label="数字人讲解">
+            <div className="section-title-row">
+              <h2>数字人讲解</h2>
+              <Volume2 aria-hidden="true" />
+            </div>
+            <div className="kiosk-clip-grid">
+              {kioskAvatarClips.map((clip) => (
+                <button
+                  className="kiosk-avatar-button"
+                  disabled={avatarPlaybackLocked || avatarActionLoading !== null}
+                  key={clip.clipId}
+                  onClick={() => void playKioskClip(clip.clipId, clip.label)}
+                  type="button"
+                >
+                  <Volume2 aria-hidden="true" size={24} />
+                  {avatarActionLoading === clip.clipId ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : `${clip.label}讲解`}
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section className="kiosk-section kiosk-route" aria-label="推荐路线摘要">
             <div className="section-title-row">
               <h2>{routeResult?.title || "亲子轻松路线"}</h2>
@@ -146,6 +306,16 @@ export function KioskPage() {
               </div>
             ))}
             {routeError ? <p className="inline-alert">{routeError}</p> : null}
+            <button
+              className="kiosk-avatar-button kiosk-avatar-button--route"
+              disabled={avatarPlaybackLocked || avatarActionLoading !== null || !routeResult}
+              onClick={() => void speakKioskRoute()}
+              type="button"
+            >
+              <Volume2 aria-hidden="true" size={26} />
+              {avatarActionLoading === "route" ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : "播报推荐路线"}
+            </button>
+            {avatarActionMessage ? <p className="kiosk-avatar-status">{avatarActionMessage}</p> : null}
             {routeResult
               ? routeResult.stops.slice(0, 3).map((stop) => (
                   <RouteStep

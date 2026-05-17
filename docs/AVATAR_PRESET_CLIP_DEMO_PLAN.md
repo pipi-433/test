@@ -84,6 +84,21 @@ Task 07.6F 已在 ignored sidecar spike 中补齐 `POST /lingjing/avatar/play-cl
 
 2026-05-16 已补充人工 WebUI 验收：用户打开 `http://127.0.0.1:8282` 建立 RTC session 后，分别验证了短句实时播报和预存 clip 播放，两种播放都能正常发声，预存 clip 效果良好。仍需注意：这只能表述为本机演示环境中的 sidecar 表现层能力，不能表述为生产级数字人口型播报能力。
 
+Task 07.6G 已把该能力接入实际游客端/Kiosk 演示链路：`scripts/start_avatar_demo.ps1` 默认优先使用 ignored fast 配置，把后端启动在 `8000` 以匹配游客端 Vite `/api` 代理，并可同时打开 WebUI 与游客端。游客端和 Kiosk 按钮仍只调用灵境后端 API，不直接调用 OpenAvatarChat。
+
+## LiteAvatar 注入语义
+
+预存 clip 流畅度的关键不只在源 wav 格式，也在 ignored OpenAvatarChat sidecar 的 `AVATAR_AUDIO` 提交流语义。已验证通过的方式是模拟正常 TTS 输出：
+
+```text
+1. submit full AVATAR_AUDIO with finish_stream=False
+2. submit 10ms silent AVATAR_AUDIO tail with finish_stream=True
+```
+
+不要把整段 wav 和 `finish_stream=True` 放在同一个 `AVATAR_AUDIO` 包里；这会让 LiteAvatar audio processor 可能只看到结束信号，表现为卡顿、吞字、无声或口型不明显。
+
+该 patch 仍位于 ignored `external/OpenAvatarChat`，不进入主仓库。主仓库只记录后端白名单、启动脚本、前端按钮和演示 SOP。
+
 ## 演示 SOP
 
 1. 准备音频资源：
@@ -94,6 +109,26 @@ New-Item -ItemType Directory -Force .\external\avatar-clips
 ```
 
 将白名单 wav 文件放入 `external/avatar-clips`，不要提交音频文件、模型、缓存或日志。
+
+音频资产进入演示前必须做标准化体检：
+
+```powershell
+cd D:\py\dota
+python .\scripts\prepare_avatar_clips.py --report-only
+python .\scripts\prepare_avatar_clips.py --in-place
+```
+
+标准化目标：
+
+- `wav`
+- `mono`
+- `24000 Hz`
+- `16-bit PCM`
+- 峰值适中
+- 压缩 260ms 以上的长静音到约 180ms
+- 首尾各保留约 160ms 安全静音
+
+脚本会把原始 wav 备份到 ignored 目录 `external/avatar-clips/_source_backup/`。如果源 wav 本身吐字不清、漏字或机械感明显，应重新生成源音频；标准化只能修正格式、响度和过长静音，不能修复错误发音。
 
 2. 启动 mock 后端：
 
@@ -147,3 +182,9 @@ Invoke-RestMethod -Method Post `
 - 真实预存音频驱动 LiteAvatar 的程序化 RTC 验证已完成，但 OpenAvatarChat patch 仍位于 ignored `external/OpenAvatarChat`，未进入主仓库。
 - 人工 WebUI 视觉/听觉验收已完成：短句实时播报和预存 clip 播放都可用于本机演示。
 - 真实讲解录音资产、批量 clip 管理、断线重连稳定性和生产化部署尚未完成。
+
+## 性能调优记录
+
+Task 07.6G 增加了 ignored fast 配置副本 `external/OpenAvatarChat/config/lingjing_trusted_liteavatar_fast.yaml`，只把 LiteAvatar 调为 `fps=15`、`enable_fast_mode=true`、`use_gpu=true`，主配置未覆盖。
+
+本轮发现预存 clip 卡顿排查中有一个更强干扰项：旧 OpenAvatarChat/LiteAvatar orphan 子进程曾占用大量内存和显存，清理后 GPU 显存从约 `5930 MiB / 6144 MiB` 降到约 `3003 MiB / 6144 MiB`。因此演示前必须先清理旧 sidecar 子进程并检查 `nvidia-smi`，再判断 fast 配置是否改善卡顿。详细记录见 `docs/AVATAR_LITEAVATAR_PERFORMANCE_TUNING.md`。

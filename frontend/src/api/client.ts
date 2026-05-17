@@ -544,6 +544,67 @@ export type FeedbackResponse = {
   created_at: string;
 };
 
+export type AvatarEmotion = "welcome" | "thinking" | "speaking" | "comforting" | "error" | "happy" | "neutral";
+export type AvatarSpeakSource = "qa" | "route" | "vision" | "clarification" | "feedback" | "kiosk" | "share" | "system";
+export type AvatarClipSource = "route" | "attraction" | "vision" | "kiosk" | "admin" | "demo";
+export type AvatarClipId = "lingshan_buddha_intro_45s" | "fan_gong_intro_45s" | "jiulong_guanyu_intro_30s";
+
+export type AvatarSpeakRequest = {
+  text: string;
+  emotion?: AvatarEmotion;
+  source?: AvatarSpeakSource;
+  interrupt?: boolean;
+};
+
+export type AvatarClipRequest = {
+  clip_id: AvatarClipId;
+  source?: AvatarClipSource;
+  interrupt?: boolean;
+};
+
+export type AvatarActionResponse = {
+  mode: string;
+  accepted: boolean;
+  message: string;
+  fallback_reason: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type AvatarStatusResponse = {
+  mode: string;
+  sidecar_ready: boolean;
+  sidecar_url: string;
+  active_session_id: string | null;
+  fallback_available: boolean;
+  message?: string;
+  fallback_reason?: string | null;
+  session_status?: string | null;
+};
+
+export type AvatarWebrtcOfferRequest =
+  | {
+      sdp: string;
+      type: "offer";
+      webrtc_id: string;
+    }
+  | {
+      candidate: RTCIceCandidateInit;
+      type: "ice-candidate";
+      webrtc_id: string;
+    };
+
+export type AvatarWebrtcOfferResponse = {
+  accepted?: boolean;
+  mode?: string;
+  sdp?: string;
+  type?: RTCSdpType;
+  sidecar_url?: string;
+  webrtc_id?: string;
+  message?: string;
+  fallback_reason?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
 export type AnalyticsOverview = {
   service_count: number;
   qa_count: number;
@@ -895,6 +956,31 @@ export async function getRouteShare(routeId: string, code: string): Promise<Rout
 
 export async function submitFeedback(payload: FeedbackRequest): Promise<FeedbackResponse> {
   return requestJson<FeedbackResponse>("/api/feedback", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function speakAvatarText(payload: AvatarSpeakRequest): Promise<AvatarActionResponse> {
+  return requestJson<AvatarActionResponse>("/api/avatar/speak", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function playAvatarClip(payload: AvatarClipRequest): Promise<AvatarActionResponse> {
+  return requestJson<AvatarActionResponse>("/api/avatar/play-clip", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function getAvatarStatus(): Promise<AvatarStatusResponse> {
+  return requestJson<AvatarStatusResponse>("/api/avatar/status");
+}
+
+export async function sendAvatarWebrtcOffer(payload: AvatarWebrtcOfferRequest): Promise<AvatarWebrtcOfferResponse> {
+  return requestJson<AvatarWebrtcOfferResponse>("/api/avatar/webrtc/offer", {
     body: JSON.stringify(payload),
     method: "POST",
   });

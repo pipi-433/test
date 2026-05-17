@@ -9,7 +9,8 @@ from app.core.config import get_settings
 from app.providers import ProviderStatus, get_provider_status
 from app.services.analytics_service import analytics_overview, record_feedback, record_interaction_event
 from app.services.avatar_clip_player import play_avatar_clip
-from app.services.avatar_speaker import enqueue_avatar_speech
+from app.services.avatar_speaker import enqueue_avatar_speech, get_avatar_status
+from app.services.avatar_webrtc import proxy_avatar_webrtc_offer
 from app.services.content_service import (
     get_attraction_or_error,
     get_attractions,
@@ -177,6 +178,14 @@ class AvatarPlayClipRequest(BaseModel):
     interrupt: bool = True
 
 
+class AvatarWebrtcOfferRequest(BaseModel):
+    sdp: str | None = None
+    type: str
+    webrtc_id: str | None = None
+    client_id: str | None = None
+    candidate: dict[str, Any] | None = None
+
+
 def _dump_model(payload: BaseModel, *, exclude_unset: bool = False) -> dict[str, Any]:
     return payload.model_dump(exclude_unset=exclude_unset)
 
@@ -291,6 +300,16 @@ def avatar_play_clip(payload: AvatarPlayClipRequest) -> dict[str, object]:
         source=payload.source,
         interrupt=payload.interrupt,
     )
+
+
+@router.get("/avatar/status")
+def avatar_status() -> dict[str, object]:
+    return get_avatar_status()
+
+
+@router.post("/avatar/webrtc/offer")
+def avatar_webrtc_offer(payload: AvatarWebrtcOfferRequest) -> dict[str, object]:
+    return proxy_avatar_webrtc_offer(_dump_model(payload, exclude_unset=True))
 
 
 @router.get("/attractions")

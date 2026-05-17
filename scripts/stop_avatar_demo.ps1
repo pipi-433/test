@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = "D:\py\dota",
-    [int[]]$Ports = @(8282, 8015),
+    [int[]]$Ports = @(8282, 8000, 8015, 5174),
     [switch]$ForceAll,
     [switch]$Preview
 )
@@ -41,16 +41,21 @@ function Test-ProjectDemoProcess {
         $cmd.Contains("OpenAvatarChat") -or
         $cmd.Contains("src/demo.py") -or
         $cmd.Contains("lingjing_trusted_liteavatar_edge_tts.yaml") -or
+        $cmd.Contains("lingjing_trusted_liteavatar_fast.yaml") -or
         $cmd.Contains("uvicorn app.main:app") -or
+        $cmd.Contains("npm --prefix .\frontend run dev") -or
         $cmd.Contains("AVATAR_SIDECAR_BASE_URL") -or
         $cmd.Contains("avatar_backend") -or
-        $cmd.Contains("avatar_sidecar")
+        $cmd.Contains("avatar_sidecar") -or
+        $cmd.Contains("avatar_frontend") -or
+        ($cmd.Contains(".sidecar-python") -and $cmd.Contains("multiprocessing.spawn"))
     )
     $belongsToProject = (
         $cmd.Contains($Root) -or
         $exe.Contains($Root) -or
         $cmd.Contains("uvicorn app.main:app") -or
-        $cmd.Contains("lingjing_trusted_liteavatar_edge_tts.yaml")
+        $cmd.Contains("lingjing_trusted_liteavatar_edge_tts.yaml") -or
+        $cmd.Contains("lingjing_trusted_liteavatar_fast.yaml")
     )
 
     return ($belongsToProject -and $looksLikeDemo)
@@ -79,6 +84,20 @@ function Get-Descendants {
     return $found.ToArray()
 }
 
+function Get-OrphanedSidecarWorkerPids {
+    param([string]$Root)
+
+    $sidecarPython = Join-Path $Root ".sidecar-python"
+    return Get-CimInstance Win32_Process |
+        Where-Object {
+            $cmd = [string]$_.CommandLine
+            $cmd.Contains($sidecarPython) -and
+            $cmd.Contains("multiprocessing.spawn") -and
+            -not (Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue)
+        } |
+        Select-Object -ExpandProperty ProcessId
+}
+
 $root = (Resolve-Path -LiteralPath $ProjectRoot).Path
 $portPids = @()
 foreach ($port in $Ports) {
@@ -95,6 +114,12 @@ foreach ($port in $Ports) {
 }
 
 $candidatePids = @($portPids + (Get-Descendants -ParentIds $portPids)) | Sort-Object -Unique
+$orphanedSidecarWorkerPids = @(Get-OrphanedSidecarWorkerPids -Root $root)
+if ($orphanedSidecarWorkerPids.Count -gt 0) {
+    "Found orphaned sidecar worker PIDs: $($orphanedSidecarWorkerPids -join ',')"
+    $candidatePids = @($candidatePids + $orphanedSidecarWorkerPids) | Sort-Object -Unique
+}
+
 $safeTargets = @()
 foreach ($processId in $candidatePids) {
     $info = Get-ProcessInfo -ProcessId $processId

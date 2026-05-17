@@ -1,8 +1,22 @@
 import { type CSSProperties, type ChangeEvent, type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Heart, Layers, Map as MapIcon, Mic, Send, ShieldCheck, Volume2, VolumeX } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Heart, Layers, Map as MapIcon, Mic, Send, ShieldCheck, Volume2 } from "lucide-react";
 
-import { askQuestion, fetchAttractions, recognizeImage, recommendRoute, sendRouteConversation, submitFeedback, understandQuery } from "../api/client";
+import {
+  askQuestion,
+  fetchAttractions,
+  getAvatarStatus,
+  playAvatarClip,
+  recognizeImage,
+  recommendRoute,
+  sendRouteConversation,
+  speakAvatarText,
+  submitFeedback,
+  understandQuery,
+} from "../api/client";
 import type {
+  AvatarClipId,
+  AvatarStatusResponse,
+  AvatarSpeakSource,
   Attraction,
   CrowdLevel,
   QAResponse,
@@ -13,7 +27,7 @@ import type {
   VisionResponse,
 } from "../api/client";
 import { Button } from "../components/Button";
-import { DigitalHumanMock, type DigitalHumanState } from "../components/DigitalHumanMock";
+import type { DigitalHumanState } from "../components/DigitalHumanMock";
 import {
   RouteConstraintChip,
   ScenicActionTile,
@@ -24,6 +38,7 @@ import {
 import { PageShell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
 import { ImageIcon, type LingshanImageIconName } from "../components/icons/LingshanImageIcons";
+import { AvatarLivePanel } from "../components/visitor/AvatarLivePanel";
 import { RouteTopologySummary, StopTopologyMeta } from "../components/visitor/RouteTopologyCards";
 import { useDigitalHumanState } from "../hooks/useDigitalHumanState";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
@@ -207,6 +222,35 @@ function routeSpeechSummary(route: RouteRecommendation) {
   return `${route.title}已生成，综合评分 ${route.recommendation_score} 分，预计 ${route.estimated_duration_minutes} 分钟。${crowdText}${operationText ? operationText : ""} 当前拥挤度与运营事件为模拟演示数据，不代表真实客流。`;
 }
 
+function routeAvatarSpeakSummary(route: RouteRecommendation) {
+  const firstStop = route.stops[0]?.name ? `首站是${route.stops[0].name}。` : "";
+  const highStop = route.stops.find((stop) => stop.crowd_level === "high");
+  const crowdText = highStop ? `${highStop.name}当前为模拟高拥挤点，建议按页面提示错峰。` : "路线节奏较舒缓。";
+  return `您好，我是灵境导游。${route.title}已生成，共${route.stops.length}站，预计${route.estimated_duration_minutes}分钟。${firstStop}${crowdText}请跟随页面路线开始游览。`;
+}
+
+function avatarClipForAttractionName(name: string | undefined): { clipId: AvatarClipId; label: string } | null {
+  if (!name) {
+    return null;
+  }
+  if (name.includes("灵山大佛")) {
+    return { clipId: "lingshan_buddha_intro_45s", label: "灵山大佛" };
+  }
+  if (name.includes("灵山梵宫") || name.includes("梵宫")) {
+    return { clipId: "fan_gong_intro_45s", label: "灵山梵宫" };
+  }
+  if (name.includes("九龙灌浴")) {
+    return { clipId: "jiulong_guanyu_intro_30s", label: "九龙灌浴" };
+  }
+  return null;
+}
+
+const avatarClipLockMs: Record<AvatarClipId, number> = {
+  fan_gong_intro_45s: 10_000,
+  jiulong_guanyu_intro_30s: 10_000,
+  lingshan_buddha_intro_45s: 8_000,
+};
+
 function visionSpeechSummary(result: VisionResponse) {
   const topCandidate = result.candidates[0];
   if (topCandidate) {
@@ -261,12 +305,58 @@ export function MobileHomePage() {
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackDone, setFeedbackDone] = useState("");
+  const [avatarActionLoading, setAvatarActionLoading] = useState<"route" | "clip" | null>(null);
+  const [avatarActionMessage, setAvatarActionMessage] = useState("");
+  const [avatarStatus, setAvatarStatus] = useState<AvatarStatusResponse | null>(null);
   const [activeNav, setActiveNav] = useState<ScenicNavKey>("recommend");
   const [answerDetailOpen, setAnswerDetailOpen] = useState(false);
   const [error, setError] = useState("");
   const { caption: humanCaption, resetHuman, setHumanState, state: humanState } = useDigitalHumanState();
   const speech = useSpeechSynthesis();
   const recognition = useSpeechRecognition();
+  const visitorLocalTtsEnabled = false;
+  const lastAvatarSpeakRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  const [avatarPlaybackLockedUntil, setAvatarPlaybackLockedUntil] = useState(0);
+  const [avatarPlaybackTick, setAvatarPlaybackTick] = useState(0);
+
+  useEffect(() => {
+    if (!avatarPlaybackLockedUntil) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      setAvatarPlaybackTick(Date.now());
+      if (Date.now() >= avatarPlaybackLockedUntil) {
+        setAvatarPlaybackLockedUntil(0);
+        setAvatarActionLoading(null);
+      }
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [avatarPlaybackLockedUntil]);
+
+  useEffect(() => {
+    let mounted = true;
+    getAvatarStatus()
+      .then((status) => {
+        if (mounted) {
+          setAvatarStatus(status);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setAvatarStatus({
+            mode: "mock",
+            sidecar_ready: false,
+            sidecar_url: "",
+            active_session_id: null,
+            fallback_available: true,
+            message: "avatar status unavailable",
+          });
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -307,7 +397,7 @@ export function MobileHomePage() {
   const routePrimaryCrowdText =
     routeResult?.stops.find((stop) => stop.crowd_level === "high")?.crowd_note ||
     routeResult?.decision_trace.find((item) => item.includes("拥挤")) ||
-    "根据实时客流为您生成错峰顺序。";
+    "根据模拟拥挤度为您生成错峰顺序。";
 
   const attractionById = useMemo(() => new Map(attractions.map((item) => [item.id, item])), [attractions]);
   const lingshanDafoId = useMemo(
@@ -320,6 +410,27 @@ export function MobileHomePage() {
   }, [attractions, routeConstraintQuery]);
   const routePreviewAttractions = useMemo(() => routeAttractionMatches.slice(0, 7), [routeAttractionMatches]);
   const hasMoreRouteAttractions = routeAttractionMatches.length > routePreviewAttractions.length;
+  const confirmedAvatarClip = useMemo(
+    () => avatarClipForAttractionName(confirmedVisionCandidate()?.attraction.name),
+    [confirmedVisionId, visionResult],
+  );
+  const avatarPlaybackRemainingMs = Math.max(0, avatarPlaybackLockedUntil - Math.max(Date.now(), avatarPlaybackTick));
+  const avatarPlaybackLocked = avatarPlaybackRemainingMs > 0;
+  const avatarPlaybackRemainingSeconds = Math.ceil(avatarPlaybackRemainingMs / 1000);
+
+  function lockAvatarPlayback(kind: "route" | "clip", durationMs: number) {
+    setAvatarActionLoading(kind);
+    setAvatarPlaybackLockedUntil(Date.now() + durationMs);
+    setAvatarPlaybackTick(Date.now());
+  }
+
+  function unlockAvatarPlaybackSoon(delayMs = 900) {
+    window.setTimeout(() => {
+      setAvatarPlaybackLockedUntil(0);
+      setAvatarActionLoading(null);
+      setAvatarPlaybackTick(Date.now());
+    }, delayMs);
+  }
 
   function scrollAnswerIntoView(block: ScrollLogicalPosition = "start") {
     void block;
@@ -330,9 +441,21 @@ export function MobileHomePage() {
 
   function speakWithHuman(
     text: string,
-    options: { caption?: string; endState?: DigitalHumanState; maxChars?: number } = {},
+    options: { caption?: string; endState?: DigitalHumanState; maxChars?: number; source?: AvatarSpeakSource } = {},
   ) {
     const caption = options.caption || speechExcerpt(text, 96);
+    if (!visitorLocalTtsEnabled) {
+      speech.stop();
+      setHumanState("speaking", caption);
+      if (!avatarPlaybackLocked) {
+        void sendTextToAvatar(text, {
+          endState: options.endState || "happy",
+          maxChars: Math.min(options.maxChars || 160, 180),
+          source: options.source || "qa",
+        });
+      }
+      return true;
+    }
     const didStart = speech.speak(text, {
       maxChars: options.maxChars,
       onEnd: () => {
@@ -355,23 +478,105 @@ export function MobileHomePage() {
     return didStart;
   }
 
-  function speakLatestAnswer() {
-    if (qaResult?.answer) {
-      speakWithHuman(qaResult.answer);
+  async function sendTextToAvatar(
+    text: string,
+    options: { endState?: DigitalHumanState; maxChars?: number; source?: AvatarSpeakSource } = {},
+  ) {
+    const cleanText = speechExcerpt(text, options.maxChars || 160);
+    if (!cleanText) {
       return;
     }
-    if (routeResult) {
-      speakWithHuman(routeSpeechSummary(routeResult));
+    const now = Date.now();
+    if (avatarPlaybackLocked) {
       return;
     }
-    if (visionResult) {
-      speakWithHuman(visionSpeechSummary(visionResult));
+    if (lastAvatarSpeakRef.current.text === cleanText && now - lastAvatarSpeakRef.current.at < 1500) {
+      return;
+    }
+    lastAvatarSpeakRef.current = { text: cleanText, at: now };
+    try {
+      const result = await speakAvatarText({
+        text: cleanText,
+        emotion: "happy",
+        source: options.source || "qa",
+        interrupt: true,
+      });
+      if (result.accepted) {
+        setHumanState(options.endState || "happy", "已发送给数字人表现层播报。");
+      } else {
+        setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
+        setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
+      }
+    } catch {
+      setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
+      setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
     }
   }
 
-  function stopSpeaking() {
+  async function speakLatestAnswer() {
     speech.stop();
-    resetHuman("播报已停止，文本内容还在页面里。");
+    if (avatarPlaybackLocked) {
+      setAvatarActionMessage(`数字人正在讲解，请 ${avatarPlaybackRemainingSeconds} 秒后再试。`);
+      return;
+    }
+    let text = "";
+    let source: "qa" | "route" | "vision" = "qa";
+    if (qaResult?.answer) {
+      text = qaResult.answer;
+      source = "qa";
+    } else if (routeResult) {
+      text = routeAvatarSpeakSummary(routeResult);
+      source = "route";
+    } else if (visionResult) {
+      text = visionSpeechSummary(visionResult);
+      source = "vision";
+    }
+    if (!text) {
+      return;
+    }
+    setAvatarActionMessage("");
+    lockAvatarPlayback("route", source === "route" ? 5_000 : 4_000);
+    try {
+      const result = await speakAvatarText({
+        text: speechExcerpt(text, 180),
+        emotion: "happy",
+        source,
+        interrupt: true,
+      });
+      if (result.accepted) {
+        setAvatarActionMessage(result.fallback_reason ? "已发送给数字人播报，当前表现层可自动降级。" : "已发送给数字人播报。");
+        setHumanState("happy", "已发送给数字人播报。");
+      } else {
+        setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
+        setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
+        unlockAvatarPlaybackSoon();
+      }
+    } catch {
+      setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
+      setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
+      unlockAvatarPlaybackSoon();
+    }
+  }
+
+  async function startLiveAvatarBroadcast() {
+    if (qaResult || routeResult || visionResult) {
+      await speakLatestAnswer();
+      return;
+    }
+    await sendTextToAvatar(
+      "您好，我是灵境导游。你可以问我灵山大佛适合怎么游览，也可以让我推荐路线。",
+      { endState: "happy", maxChars: 120, source: "qa" },
+    );
+    setAvatarActionMessage("已发送给数字人播报。");
+  }
+
+  function stopLiveAvatarBroadcast() {
+    speech.stop();
+    setAvatarPlaybackLockedUntil(0);
+    setAvatarActionLoading(null);
+    setAvatarPlaybackTick(Date.now());
+    setAvatarActionMessage("已停止页面播报状态。");
+    resetHuman("播报已停止。你可以继续提问。");
   }
 
   function toggleVoiceInput() {
@@ -575,6 +780,73 @@ export function MobileHomePage() {
     ];
   }
 
+  async function sendRouteToAvatar() {
+    if (!routeResult) {
+      return;
+    }
+    if (avatarPlaybackLocked) {
+      setAvatarActionMessage(`数字人正在讲解，请 ${avatarPlaybackRemainingSeconds} 秒后再试。`);
+      return;
+    }
+    const text = routeAvatarSpeakSummary(routeResult);
+    speech.stop();
+    setAvatarActionMessage("");
+    lockAvatarPlayback("route", 5_000);
+    try {
+      const result = await speakAvatarText({
+        text,
+        emotion: "happy",
+        source: "route",
+        interrupt: true,
+      });
+      if (result.accepted) {
+        setAvatarActionMessage(result.fallback_reason ? "已发送给数字人播报，当前表现层可自动降级。" : "已发送给数字人播报。");
+        setHumanState("happy", "已发送给数字人播报。");
+      } else {
+        setAvatarActionMessage("已切换为文本播报/稍后重试。");
+        setHumanState("comforting", "数字人暂不可用，路线摘要请查看页面文本。");
+        unlockAvatarPlaybackSoon();
+      }
+    } catch {
+      setAvatarActionMessage("已切换为文本播报/稍后重试。");
+      setHumanState("comforting", "数字人暂不可用，路线摘要请查看页面文本。");
+      unlockAvatarPlaybackSoon();
+    }
+  }
+
+  async function playConfirmedAvatarClip() {
+    const clip = confirmedAvatarClip;
+    if (!clip) {
+      return;
+    }
+    if (avatarPlaybackLocked) {
+      setAvatarActionMessage(`数字人正在讲解，请 ${avatarPlaybackRemainingSeconds} 秒后再试。`);
+      return;
+    }
+    speech.stop();
+    setAvatarActionMessage("");
+    lockAvatarPlayback("clip", avatarClipLockMs[clip.clipId] || 10_000);
+    try {
+      const result = await playAvatarClip({
+        clip_id: clip.clipId,
+        source: "attraction",
+        interrupt: true,
+      });
+      if (result.accepted) {
+        setAvatarActionMessage(result.fallback_reason ? "已发送给数字人讲解，当前表现层可自动降级。" : "已发送给数字人讲解。");
+        setHumanState("happy", `已发送${clip.label}讲解给数字人。`);
+      } else {
+        setAvatarActionMessage("已切换为文本播报/稍后重试。");
+        setHumanState("comforting", `${clip.label}的预存数字人讲解暂不可用，你可以点击一键讲解查看本地知识库文本。`);
+        unlockAvatarPlaybackSoon();
+      }
+    } catch {
+      setAvatarActionMessage("已切换为文本播报/稍后重试。");
+      setHumanState("comforting", `${clip.label}的预存数字人讲解暂不可用，你可以点击一键讲解查看本地知识库文本。`);
+      unlockAvatarPlaybackSoon();
+    }
+  }
+
   function syncRouteStateFromConversation(result: RouteConversationResponse) {
     setRouteConversation(result);
     setRouteSessionId(result.session_id);
@@ -582,6 +854,7 @@ export function MobileHomePage() {
     if (!result.route) {
       return;
     }
+    setAvatarActionMessage("");
     setRouteResult(result.route);
     setRouteTheme(result.route.theme);
     setRouteBudget(result.route.time_budget_minutes);
@@ -656,6 +929,7 @@ export function MobileHomePage() {
     setRouteConversation(null);
     setRouteSessionId("");
     setClarificationOptions([]);
+    setAvatarActionMessage("");
     setError("");
   }
 
@@ -683,6 +957,7 @@ export function MobileHomePage() {
         avoidAttractionIds,
       });
       setRouteResult(result);
+      setAvatarActionMessage("");
       setActiveNav("route");
       setHumanState("happy", routeSpeechSummary(result));
       speakWithHuman(routeSpeechSummary(result), { endState: "happy", maxChars: 320 });
@@ -808,16 +1083,38 @@ export function MobileHomePage() {
         </div>
       </header>
 
+      <AvatarLivePanel
+        broadcastDisabled={avatarActionLoading !== null}
+        broadcasting={avatarPlaybackLocked || avatarActionLoading !== null}
+        caption={humanCaption}
+        chrome={activeNav === "recommend" ? "preview" : "full"}
+        onStartBroadcast={() => void startLiveAvatarBroadcast()}
+        onStopBroadcast={stopLiveAvatarBroadcast}
+        sidecarUrl={avatarStatus?.sidecar_url || undefined}
+        state={humanState}
+        status={avatarStatus}
+        title="灵境导游"
+        variant="mobile"
+      />
+
       {activeNav === "recommend" ? (
         <>
-          <section className="mobile-home-hero scenic-image-placeholder" aria-labelledby="mobile-home-hero-title">
-            <div className="mobile-home-hero__mountains" aria-hidden="true" />
-            <DigitalHumanMock caption={humanCaption} state={humanState} className="mobile-home-hero__human" />
-            <div className="mobile-home-hero__bubble">
-              <h2 id="mobile-home-hero-title">您好，我是灵境导游小灵</h2>
-              <p>很高兴为您服务，想了解什么呢？</p>
-            </div>
-          </section>
+          <button
+            className="mobile-home-hero mobile-home-hero--avatar"
+            onClick={() => {
+              setActiveNav("guide");
+              window.setTimeout(() => composerInputRef.current?.focus(), 120);
+            }}
+            type="button"
+          >
+            <span className="mobile-home-hero__preview">
+            </span>
+            <span className="mobile-home-hero__bubble">
+              <strong id="mobile-home-hero-title">您好，我是灵境导游小灵</strong>
+              <span>{humanCaption || "想了解景点、文化故事或适合怎么游览？点击进入数字人导游。"}</span>
+            </span>
+            <span className="mobile-home-hero__cta">进入游灵山</span>
+          </button>
 
           <form className="home-ask-bar" aria-label="首页提问" onSubmit={handleSubmit}>
             <input
@@ -926,36 +1223,10 @@ export function MobileHomePage() {
           <ImageIcon name="buddha" size={32} />
           <div>
             <strong>
-              {qaLoading ? "检索中" : clarificationOptions.length ? "需要澄清" : speech.speaking ? "正在讲解" : submittedQuestion ? "待追问" : "待提问"}
+              {qaLoading ? "检索中" : clarificationOptions.length ? "需要澄清" : avatarActionLoading ? "正在发送" : submittedQuestion ? "待追问" : "待提问"}
             </strong>
-            <span>{speech.speaking ? "TTS 播报中" : speech.supported ? "TTS 可用" : "TTS 不可用"}</span>
+            <span>本地 TTS 关闭 · 数字人接手</span>
           </div>
-        </div>
-      </section>
-
-      <section className="guide-live-stage" aria-label="沉浸式数字人直播讲解">
-        <div className="guide-live-stage__top">
-          <span className="guide-live-stage__badge">
-            小灵 · {qaLoading ? "检索中" : recognition.listening ? "正在听" : speech.speaking ? "口型同步讲解" : "在线待命"}
-          </span>
-          <span className="guide-live-stage__signal">
-            {speech.speaking ? "TTS 播报中" : recognition.supported ? "语音可用" : "文本可用"}
-          </span>
-        </div>
-        <div className={`guide-live-avatar-slot guide-live-avatar-slot--${humanState}`} aria-label="数字人渲染接口位">
-          <div className="guide-live-avatar-slot__figure" aria-hidden="true">
-            <span />
-            <i />
-          </div>
-          <div className="guide-live-avatar-slot__waves" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-        </div>
-        <div className="guide-live-stage__caption">
-          <strong>{speech.speaking ? "正在讲解" : recognition.listening ? "我在听" : qaLoading ? "正在查资料" : "可以语音或文字提问"}</strong>
-          <span>{humanCaption}</span>
         </div>
       </section>
 
@@ -1017,16 +1288,16 @@ export function MobileHomePage() {
           <div className="speech-control-row" aria-label="数字人语音控制">
             <Button
               className="speech-control-button"
-              disabled={!qaResult && !routeResult && !visionResult}
-              icon={speech.speaking ? <VolumeX size={18} /> : <Volume2 size={18} />}
-              onClick={speech.speaking ? stopSpeaking : speakLatestAnswer}
+              disabled={avatarPlaybackLocked || avatarActionLoading !== null || (!qaResult && !routeResult && !visionResult)}
+              icon={<Volume2 size={18} />}
+              onClick={() => void speakLatestAnswer()}
               type="button"
-              variant={speech.speaking ? "quiet" : "secondary"}
+              variant="secondary"
             >
-              {speech.speaking ? "停止播报" : "播报最新回答"}
+              {avatarPlaybackLocked ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : avatarActionLoading ? "正在发送" : "发送给数字人"}
             </Button>
             <span>
-              {speech.supported ? "TTS 使用浏览器 SpeechSynthesis" : "此浏览器不支持 TTS，文本可用"}
+              游客端本地 TTS 已关闭，播报由数字人表现层接手
               {recognition.listening ? " · 正在听取" : ""}
             </span>
           </div>
@@ -1100,9 +1371,9 @@ export function MobileHomePage() {
                 </div>
               </div>
               <section className="guide-action-grid" aria-label="讲解操作">
-                <button type="button" onClick={speech.speaking ? stopSpeaking : speakLatestAnswer} disabled={!qaResult && !routeResult && !visionResult}>
+                <button type="button" onClick={() => void speakLatestAnswer()} disabled={avatarPlaybackLocked || avatarActionLoading !== null || (!qaResult && !routeResult && !visionResult)}>
                   <Volume2 aria-hidden="true" size={24} />
-                  播放讲解
+                  {avatarPlaybackLocked ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : "数字人播报"}
                 </button>
                 <button type="button" onClick={() => setAnswerDetailOpen(true)} disabled={!qaResult}>
                   <ImageIcon name="source-doc" size={25} />
@@ -1449,6 +1720,20 @@ export function MobileHomePage() {
               <div className="vision-confirmed-panel" aria-label="确认后讲解入口">
                 <strong>已确认：{confirmedVisionCandidate()?.attraction.name}</strong>
                 <p>接下来会走本地知识库问答，不凭视觉候选编造讲解。</p>
+                {confirmedAvatarClip ? (
+                  <div className="avatar-speak-row avatar-speak-row--vision">
+                    <button
+                      className="avatar-speak-button avatar-speak-button--clip"
+                      disabled={avatarPlaybackLocked || avatarActionLoading !== null}
+                      onClick={() => void playConfirmedAvatarClip()}
+                      type="button"
+                    >
+                      <Volume2 aria-hidden="true" size={18} />
+                      {avatarActionLoading === "clip" ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : "数字人讲解"}
+                    </button>
+                  </div>
+                ) : null}
+                {avatarActionMessage ? <p className="avatar-speak-status">{avatarActionMessage}</p> : null}
                 <div className="suggested-question-list" aria-label="识景建议问题">
                 {visionSuggestedQuestions().map((item) => (
                   <button className="quick-question" key={item} onClick={() => void submitQuestion(item)} type="button">
@@ -1692,11 +1977,23 @@ export function MobileHomePage() {
               </div>
               <p>{routePrimaryCrowdText}</p>
               <div className="route-ticket__share">
-                <span>根据实时客流为您生成，预计拥挤时段已避开</span>
+                <span>根据模拟拥挤度为您生成，预计拥挤时段已避开</span>
                 <a href={routeResult.share.share_url}>
                   查看地图
                 </a>
               </div>
+              <div className="avatar-speak-row avatar-speak-row--route">
+                <button
+                  className="avatar-speak-button avatar-speak-button--route"
+                  disabled={avatarPlaybackLocked || avatarActionLoading !== null}
+                  onClick={() => void sendRouteToAvatar()}
+                  type="button"
+                >
+                  <Volume2 aria-hidden="true" size={18} />
+                  {avatarActionLoading === "route" ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : "数字人播报路线"}
+                </button>
+              </div>
+              {avatarActionMessage ? <p className="avatar-speak-status">{avatarActionMessage}</p> : null}
             </div>
             <RouteTopologySummary route={routeResult} />
           </>
@@ -1925,6 +2222,10 @@ export function MobileHomePage() {
                 <ImageIcon name="route-path" size={22} />
                 调整路线
               </button>
+              <button type="button" onClick={() => void sendRouteToAvatar()} disabled={avatarPlaybackLocked || avatarActionLoading !== null}>
+                <Volume2 aria-hidden="true" size={22} />
+                {avatarPlaybackLocked ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : "数字人播报"}
+              </button>
             </div>
           </div>
         ) : null}
@@ -2041,7 +2342,7 @@ export function MobileHomePage() {
 
       <div className="mobile-mode-note">
         <Layers aria-hidden="true" size={16} />
-        当前为 mock 模式：前端只调用后端 API，不接触模型厂商 Key。
+        前端只调用灵境后端 API；数字人表现层由后端统一转发或降级。
       </div>
     </PageShell>
   );

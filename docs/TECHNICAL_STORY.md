@@ -2,7 +2,7 @@
 
 ## 一句话
 
-灵境导游不是让大模型自由讲解景区，而是用 `Query Understanding Gate + 本地 RAG 来源 + 受约束 Route Planner + 本地 eval reports` 组成可解释、可评测、可运营的景区 AI 数字人导览系统。
+灵境导游不是让大模型自由讲解景区，而是用 `Query Understanding Gate + 本地 RAG 来源 + 受约束 Route Planner + 数字人表现层 + 本地 eval reports` 组成可解释、可评测、可运营的景区 AI 数字人导览系统。
 
 ## 三大闭环
 
@@ -23,6 +23,24 @@
 游客问答、识景、路线、二维码带走、反馈会沉淀为本地交互日志。后台可以看到服务统计、拥挤预警、运营事件、知识缺口和评测看板。
 
 当系统遇到无来源、低置信或“信息不准”反馈，会进入知识缺口列表。管理员可以生成 FAQ 草稿、标记状态并加入评测集，为后续资料补充和索引重建提供依据。
+
+### 4. 数字人表现闭环
+
+数字人不负责事实生成或路线决策。灵境后端先完成 Query Gate、RAG、识景确认或 Route Planner，再把可信短文本或白名单预存讲解 clip 交给表现层。
+
+当前已验证两条本机演示路径：
+
+1. 短句播报：`POST /api/avatar/speak` 把后端可信短文本送入 OpenAvatarChat + LiteAvatar sidecar。
+2. 预存讲解：`POST /api/avatar/play-clip` 只接收后端白名单 `clip_id`，把 `external/avatar-clips` 下的 wav 作为 `AVATAR_AUDIO` 交给 LiteAvatar 输出 audio/video。
+
+这两条路径都不使用 OpenAvatarChat WebUI 的 `SendHumanText`，不进入 `HUMAN_TEXT`，不调用 LLM。sidecar 离线时主后端降级 mock，不影响问答、路线、识景和后台。
+
+Task 07.6G 后，实际演示链路已经从“PowerShell 单测”推进到游客端/Kiosk 按钮：
+
+- `scripts/start_avatar_demo.ps1` 默认优先使用 ignored `lingjing_trusted_liteavatar_fast.yaml`，并把后端启动在 `8000`，对齐游客端 Vite `/api` 代理。
+- 游客端和 Kiosk 按钮只调用灵境后端 `/api/avatar/speak`、`/api/avatar/play-clip`；前端不直连 OpenAvatarChat API 或模型厂商。
+- 游客端本地浏览器 TTS 已关闭，发声/口型以 8282 WebUI 的 LiteAvatar session 为准。
+- 预存 clip 的 sidecar 注入采用 SAPI-compatible stream 语义：先提交完整 `AVATAR_AUDIO` 且 `finish_stream=False`，再提交 10ms 静音结束包且 `finish_stream=True`，避免整段 wav 和结束标记在同一个包里导致卡顿或无口型。
 
 ## Query Understanding Gate
 
@@ -135,6 +153,23 @@
 - 运营事件来源为 `manual_admin` 或 `mock_simulation`，不代表真实硬件。
 - 不接真实闸机、摄像头、Wi-Fi 探针、GPS、IoT。
 - 不记录真实个人身份。
+- OpenAvatarChat + LiteAvatar 是本机 sidecar 表现层预研；不是生产级数字人平台，也不代表真实景区硬件接入。
+
+## 数字人表现层边界
+
+当前数字人能力分三层：
+
+1. 主前端 mock fallback：React/SVG/CSS 数字人状态机，保证无 sidecar、无 API Key 也能演示。
+2. 可信短文本播报：主后端 `/api/avatar/speak` 生成或转发短句，sidecar 在线时由 LiteAvatar 发声和口型表现。
+3. 预存讲解 clip：主后端 `/api/avatar/play-clip` 按白名单播放固定景点讲解 wav，适合 20 到 60 秒演示段落。
+
+工程约束：
+
+- 前端只能调用灵境后端 API。
+- 请求只能传 `clip_id`，不能传任意音频路径。
+- sidecar 只接受后端可信内容，不接管 RAG、Route Planner、Vision、Analytics。
+- 长讲解优先预存音频，不建议现场长文本 TTS。
+- 换音色优先通过预存 clip 或 TTS 配置完成；换数字人模型属于后续配置化预研，不应在答辩前大改主链路。
 
 ## 后续接 LLM 的正确位置
 

@@ -1,11 +1,15 @@
 param(
     [string]$ProjectRoot = "D:\py\dota",
     [int]$SidecarPort = 8282,
-    [int]$BackendPort = 8015,
+    [int]$BackendPort = 8000,
+    [int]$FrontendPort = 5174,
+    [string]$SidecarConfigName = "",
     [double]$MinFreeGB = 8.0,
     [switch]$ForceLowMemory,
     [switch]$SkipBackend,
-    [switch]$OpenWebUI
+    [switch]$SkipFrontend,
+    [switch]$OpenWebUI,
+    [switch]$OpenVisitor
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +17,23 @@ $ErrorActionPreference = "Stop"
 function Get-FreeMemoryGB {
     $os = Get-CimInstance Win32_OperatingSystem
     return [math]::Round($os.FreePhysicalMemory / 1MB, 2)
+}
+
+function Stop-OrphanedSidecarWorkers {
+    param([string]$Root)
+
+    $sidecarPython = Join-Path $Root ".sidecar-python"
+    $orphans = Get-CimInstance Win32_Process |
+        Where-Object {
+            $cmd = [string]$_.CommandLine
+            $cmd.Contains($sidecarPython) -and
+            $cmd.Contains("multiprocessing.spawn") -and
+            -not (Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue)
+        }
+    foreach ($orphan in $orphans) {
+        "Stopping orphaned sidecar worker PID=$($orphan.ProcessId)"
+        Stop-Process -Id $orphan.ProcessId -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Get-Listener {
@@ -73,9 +94,21 @@ function Start-HiddenPowerShell {
 }
 
 $project = (Resolve-Path -LiteralPath $ProjectRoot).Path
+Stop-OrphanedSidecarWorkers -Root $project
 $openAvatarDir = Join-Path $project "external\OpenAvatarChat"
 $uvExe = Join-Path $project ".sidecar-tools\Scripts\uv.exe"
-$sidecarConfig = Join-Path $openAvatarDir "config\lingjing_trusted_liteavatar_edge_tts.yaml"
+$fastConfigName = "lingjing_trusted_liteavatar_fast.yaml"
+$stableConfigName = "lingjing_trusted_liteavatar_edge_tts.yaml"
+if (-not $SidecarConfigName) {
+    $fastConfigPath = Join-Path $openAvatarDir "config\$fastConfigName"
+    if (Test-Path -LiteralPath $fastConfigPath) {
+        $SidecarConfigName = $fastConfigName
+    }
+    else {
+        $SidecarConfigName = $stableConfigName
+    }
+}
+$sidecarConfig = Join-Path $openAvatarDir "config\$SidecarConfigName"
 $runtimeDll = Join-Path $openAvatarDir ".runtime-dll"
 $sidecarTools = Join-Path $project ".sidecar-tools\Scripts"
 $logDir = Join-Path $project "external\run_logs"
@@ -96,6 +129,9 @@ $backendListener = Get-Listener -Port $BackendPort
 
 "Avatar demo startup"
 "Project: $project"
+"Sidecar config: config/$SidecarConfigName"
+"Backend API: http://127.0.0.1:$BackendPort"
+"Visitor UI: http://127.0.0.1:$FrontendPort/"
 "Free memory: $freeBefore GB"
 
 if (-not $sidecarListener -and -not $ForceLowMemory -and $freeBefore -lt $MinFreeGB) {
@@ -104,6 +140,7 @@ if (-not $sidecarListener -and -not $ForceLowMemory -and $freeBefore -lt $MinFre
 
 if ($sidecarListener) {
     "Sidecar already listening on port $SidecarPort, PID=$($sidecarListener.OwningProcess)."
+    "If you need the Task 07.6G fast config, stop the old sidecar first with scripts\stop_avatar_demo.ps1 and rerun this script."
 }
 else {
     $pathValue = "$runtimeDll;$sidecarTools;$env:PATH"
@@ -111,7 +148,7 @@ $sidecarScript = @"
 `$env:PATH = '$pathValue'
 `$env:PYTHONUTF8 = '1'
 `$env:PYTHONIOENCODING = 'utf-8'
-& '$uvExe' run --python 3.11 src/demo.py --host 127.0.0.1 --port $SidecarPort --config config/lingjing_trusted_liteavatar_edge_tts.yaml
+& '$uvExe' run --python 3.11 src/demo.py --host 127.0.0.1 --port $SidecarPort --config config/$SidecarConfigName
 "@
     $sidecarStarted = Start-HiddenPowerShell -Name "avatar_sidecar" -WorkingDirectory $openAvatarDir -ScriptBlockText $sidecarScript -LogDirectory $logDir
     "Started sidecar launcher PID=$($sidecarStarted.launcher_pid)"
@@ -126,6 +163,7 @@ if (-not $SkipBackend) {
     $backendListener = Get-Listener -Port $BackendPort
     if ($backendListener) {
         "Backend already listening on port $BackendPort, PID=$($backendListener.OwningProcess)."
+        "If visitor/Kiosk avatar buttons still return mode=mock, stop the old demo backend first with scripts\stop_avatar_demo.ps1 and rerun this script."
     }
     else {
         $backendScript = @"
@@ -134,6 +172,8 @@ if (-not $SkipBackend) {
 `$env:AVATAR_SIDECAR_BASE_URL = 'http://127.0.0.1:$SidecarPort'
 `$env:AVATAR_SIDECAR_SPEAK_PATH = '/lingjing/avatar/speak'
 `$env:AVATAR_SIDECAR_CLIP_PATH = '/lingjing/avatar/play-clip'
+`$env:PYTHONUTF8 = '1'
+`$env:PYTHONIOENCODING = 'utf-8'
 python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $BackendPort
 "@
         $backendStarted = Start-HiddenPowerShell -Name "avatar_backend" -WorkingDirectory $project -ScriptBlockText $backendScript -LogDirectory $logDir
@@ -144,6 +184,24 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $Backen
 
     $backendReady = Wait-JsonEndpoint -Url "http://127.0.0.1:$BackendPort/api/health" -TimeoutSeconds 60
     "Backend health: $($backendReady.status)"
+}
+
+if (-not $SkipFrontend) {
+    $frontendListener = Get-Listener -Port $FrontendPort
+    if ($frontendListener) {
+        "Frontend already listening on port $FrontendPort, PID=$($frontendListener.OwningProcess)."
+        "Vite /api proxy expects the backend on http://127.0.0.1:$BackendPort."
+    }
+    else {
+        $frontendScript = @"
+npm --prefix .\frontend run dev -- --host 127.0.0.1 --port $FrontendPort
+"@
+        $frontendStarted = Start-HiddenPowerShell -Name "avatar_frontend" -WorkingDirectory $project -ScriptBlockText $frontendScript -LogDirectory $logDir
+        "Started frontend launcher PID=$($frontendStarted.launcher_pid)"
+        "  stdout: $($frontendStarted.stdout)"
+        "  stderr: $($frontendStarted.stderr)"
+        Start-Sleep -Seconds 3
+    }
 }
 
 $healthcheck = Join-Path $project "scripts\avatar_sidecar_healthcheck.ps1"
@@ -169,4 +227,8 @@ if (-not $sessions.active_session_id) {
 
 if ($OpenWebUI) {
     Start-Process "http://127.0.0.1:$SidecarPort"
+}
+
+if ($OpenVisitor) {
+    Start-Process "http://127.0.0.1:$FrontendPort/"
 }
