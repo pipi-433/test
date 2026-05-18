@@ -25,6 +25,15 @@ from app.services.admin_knowledge_service import (
     update_admin_faq,
     update_admin_knowledge_asset,
 )
+from app.services.admin_sentiment_service import (
+    generate_admin_sentiment_report,
+    get_admin_sentiment_report,
+)
+from app.services.admin_system_service import (
+    get_admin_system_settings,
+    run_admin_system_healthcheck,
+    update_admin_system_settings,
+)
 from app.services.avatar_clip_player import play_avatar_clip
 from app.services.avatar_speaker import enqueue_avatar_speech, get_avatar_status
 from app.services.avatar_webrtc import proxy_avatar_webrtc_offer
@@ -269,6 +278,15 @@ class AdminAvatarClipGenerateRequest(BaseModel):
     title: str | None = None
     clip_id: str | None = None
     attraction_id: str | None = None
+
+
+class AdminSystemSettingsUpdateRequest(BaseModel):
+    scenic_area_name: str | None = None
+    default_provider_mode: str | None = None
+    avatar_mode: str | None = None
+    mock_crowd_enabled: bool | None = None
+    route_topology_enabled: bool | None = None
+    data_boundary_notice: str | None = None
 
 
 def _dump_model(payload: BaseModel, *, exclude_unset: bool = False) -> dict[str, Any]:
@@ -672,6 +690,16 @@ def admin_eval_reports_overview() -> dict[str, object]:
     return eval_reports_overview()
 
 
+@router.get("/admin/sentiment/report")
+def admin_sentiment_report() -> dict[str, object]:
+    return get_admin_sentiment_report()
+
+
+@router.post("/admin/sentiment/report/generate")
+def admin_generate_sentiment_report() -> dict[str, object]:
+    return generate_admin_sentiment_report()
+
+
 @router.get("/admin/avatar/profile")
 def admin_avatar_profile() -> dict[str, object]:
     return get_admin_avatar_profile()
@@ -695,6 +723,21 @@ def admin_avatar_generate_clip(payload: AdminAvatarClipGenerateRequest) -> dict[
 @router.get("/admin/avatar/clips/jobs")
 def admin_avatar_clip_jobs() -> dict[str, object]:
     return list_admin_avatar_clip_jobs()
+
+
+@router.get("/admin/system/settings")
+def admin_system_settings() -> dict[str, object]:
+    return get_admin_system_settings()
+
+
+@router.patch("/admin/system/settings")
+def admin_update_system_settings(payload: AdminSystemSettingsUpdateRequest) -> dict[str, object]:
+    return update_admin_system_settings(_dump_model(payload, exclude_unset=True))
+
+
+@router.post("/admin/system/healthcheck")
+def admin_system_healthcheck() -> dict[str, object]:
+    return run_admin_system_healthcheck()
 
 
 @router.post("/routes/recommend")

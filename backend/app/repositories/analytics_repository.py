@@ -240,6 +240,64 @@ def feedback_tags() -> list[dict[str, Any]]:
     return [{"tag": tag, "count": count} for tag, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]
 
 
+def feedback_rating_distribution() -> dict[str, int]:
+    rows = _rows("SELECT rating FROM feedback_events")
+    distribution = {"positive": 0, "neutral": 0, "negative": 0, "total": 0}
+    for row in rows:
+        rating = int(row["rating"])
+        distribution["total"] += 1
+        if rating >= 4:
+            distribution["positive"] += 1
+        elif rating == 3:
+            distribution["neutral"] += 1
+        else:
+            distribution["negative"] += 1
+    return distribution
+
+
+def feedback_rows(limit: int = 12) -> list[dict[str, Any]]:
+    rows = _rows(
+        """
+        SELECT id, channel, route_id, attraction_id, rating, tags_json, comment, created_at
+        FROM feedback_events
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (max(1, min(limit, 100)),),
+    )
+    items = []
+    for row in rows:
+        try:
+            tags = json.loads(row["tags_json"])
+        except json.JSONDecodeError:
+            tags = []
+        rating = int(row["rating"])
+        if rating >= 4:
+            sentiment = "positive"
+            status = "已处理"
+        elif rating == 3:
+            sentiment = "neutral"
+            status = "处理中"
+        else:
+            sentiment = "negative"
+            status = "待跟进"
+        topic = row["attraction_id"] or row["route_id"] or "游客反馈"
+        items.append(
+            {
+                "id": row["id"],
+                "time": row["created_at"],
+                "channel": row["channel"],
+                "topic": topic,
+                "rating": rating,
+                "tags": tags,
+                "comment": row["comment"] or "游客未填写文字备注。",
+                "sentiment": sentiment,
+                "status": status,
+            }
+        )
+    return items
+
+
 def recent_events(limit: int = 12) -> list[dict[str, Any]]:
     rows = _rows(
         """

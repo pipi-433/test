@@ -362,6 +362,65 @@ export type AdminAvatarClipJobsResponse = {
   source_note: string;
 };
 
+export type AdminSentimentFeedbackRow = {
+  id: string;
+  time: string;
+  channel: string;
+  topic: string;
+  rating: number;
+  tags: string[];
+  comment: string;
+  sentiment: "positive" | "neutral" | "negative" | string;
+  status: string;
+};
+
+export type AdminSentimentReport = {
+  satisfaction_score: number;
+  positive_rate: number;
+  pending_issues: number;
+  low_confidence_count: number;
+  emotion_volatility_index: number;
+  focus_topics: Array<{ topic: string; count: number }>;
+  negative_reasons: Array<{ reason: string; count: number; percent: number }>;
+  route_experience_tags: Array<{ tag: string; count: number; percent: number }>;
+  service_suggestions: string[];
+  feedback_rows: AdminSentimentFeedbackRow[];
+  generated_at: string;
+  mode: string;
+  source_note: string;
+};
+
+export type AdminSentimentReportGenerateResponse = AdminSentimentReport & {
+  accepted: boolean;
+  job_id: string;
+  message: string;
+};
+
+export type AdminSystemSettings = {
+  id?: string;
+  scenic_area_name: string;
+  default_provider_mode: string;
+  avatar_mode: string;
+  mock_crowd_enabled: boolean;
+  route_topology_enabled: boolean;
+  data_boundary_notice: string;
+  updated_at?: string;
+  mode?: string;
+  source_note?: string;
+};
+
+export type AdminSystemHealthcheck = {
+  backend: Record<string, unknown>;
+  database: Record<string, unknown>;
+  avatar_mock: Record<string, unknown>;
+  sidecar_status: Record<string, unknown>;
+  knowledge_local: Record<string, unknown>;
+  settings: AdminSystemSettings;
+  checked_at: string;
+  mode: string;
+  source_note: string;
+};
+
 export type EvalReportStatus = "pass" | "fail" | "missing";
 
 export type EvalFailureSample = {
@@ -1179,6 +1238,35 @@ export async function generateAdminAvatarClip(payload: {
 
 export async function getAdminAvatarClipJobs(): Promise<AdminAvatarClipJobsResponse> {
   return requestJson<AdminAvatarClipJobsResponse>("/api/admin/avatar/clips/jobs");
+}
+
+export async function getAdminSentimentReport(): Promise<AdminSentimentReport> {
+  return requestJson<AdminSentimentReport>("/api/admin/sentiment/report");
+}
+
+export async function generateAdminSentimentReport(): Promise<AdminSentimentReportGenerateResponse> {
+  return requestJson<AdminSentimentReportGenerateResponse>("/api/admin/sentiment/report/generate", {
+    body: JSON.stringify({}),
+    method: "POST",
+  });
+}
+
+export async function getAdminSystemSettings(): Promise<AdminSystemSettings> {
+  return requestJson<AdminSystemSettings>("/api/admin/system/settings");
+}
+
+export async function updateAdminSystemSettings(payload: Partial<AdminSystemSettings>): Promise<AdminSystemSettings> {
+  return requestJson<AdminSystemSettings>("/api/admin/system/settings", {
+    body: JSON.stringify(payload),
+    method: "PATCH",
+  });
+}
+
+export async function runAdminSystemHealthcheck(): Promise<AdminSystemHealthcheck> {
+  return requestJson<AdminSystemHealthcheck>("/api/admin/system/healthcheck", {
+    body: JSON.stringify({}),
+    method: "POST",
+  });
 }
 
 export async function sendAvatarWebrtcOffer(payload: AvatarWebrtcOfferRequest): Promise<AvatarWebrtcOfferResponse> {

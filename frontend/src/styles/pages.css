@@ -6553,6 +6553,8 @@
 .admin-faq-editor input,
 .admin-faq-editor textarea,
 .admin-setting-form input,
+.admin-setting-form select,
+.admin-setting-form textarea,
 .admin-slider-list select {
   width: 100%;
   min-height: 42px;
@@ -6564,9 +6566,27 @@
   font: inherit;
 }
 
-.admin-faq-editor textarea {
+.admin-faq-editor textarea,
+.admin-setting-form textarea {
   resize: vertical;
   line-height: 1.6;
+}
+
+.admin-setting-form .admin-checkbox-row {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #eadfca;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffdf8;
+}
+
+.admin-setting-form .admin-checkbox-row input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--admin-teal);
 }
 
 .admin-avatar-preview {

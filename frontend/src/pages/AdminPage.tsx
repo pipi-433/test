@@ -43,17 +43,22 @@ import {
   draftKnowledgeGapFaq,
   fetchAttractions,
   generateAdminAvatarClip,
+  generateAdminSentimentReport,
   getAdminAvatarClipJobs,
   getAdminAvatarProfile,
   getAdminFaqs,
   getAdminKnowledgeAssets,
   getAdminOperationEvents,
+  getAdminSentimentReport,
+  getAdminSystemSettings,
   getAnalyticsOverview,
   getEvalReportsOverview,
   getKnowledgeGaps,
   publishAdminKnowledge,
   reindexAdminKnowledge,
+  runAdminSystemHealthcheck,
   runAdminAvatarVoiceTest,
+  updateAdminSystemSettings,
   updateAdminAvatarProfile,
   updateAdminFaq,
   updateKnowledgeGapStatus,
@@ -65,6 +70,9 @@ import type {
   AdminFaq,
   AdminKnowledgeAsset,
   AdminKnowledgeStatus,
+  AdminSentimentReport,
+  AdminSystemHealthcheck,
+  AdminSystemSettings,
   AnalyticsOverview,
   Attraction,
   EvalReportsOverview,
@@ -106,6 +114,15 @@ const defaultAdminAvatarProfile: AdminAvatarProfile = {
   volume: 0.9,
   default_emotion: "happy",
   background_style: "灵山山水",
+};
+
+const defaultAdminSystemSettings: AdminSystemSettings = {
+  scenic_area_name: "灵山胜境",
+  default_provider_mode: "mock",
+  avatar_mode: "mock",
+  mock_crowd_enabled: true,
+  route_topology_enabled: true,
+  data_boundary_notice: "本地演示日志、公开样例与 mock 数据，不代表真实全园运营数据。",
 };
 
 const adminNavItems: Array<{ id: AdminTabId; label: string; path: string; Icon: typeof Home }> = [
@@ -259,6 +276,19 @@ function formatMaybeDate(value?: string | null) {
     minute: "2-digit",
     month: "2-digit",
   });
+}
+
+function sentimentLabel(value: string) {
+  if (value === "positive") return "正向";
+  if (value === "negative") return "负向";
+  if (value === "neutral") return "中性";
+  return value;
+}
+
+function sentimentTone(value: string): "ok" | "warning" | "neutral" {
+  if (value === "positive") return "ok";
+  if (value === "negative") return "warning";
+  return "neutral";
 }
 
 function eventTimeWindow(event: OperationEvent) {
@@ -445,6 +475,13 @@ export function AdminPage() {
   const [avatarJobs, setAvatarJobs] = useState<AdminAvatarClipJob[]>([]);
   const [avatarMessage, setAvatarMessage] = useState("");
   const [avatarBusy, setAvatarBusy] = useState("");
+  const [sentimentReport, setSentimentReport] = useState<AdminSentimentReport | null>(null);
+  const [sentimentMessage, setSentimentMessage] = useState("");
+  const [sentimentBusy, setSentimentBusy] = useState("");
+  const [systemSettings, setSystemSettings] = useState<AdminSystemSettings>(defaultAdminSystemSettings);
+  const [systemHealth, setSystemHealth] = useState<AdminSystemHealthcheck | null>(null);
+  const [systemMessage, setSystemMessage] = useState("");
+  const [systemBusy, setSystemBusy] = useState("");
 
   useEffect(() => {
     fetch("/api/provider/status")
@@ -462,6 +499,8 @@ export function AdminPage() {
     void loadKnowledgeGaps();
     void loadAdminKnowledge();
     void loadAdminAvatar();
+    void loadAdminSentimentReport();
+    void loadAdminSystemSettings();
   }, []);
 
   async function loadOperationAttractions() {
@@ -509,6 +548,24 @@ export function AdminPage() {
       setAvatarJobs(jobsPayload.items);
     } catch (cause) {
       setAvatarMessage(cause instanceof Error ? cause.message : "数字人管理数据加载失败。");
+    }
+  }
+
+  async function loadAdminSentimentReport() {
+    try {
+      const report = await getAdminSentimentReport();
+      setSentimentReport(report);
+    } catch (cause) {
+      setSentimentMessage(cause instanceof Error ? cause.message : "游客感受度报告加载失败。");
+    }
+  }
+
+  async function loadAdminSystemSettings() {
+    try {
+      const settings = await getAdminSystemSettings();
+      setSystemSettings(settings);
+    } catch (cause) {
+      setSystemMessage(cause instanceof Error ? cause.message : "系统设置加载失败。");
     }
   }
 
@@ -757,6 +814,63 @@ export function AdminPage() {
     }
   }
 
+  async function handleGenerateSentimentReport() {
+    setSentimentBusy("generate");
+    setSentimentMessage("");
+    try {
+      const report = await generateAdminSentimentReport();
+      setSentimentReport(report);
+      setSentimentMessage(`${report.message} job=${report.job_id}`);
+    } catch (cause) {
+      setSentimentMessage(cause instanceof Error ? cause.message : "游客感受度周报生成失败。");
+    } finally {
+      setSentimentBusy("");
+    }
+  }
+
+  function handleSentimentPdfStub() {
+    setSentimentMessage("演示版已生成报告数据，PDF 导出待接入；当前不会生成或下载文件。");
+  }
+
+  function handleSentimentOperationHint() {
+    setSentimentMessage("如需创建运营事件，请切换到“运营事件”页发布 crowd / closed / show / recommendation 事件。");
+  }
+
+  async function handleSaveSystemSettings() {
+    setSystemBusy("settings");
+    setSystemMessage("");
+    try {
+      const settings = await updateAdminSystemSettings({
+        avatar_mode: systemSettings.avatar_mode,
+        data_boundary_notice: systemSettings.data_boundary_notice,
+        default_provider_mode: systemSettings.default_provider_mode,
+        mock_crowd_enabled: systemSettings.mock_crowd_enabled,
+        route_topology_enabled: systemSettings.route_topology_enabled,
+        scenic_area_name: systemSettings.scenic_area_name,
+      });
+      setSystemSettings(settings);
+      setSystemMessage("系统设置已保存到本地 SQLite，mock 模式无 API Key 可运行。");
+    } catch (cause) {
+      setSystemMessage(cause instanceof Error ? cause.message : "系统设置保存失败。");
+    } finally {
+      setSystemBusy("");
+    }
+  }
+
+  async function handleRunSystemHealthcheck() {
+    setSystemBusy("health");
+    setSystemMessage("");
+    try {
+      const result = await runAdminSystemHealthcheck();
+      setSystemHealth(result);
+      setSystemMessage("健康检查已完成，结果来自后端本地状态与 mock fallback。");
+    } catch (cause) {
+      setSystemMessage(cause instanceof Error ? cause.message : "健康检查失败。");
+    } finally {
+      setSystemBusy("");
+    }
+  }
+
   const providerEntries = providers ? Object.entries(providers).map(([name, value]) => [name, value.provider, value.status]) : providerRows;
   const tags = overview?.feedback_tags || [];
   const themes = overview?.route_theme_distribution || [];
@@ -789,6 +903,11 @@ export function AdminPage() {
   const weekServiceCount = Math.max(overview?.service_count ? overview.service_count * 6 + 178 : 2146, todayServiceCount);
   const qaAccuracy = evalOverview?.overall.overall_accuracy ?? 0.926;
   const satisfaction = overview?.average_rating ?? 4.7;
+  const sentimentSatisfaction = sentimentReport?.satisfaction_score ?? satisfaction;
+  const sentimentPositiveRate = Math.round((sentimentReport?.positive_rate ?? 0.82) * 100);
+  const sentimentPendingIssues = sentimentReport?.pending_issues ?? (openGapCount || 18);
+  const sentimentLowConfidenceCount = sentimentReport?.low_confidence_count ?? (lowConfidence.length || 7);
+  const sentimentVolatilityIndex = sentimentReport?.emotion_volatility_index ?? 12;
   const avatarSuccessRate = 0.961;
   const dashboardThemes = themes.length > 0 ? themes.map((item) => ({ label: item.theme_label, value: item.count, percent: Math.min(46, Math.max(10, item.count * 10)) })) : routeThemes;
   const documentRows =
@@ -1272,11 +1391,11 @@ export function AdminPage() {
         {activeAdminSection === "sentiment" ? (
           <section className="admin-dashboard-grid admin-sentiment-screen">
             <section className="admin-kpi-grid admin-panel--span-12" aria-label="游客感受度指标">
-              <AdminMetricCard Icon={Star} label="满意度均值（5分制）" trend="较昨日 ↑ 0.2" value={satisfaction.toFixed(1)} suffix="/5" />
-              <AdminMetricCard Icon={Smile} label="正向反馈占比" trend="较昨日 ↑ 2.4%" value="82" suffix="%" />
-              <AdminMetricCard Icon={AlertTriangle} label="待跟进问题" trend="较昨日 ↓ 3" value={String(openGapCount || 18)} />
-              <AdminMetricCard Icon={MessageSquareText} label="低置信问答" trend="较昨日 ↓ 1" value={String(lowConfidence.length || 7)} />
-              <AdminMetricCard Icon={LineChart} label="情绪波动指数" trend="较昨日 ↓ 2%" value="12" suffix="%" />
+              <AdminMetricCard Icon={Star} label="满意度均值（5分制）" trend="本地反馈汇总" value={sentimentSatisfaction.toFixed(1)} suffix="/5" />
+              <AdminMetricCard Icon={Smile} label="正向反馈占比" trend="本地样例口径" value={String(sentimentPositiveRate)} suffix="%" />
+              <AdminMetricCard Icon={AlertTriangle} label="待跟进问题" trend="知识缺口 + 低置信" value={String(sentimentPendingIssues)} />
+              <AdminMetricCard Icon={MessageSquareText} label="低置信问答" trend="本地日志识别" value={String(sentimentLowConfidenceCount)} />
+              <AdminMetricCard Icon={LineChart} label="情绪波动指数" trend="演示指数" value={String(sentimentVolatilityIndex)} suffix="%" />
             </section>
             <AdminPanel className="admin-panel--span-7" title="情感趋势" subtitle="近 7 天">
               <div className="admin-sentiment-chart">
@@ -1290,56 +1409,66 @@ export function AdminPage() {
             </AdminPanel>
             <AdminPanel className="admin-panel--span-5" title="服务建议" subtitle="基于数据洞察与反馈聚类">
               <ol className="admin-advice-list admin-advice-list--numbered">
-                <li>补充九龙灌浴演出时间 FAQ，明确具体时段与注意事项。</li>
-                <li>优化老人路线讲解，增加无障碍设施与休息点指引。</li>
-                <li>增加梵宫室内动线提示与看点推荐，帮助游客更好游览。</li>
-                <li>完善低置信兜底话术，提升未命中问题的引导与体验。</li>
+                {(sentimentReport?.service_suggestions || [
+                  "补充九龙灌浴演出时间 FAQ，明确具体时段与注意事项。",
+                  "优化老人路线讲解，增加无障碍设施与休息点指引。",
+                  "完善低置信兜底话术，提升未命中问题的引导与体验。",
+                ]).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
               </ol>
+              {sentimentMessage ? <p className="operation-message">{sentimentMessage}</p> : null}
               <div className="admin-form-actions admin-form-actions--spread">
-                <StubButton tone="primary">生成周报</StubButton>
-                <StubButton icon={<Upload size={16} />}>导出 PDF</StubButton>
-                <StubButton tone="gold">创建运营事件</StubButton>
+                <StubButton disabled={sentimentBusy === "generate"} onClick={() => void handleGenerateSentimentReport()} tone="primary">
+                  {sentimentBusy === "generate" ? "生成中" : "生成周报"}
+                </StubButton>
+                <StubButton icon={<Upload size={16} />} onClick={handleSentimentPdfStub}>导出 PDF</StubButton>
+                <StubButton onClick={handleSentimentOperationHint} tone="gold">创建运营事件</StubButton>
               </div>
             </AdminPanel>
             <AdminPanel className="admin-panel--span-4" title="游客关注点 TOP5" subtitle="近 7 天">
               <div className="admin-rank-list">
-                {(tags.length > 0 ? tags.slice(0, 5).map((item) => [item.tag, item.count]) : [["灵山大佛怎么游览", 12856], ["九龙灌浴几点表演", 9732], ["梵宫有什么看点", 8421], ["适合老人路线", 7215], ["拈花湾夜游", 6184]]).map(([label, count], index) => (
-                  <div key={String(label)}><span>{index + 1}</span><strong>{label}</strong><em>{count}</em></div>
+                {(sentimentReport?.focus_topics || (tags.length > 0 ? tags.slice(0, 5).map((item) => ({ topic: item.tag, count: item.count })) : [
+                  { topic: "灵山大佛怎么游览", count: 12856 },
+                  { topic: "九龙灌浴几点表演", count: 9732 },
+                  { topic: "梵宫有什么看点", count: 8421 },
+                  { topic: "适合老人路线", count: 7215 },
+                  { topic: "拈花湾夜游", count: 6184 },
+                ])).map((item, index) => (
+                  <div key={item.topic}><span>{index + 1}</span><strong>{item.topic}</strong><em>{item.count}</em></div>
                 ))}
               </div>
             </AdminPanel>
             <AdminPanel className="admin-panel--span-4" title="负向反馈原因" subtitle="近 7 天">
               <div className="admin-compact-bars admin-compact-bars--red">
-                {[
-                  ["信息不准确 / 过时", "38%", 38, 262],
-                  ["路线指引不清晰", "26%", 26, 178],
-                  ["演出时间不明确", "18%", 18, 122],
-                  ["内容不完整", "10%", 10, 69],
-                  ["其他", "8%", 8, 55],
-                ].map(([label, percent, width, count]) => (
-                  <div className="admin-compact-bar-row" key={String(label)}>
-                    <span>{label}</span>
-                    <i><b style={{ width: `${width}%` }} /></i>
-                    <strong>{percent}</strong>
-                    <em>{count}</em>
+                {(sentimentReport?.negative_reasons || [
+                  { reason: "信息不准确 / 过时", percent: 38, count: 262 },
+                  { reason: "路线指引不清晰", percent: 26, count: 178 },
+                  { reason: "演出时间不明确", percent: 18, count: 122 },
+                  { reason: "内容不完整", percent: 10, count: 69 },
+                ]).map((item) => (
+                  <div className="admin-compact-bar-row" key={item.reason}>
+                    <span>{item.reason}</span>
+                    <i><b style={{ width: `${item.percent}%` }} /></i>
+                    <strong>{item.percent}%</strong>
+                    <em>{item.count}</em>
                   </div>
                 ))}
               </div>
             </AdminPanel>
             <AdminPanel className="admin-panel--span-4" title="路线体验标签" subtitle="近 7 天">
               <div className="admin-compact-bars">
-                {[
-                  ["步行友好", "42%", 42, 1285],
-                  ["景点丰富", "32%", 32, 978],
-                  ["休息充足", "18%", 18, 554],
-                  ["餐饮便利", "14%", 14, 421],
-                  ["指引清晰", "12%", 12, 365],
-                ].map(([label, percent, width, count]) => (
-                  <div className="admin-compact-bar-row" key={String(label)}>
-                    <span>{label}</span>
-                    <i><b style={{ width: `${width}%` }} /></i>
-                    <strong>{percent}</strong>
-                    <em>{count}</em>
+                {(sentimentReport?.route_experience_tags || [
+                  { tag: "路线合理", percent: 42, count: 1285 },
+                  { tag: "避开拥挤", percent: 32, count: 978 },
+                  { tag: "讲解清楚", percent: 24, count: 554 },
+                  { tag: "人多拥挤", percent: 14, count: 421 },
+                ]).map((item) => (
+                  <div className="admin-compact-bar-row" key={item.tag}>
+                    <span>{item.tag}</span>
+                    <i><b style={{ width: `${item.percent}%` }} /></i>
+                    <strong>{item.percent}%</strong>
+                    <em>{item.count}</em>
                   </div>
                 ))}
               </div>
@@ -1347,16 +1476,21 @@ export function AdminPage() {
             <AdminPanel className="admin-panel--span-12" title="反馈明细" subtitle="近 7 天">
               <AdminTable
                 columns={["时间", "渠道", "场景", "评分（5分制）", "标签", "反馈摘要", "处理状态", "操作"]}
-                rows={[
-                  ["2026-05-17 14:32:18", "小程序", "灵山大佛游览", "5.0", <StatusBadge tone="ok">正向</StatusBadge>, "讲解很清晰，路线推荐很实用，节省了不少时间。", <StatusBadge tone="ok">已处理</StatusBadge>, "查看  转知识缺口  标记已处理"],
-                  ["2026-05-17 13:18:07", "数字人终端", "九龙灌浴演出", "4.0", <StatusBadge tone="neutral">中性</StatusBadge>, "希望再明确一下演出具体时段和地点。", <StatusBadge tone="warning">待处理</StatusBadge>, "查看  转知识缺口  标记已处理"],
-                  ["2026-05-17 11:46:22", "小程序", "梵宫参观", "3.0", <StatusBadge tone="warning">负向</StatusBadge>, "室内动线有点绕，找不到重点展区。", <StatusBadge tone="warning">待处理</StatusBadge>, "查看  转知识缺口  标记已处理"],
-                  ["2026-05-17 10:28:55", "APP", "老人路线规划", "5.0", <StatusBadge tone="ok">正向</StatusBadge>, "老人路线很贴心，休息点安排合理。", <StatusBadge tone="ok">已处理</StatusBadge>, "查看  转知识缺口  标记已处理"],
-                  ["2026-05-16 16:42:33", "小程序", "拈花湾夜游", "4.0", <StatusBadge tone="neutral">中性</StatusBadge>, "夜景很美，灯光时间可以提前一点告知。", <StatusBadge tone="neutral">处理中</StatusBadge>, "查看  转知识缺口  标记已处理"],
+                rows={(sentimentReport?.feedback_rows || []).length > 0 ? (sentimentReport?.feedback_rows || []).map((row) => [
+                  formatMaybeDate(row.time),
+                  row.channel,
+                  row.topic,
+                  row.rating.toFixed(1),
+                  <StatusBadge tone={sentimentTone(row.sentiment)}>{sentimentLabel(row.sentiment)}</StatusBadge>,
+                  row.comment,
+                  <StatusBadge tone={row.status.includes("待") ? "warning" : row.status.includes("已") ? "ok" : "neutral"}>{row.status}</StatusBadge>,
+                  "查看  转知识缺口  标记已处理",
+                ]) : [
+                  ["暂无反馈", "-", "-", "-", <StatusBadge tone="neutral">empty</StatusBadge>, "生成周报后会读取本地反馈样例。", <StatusBadge tone="neutral">待生成</StatusBadge>, "-"],
                 ]}
               />
             </AdminPanel>
-            <p className="admin-source-footnote admin-panel--span-12">分析来源：本地演示交互日志 / 反馈样例，不代表真实景区全量运营数据。</p>
+            <p className="admin-source-footnote admin-panel--span-12">{sentimentReport?.source_note || "分析来源：本地演示交互日志 / 反馈样例，不代表真实景区全量运营数据。"}</p>
           </section>
         ) : null}
 
@@ -1470,13 +1604,80 @@ export function AdminPage() {
               </div>
               <StubButton icon={<UserCog size={16} />}>管理账号</StubButton>
             </AdminPanel>
-            <AdminPanel className="admin-panel--span-3" title="演示模式" subtitle="本地 mock 配置">
-              <div className="admin-toggle-list">
-                <span>mock provider <b>开启</b></span>
-                <span>本地日志汇总 <b>开启</b></span>
-                <span>硬件客流采集 <b>未接入</b></span>
+            <AdminPanel className="admin-panel--span-6" title="演示模式与数据边界" subtitle="本地 mock 配置保存到 SQLite">
+              <div className="admin-setting-form">
+                <label>
+                  演示景区名称
+                  <input
+                    onChange={(event) => setSystemSettings((current) => ({ ...current, scenic_area_name: event.target.value }))}
+                    value={systemSettings.scenic_area_name}
+                  />
+                </label>
+                <label>
+                  默认 provider 模式
+                  <select
+                    onChange={(event) => setSystemSettings((current) => ({ ...current, default_provider_mode: event.target.value }))}
+                    value={systemSettings.default_provider_mode}
+                  >
+                    <option value="mock">mock</option>
+                    <option value="local">local</option>
+                    <option value="sidecar">sidecar</option>
+                  </select>
+                </label>
+                <label>
+                  数字人模式
+                  <select
+                    onChange={(event) => setSystemSettings((current) => ({ ...current, avatar_mode: event.target.value }))}
+                    value={systemSettings.avatar_mode}
+                  >
+                    <option value="mock">mock</option>
+                    <option value="sidecar">sidecar</option>
+                    <option value="browser_fallback">browser fallback</option>
+                  </select>
+                </label>
+                <label className="admin-checkbox-row">
+                  <input
+                    checked={systemSettings.mock_crowd_enabled}
+                    onChange={(event) => setSystemSettings((current) => ({ ...current, mock_crowd_enabled: event.target.checked }))}
+                    type="checkbox"
+                  />
+                  启用 mock 拥挤度演示数据
+                </label>
+                <label className="admin-checkbox-row">
+                  <input
+                    checked={systemSettings.route_topology_enabled}
+                    onChange={(event) => setSystemSettings((current) => ({ ...current, route_topology_enabled: event.target.checked }))}
+                    type="checkbox"
+                  />
+                  启用导览图拓扑路线说明
+                </label>
+                <label>
+                  数据边界提示
+                  <textarea
+                    onChange={(event) => setSystemSettings((current) => ({ ...current, data_boundary_notice: event.target.value }))}
+                    rows={3}
+                    value={systemSettings.data_boundary_notice}
+                  />
+                </label>
               </div>
-              <StubButton icon={<SlidersHorizontal size={16} />} tone="gold">保存设置</StubButton>
+              {systemMessage ? <p className="operation-message">{systemMessage}</p> : null}
+              <div className="admin-form-actions">
+                <StubButton disabled={systemBusy === "settings"} icon={<SlidersHorizontal size={16} />} onClick={() => void handleSaveSystemSettings()} tone="gold">
+                  {systemBusy === "settings" ? "保存中" : "保存设置"}
+                </StubButton>
+                <StubButton disabled={systemBusy === "health"} icon={<RefreshCw size={16} />} onClick={() => void handleRunSystemHealthcheck()} tone="primary">
+                  {systemBusy === "health" ? "检查中" : "运行健康检查"}
+                </StubButton>
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-3" title="健康检查" subtitle="后端本地状态">
+              <div className="admin-toggle-list">
+                <span>backend <b>{String(systemHealth?.backend?.["status"] || "待检查")}</b></span>
+                <span>database <b>{String(systemHealth?.database?.["status"] || "待检查")}</b></span>
+                <span>avatar mock <b>{String(systemHealth?.avatar_mock?.["status"] || "待检查")}</b></span>
+                <span>sidecar <b>{String(systemHealth?.sidecar_status?.["status"] || "mock_fallback")}</b></span>
+                <span>knowledge local <b>{String(systemHealth?.knowledge_local?.["status"] || "待检查")}</b></span>
+              </div>
             </AdminPanel>
             <AdminPanel className="admin-panel--span-12" title="评测看板" subtitle="保留现有 eval reports 概览">
               <AdminTable

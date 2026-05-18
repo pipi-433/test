@@ -193,6 +193,17 @@ CREATE TABLE IF NOT EXISTS admin_avatar_clip_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_admin_avatar_clip_jobs_created
   ON admin_avatar_clip_jobs(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS admin_system_settings (
+  id TEXT PRIMARY KEY,
+  scenic_area_name TEXT NOT NULL,
+  default_provider_mode TEXT NOT NULL,
+  avatar_mode TEXT NOT NULL,
+  mock_crowd_enabled INTEGER NOT NULL,
+  route_topology_enabled INTEGER NOT NULL,
+  data_boundary_notice TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 """
 
 DEMO_OPERATION_EVENTS = [
@@ -317,6 +328,7 @@ def initialize_database(
                 DROP TABLE IF EXISTS admin_faqs;
                 DROP TABLE IF EXISTS admin_avatar_profile;
                 DROP TABLE IF EXISTS admin_avatar_clip_jobs;
+                DROP TABLE IF EXISTS admin_system_settings;
                 DROP TABLE IF EXISTS attractions;
                 """
             )
@@ -407,4 +419,5 @@ def initialize_database(
         "admin_faqs": 0,
         "admin_avatar_profiles": 0,
         "admin_avatar_clip_jobs": 0,
+        "admin_system_settings": 0,
     }
