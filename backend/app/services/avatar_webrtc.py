@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 from app.core.config import get_settings
-from app.services.avatar_speaker import _check_sidecar_ready, _public_base_url
+from app.services.avatar_speaker import _check_sidecar_ready, _public_base_url, _resolve_avatar_sidecar
 
 
 ALLOWED_WEBRTC_OFFER_TYPES = {"offer", "ice-candidate"}
@@ -22,7 +22,11 @@ def proxy_avatar_webrtc_offer(payload: dict[str, object]) -> dict[str, object]:
     started_at = perf_counter()
     settings = get_settings()
     requested_mode = (settings.avatar_speaker_mode or "mock").strip().lower()
-    base_url = settings.avatar_sidecar_base_url.strip()
+    effective_mode, base_url, auto_detected = _resolve_avatar_sidecar(
+        requested_mode,
+        settings.avatar_sidecar_base_url,
+        settings.avatar_speaker_timeout_seconds,
+    )
     offer_type = str(payload.get("type") or "").strip()
     webrtc_id = str(payload.get("webrtc_id") or payload.get("client_id") or "").strip()
 
@@ -42,10 +46,10 @@ def proxy_avatar_webrtc_offer(payload: dict[str, object]) -> dict[str, object]:
             "fallback_reason": "missing_webrtc_id",
             "metadata": {},
         }
-    if requested_mode != "sidecar" or not base_url:
+    if effective_mode != "sidecar" or not base_url:
         return {
             "accepted": False,
-            "mode": requested_mode or "mock",
+            "mode": effective_mode or "mock",
             "message": "avatar sidecar is not configured",
             "fallback_reason": None if requested_mode != "sidecar" else "AVATAR_SIDECAR_BASE_URL is empty",
             "metadata": {"webrtc_id": webrtc_id},
@@ -95,6 +99,7 @@ def proxy_avatar_webrtc_offer(payload: dict[str, object]) -> dict[str, object]:
                     "sidecar_url": _public_base_url(base_url),
                     "webrtc_id": webrtc_id,
                     "latency_ms": round((perf_counter() - started_at) * 1000),
+                    "auto_detected": auto_detected,
                 }
             )
             return parsed

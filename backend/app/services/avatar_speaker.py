@@ -16,6 +16,7 @@ MAX_SPEAK_TEXT_CHARS = 300
 ALLOWED_EMOTIONS = {"welcome", "thinking", "speaking", "comforting", "error", "happy", "neutral"}
 ALLOWED_SOURCES = {"qa", "route", "vision", "clarification", "feedback", "kiosk", "share", "system"}
 ALLOWED_SIDECAR_ADAPTERS = {"readiness", "http_json"}
+DEFAULT_LOCAL_SIDECAR_BASE_URL = "http://127.0.0.1:8282"
 
 
 def _check_sidecar_ready(base_url: str, timeout_seconds: float) -> tuple[bool, str | None]:
@@ -41,6 +42,18 @@ def _public_base_url(base_url: str) -> str:
     if not parsed.scheme or not parsed.netloc:
         return base_url.rstrip("/")
     return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _resolve_avatar_sidecar(requested_mode: str, configured_base_url: str, timeout_seconds: float) -> tuple[str, str, bool]:
+    mode = (requested_mode or "mock").strip().lower()
+    base_url = configured_base_url.strip()
+    if base_url:
+        return mode, base_url, False
+
+    ready, _reason = _check_sidecar_ready(DEFAULT_LOCAL_SIDECAR_BASE_URL, timeout_seconds)
+    if ready:
+        return "sidecar", DEFAULT_LOCAL_SIDECAR_BASE_URL, True
+    return mode or "mock", "", False
 
 
 def _fetch_sidecar_active_session(base_url: str, timeout_seconds: float) -> tuple[str | None, str | None]:
@@ -82,12 +95,16 @@ def _fetch_sidecar_active_session(base_url: str, timeout_seconds: float) -> tupl
 def get_avatar_status() -> dict[str, object]:
     settings = get_settings()
     requested_mode = (settings.avatar_speaker_mode or "mock").strip().lower()
-    base_url = settings.avatar_sidecar_base_url.strip()
     timeout_seconds = settings.avatar_speaker_timeout_seconds
+    effective_mode, base_url, auto_detected = _resolve_avatar_sidecar(
+        requested_mode,
+        settings.avatar_sidecar_base_url,
+        timeout_seconds,
+    )
 
-    if requested_mode != "sidecar" or not base_url:
+    if effective_mode != "sidecar" or not base_url:
         return {
-            "mode": requested_mode or "mock",
+            "mode": effective_mode or "mock",
             "sidecar_ready": False,
             "sidecar_url": "",
             "active_session_id": None,
@@ -111,6 +128,7 @@ def get_avatar_status() -> dict[str, object]:
         "message": "sidecar avatar presentation is ready." if ready else "sidecar avatar presentation is not ready.",
         "fallback_reason": None if ready else reason,
         "session_status": session_reason,
+        "auto_detected": auto_detected,
     }
 
 
@@ -227,14 +245,18 @@ def enqueue_avatar_speech(
 
     settings = get_settings()
     requested_mode = (settings.avatar_speaker_mode or "mock").strip().lower()
+    effective_mode, base_url, auto_detected = _resolve_avatar_sidecar(
+        requested_mode,
+        settings.avatar_sidecar_base_url,
+        settings.avatar_speaker_timeout_seconds,
+    )
     adapter = (settings.avatar_sidecar_adapter or "readiness").strip().lower()
     mode = "mock"
     fallback_reason = None
     adapter_metadata: dict[str, object] = {}
     started_at = perf_counter()
 
-    if requested_mode == "sidecar":
-        base_url = settings.avatar_sidecar_base_url.strip()
+    if effective_mode == "sidecar":
         if not base_url:
             fallback_reason = "AVATAR_SIDECAR_BASE_URL is empty; using mock speaker queue."
         elif adapter not in ALLOWED_SIDECAR_ADAPTERS:
@@ -258,6 +280,7 @@ def enqueue_avatar_speech(
                     adapter_metadata = {
                         "adapter": "http_json",
                         "sidecar_url": _public_base_url(base_url),
+                        "auto_detected": auto_detected,
                         "sidecar_response": response_metadata,
                     }
                     if ok:
@@ -283,6 +306,7 @@ def enqueue_avatar_speech(
         "fallback_reason": fallback_reason,
         "metadata": {
             "requested_mode": requested_mode,
+            "effective_mode": effective_mode,
             "emotion": emotion,
             "source": source,
             "interrupt": interrupt,

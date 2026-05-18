@@ -9,7 +9,7 @@ from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from app.core.config import PROJECT_ROOT, get_settings
-from app.services.avatar_speaker import _check_sidecar_ready
+from app.services.avatar_speaker import _check_sidecar_ready, _resolve_avatar_sidecar
 
 
 ALLOWED_CLIP_SOURCES = {"route", "attraction", "vision", "kiosk", "admin", "demo"}
@@ -223,11 +223,15 @@ def play_avatar_clip(
 
     settings = get_settings()
     requested_mode = (settings.avatar_speaker_mode or "mock").strip().lower()
+    effective_mode, base_url, auto_detected = _resolve_avatar_sidecar(
+        requested_mode,
+        settings.avatar_sidecar_base_url,
+        settings.avatar_speaker_timeout_seconds,
+    )
     fallback_reason = None
     mode = "mock"
 
-    if requested_mode == "sidecar":
-        base_url = settings.avatar_sidecar_base_url.strip()
+    if effective_mode == "sidecar":
         clip_path = settings.avatar_sidecar_clip_path.strip()
         if path_error:
             fallback_reason = f"{path_error}; using mock preset clip queue."
@@ -257,6 +261,7 @@ def play_avatar_clip(
                     {
                         "adapter": "http_json_clip",
                         "sidecar_url": _public_base_url(base_url),
+                        "auto_detected": auto_detected,
                         "sidecar_response": sidecar_response,
                     }
                 )
@@ -270,6 +275,7 @@ def play_avatar_clip(
     metadata.update(
         {
             "requested_mode": requested_mode,
+            "effective_mode": effective_mode,
             "latency_ms": round((perf_counter() - started_at) * 1000),
         }
     )
