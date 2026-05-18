@@ -64,6 +64,40 @@ function Wait-JsonEndpoint {
     throw "Timed out waiting for $Url. Last error: $lastError"
 }
 
+function Get-JsonEndpointOrNull {
+    param(
+        [string]$Url,
+        [int]$TimeoutSeconds = 5
+    )
+
+    try {
+        return Invoke-RestMethod -Uri $Url -TimeoutSec $TimeoutSeconds
+    }
+    catch {
+        return $null
+    }
+}
+
+function Test-BackendSyncedToSidecar {
+    param(
+        [object]$Status,
+        [int]$ExpectedSidecarPort
+    )
+
+    if (-not $Status) {
+        return $false
+    }
+
+    $expectedUrl = "http://127.0.0.1:$ExpectedSidecarPort"
+    $mode = [string]$Status.mode
+    $sidecarUrl = [string]$Status.sidecar_url
+    return (
+        $mode -eq "sidecar" -and
+        $Status.sidecar_ready -eq $true -and
+        $sidecarUrl.TrimEnd("/") -eq $expectedUrl
+    )
+}
+
 function Start-HiddenPowerShell {
     param(
         [string]$Name,
@@ -91,6 +125,27 @@ function Start-HiddenPowerShell {
         stdout = $outLog
         stderr = $errLog
     }
+}
+
+function Start-AvatarBackend {
+    param(
+        [string]$Project,
+        [string]$LogDirectory,
+        [int]$BackendPort,
+        [int]$SidecarPort
+    )
+
+    $backendScript = @"
+`$env:AVATAR_SPEAKER_MODE = 'sidecar'
+`$env:AVATAR_SIDECAR_ADAPTER = 'http_json'
+`$env:AVATAR_SIDECAR_BASE_URL = 'http://127.0.0.1:$SidecarPort'
+`$env:AVATAR_SIDECAR_SPEAK_PATH = '/lingjing/avatar/speak'
+`$env:AVATAR_SIDECAR_CLIP_PATH = '/lingjing/avatar/play-clip'
+`$env:PYTHONUTF8 = '1'
+`$env:PYTHONIOENCODING = 'utf-8'
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $BackendPort
+"@
+    return Start-HiddenPowerShell -Name "avatar_backend" -WorkingDirectory $Project -ScriptBlockText $backendScript -LogDirectory $LogDirectory
 }
 
 $project = (Resolve-Path -LiteralPath $ProjectRoot).Path
@@ -162,21 +217,34 @@ $sidecarReady = Wait-JsonEndpoint -Url "http://127.0.0.1:$SidecarPort/readiness"
 if (-not $SkipBackend) {
     $backendListener = Get-Listener -Port $BackendPort
     if ($backendListener) {
-        "Backend already listening on port $BackendPort, PID=$($backendListener.OwningProcess)."
-        "If visitor/Kiosk avatar buttons still return mode=mock, stop the old demo backend first with scripts\stop_avatar_demo.ps1 and rerun this script."
+        $backendBaseUrl = "http://127.0.0.1:$BackendPort"
+        $backendHealth = Get-JsonEndpointOrNull -Url "$backendBaseUrl/api/health" -TimeoutSeconds 5
+        $avatarStatus = Get-JsonEndpointOrNull -Url "$backendBaseUrl/api/avatar/status" -TimeoutSeconds 5
+        if (Test-BackendSyncedToSidecar -Status $avatarStatus -ExpectedSidecarPort $SidecarPort) {
+            "Backend already listening on port $BackendPort, PID=$($backendListener.OwningProcess), synced to sidecar."
+        }
+        elseif ($backendHealth -and [string]$backendHealth.service -eq "lingjing-guide") {
+            "Backend already listening on port $BackendPort, PID=$($backendListener.OwningProcess), but avatar mode is not synced."
+            "  current mode: $([string]$avatarStatus.mode)"
+            "  current sidecar_ready: $($avatarStatus.sidecar_ready)"
+            "Restarting backend with AVATAR_SPEAKER_MODE=sidecar and AVATAR_SIDECAR_BASE_URL=http://127.0.0.1:$SidecarPort"
+            Stop-Process -Id $backendListener.OwningProcess -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+            $remainingBackend = Get-Listener -Port $BackendPort
+            if ($remainingBackend) {
+                throw "Backend port $BackendPort is still occupied by PID=$($remainingBackend.OwningProcess); cannot start synced avatar backend."
+            }
+            $backendStarted = Start-AvatarBackend -Project $project -LogDirectory $logDir -BackendPort $BackendPort -SidecarPort $SidecarPort
+            "Started backend launcher PID=$($backendStarted.launcher_pid)"
+            "  stdout: $($backendStarted.stdout)"
+            "  stderr: $($backendStarted.stderr)"
+        }
+        else {
+            throw "Backend port $BackendPort is occupied by PID=$($backendListener.OwningProcess), but it does not look like the Lingjing backend. Stop it manually or rerun with -SkipBackend."
+        }
     }
     else {
-        $backendScript = @"
-`$env:AVATAR_SPEAKER_MODE = 'sidecar'
-`$env:AVATAR_SIDECAR_ADAPTER = 'http_json'
-`$env:AVATAR_SIDECAR_BASE_URL = 'http://127.0.0.1:$SidecarPort'
-`$env:AVATAR_SIDECAR_SPEAK_PATH = '/lingjing/avatar/speak'
-`$env:AVATAR_SIDECAR_CLIP_PATH = '/lingjing/avatar/play-clip'
-`$env:PYTHONUTF8 = '1'
-`$env:PYTHONIOENCODING = 'utf-8'
-python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $BackendPort
-"@
-        $backendStarted = Start-HiddenPowerShell -Name "avatar_backend" -WorkingDirectory $project -ScriptBlockText $backendScript -LogDirectory $logDir
+        $backendStarted = Start-AvatarBackend -Project $project -LogDirectory $logDir -BackendPort $BackendPort -SidecarPort $SidecarPort
         "Started backend launcher PID=$($backendStarted.launcher_pid)"
         "  stdout: $($backendStarted.stdout)"
         "  stderr: $($backendStarted.stderr)"
@@ -184,6 +252,11 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $Backen
 
     $backendReady = Wait-JsonEndpoint -Url "http://127.0.0.1:$BackendPort/api/health" -TimeoutSeconds 60
     "Backend health: $($backendReady.status)"
+    $backendAvatarStatus = Wait-JsonEndpoint -Url "http://127.0.0.1:$BackendPort/api/avatar/status" -TimeoutSeconds 30
+    if (-not (Test-BackendSyncedToSidecar -Status $backendAvatarStatus -ExpectedSidecarPort $SidecarPort)) {
+        throw "Backend started but avatar sidecar mode is not ready. mode=$($backendAvatarStatus.mode), sidecar_ready=$($backendAvatarStatus.sidecar_ready), sidecar_url=$($backendAvatarStatus.sidecar_url)"
+    }
+    "Backend avatar mode: $($backendAvatarStatus.mode), sidecar_ready=$($backendAvatarStatus.sidecar_ready), sidecar_url=$($backendAvatarStatus.sidecar_url)"
 }
 
 if (-not $SkipFrontend) {

@@ -8,6 +8,23 @@ from app.core.errors import ApiError
 from app.core.config import get_settings
 from app.providers import ProviderStatus, get_provider_status
 from app.services.analytics_service import analytics_overview, record_feedback, record_interaction_event
+from app.services.admin_avatar_profile_service import (
+    create_admin_avatar_clip_job,
+    get_admin_avatar_profile,
+    list_admin_avatar_clip_jobs,
+    run_admin_avatar_voice_test,
+    update_admin_avatar_profile,
+)
+from app.services.admin_knowledge_service import (
+    create_admin_faq,
+    create_admin_knowledge_asset,
+    list_admin_faqs,
+    list_admin_knowledge_assets,
+    publish_admin_knowledge,
+    rebuild_admin_knowledge_index,
+    update_admin_faq,
+    update_admin_knowledge_asset,
+)
 from app.services.avatar_clip_player import play_avatar_clip
 from app.services.avatar_speaker import enqueue_avatar_speech, get_avatar_status
 from app.services.avatar_webrtc import proxy_avatar_webrtc_offer
@@ -165,6 +182,53 @@ class KnowledgeGapUpdateRequest(BaseModel):
     status: str | None = None
 
 
+class AdminKnowledgeAssetCreateRequest(BaseModel):
+    title: str | None = None
+    asset_type: str = "other"
+    scenic_area: str | None = None
+    attraction_id: str | None = None
+    status: str = "draft"
+    source_filename: str | None = None
+    note: str | None = None
+
+
+class AdminKnowledgeAssetUpdateRequest(BaseModel):
+    title: str | None = None
+    asset_type: str | None = None
+    scenic_area: str | None = None
+    attraction_id: str | None = None
+    status: str | None = None
+    chunk_count: int | None = None
+    source_filename: str | None = None
+    note: str | None = None
+
+
+class AdminFaqCreateRequest(BaseModel):
+    question: str
+    answer: str
+    scenic_area: str | None = None
+    attraction_id: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    status: str = "draft"
+    source_gap_id: str | None = None
+
+
+class AdminFaqUpdateRequest(BaseModel):
+    question: str | None = None
+    answer: str | None = None
+    scenic_area: str | None = None
+    attraction_id: str | None = None
+    tags: list[str] | None = None
+    status: str | None = None
+    source_gap_id: str | None = None
+
+
+class AdminKnowledgePublishRequest(BaseModel):
+    asset_ids: list[str] | None = None
+    faq_ids: list[str] | None = None
+    publish_all_drafts: bool = False
+
+
 class AvatarSpeakRequest(BaseModel):
     text: str
     emotion: str = "happy"
@@ -184,6 +248,27 @@ class AvatarWebrtcOfferRequest(BaseModel):
     webrtc_id: str | None = None
     client_id: str | None = None
     candidate: dict[str, Any] | None = None
+
+
+class AdminAvatarProfileUpdateRequest(BaseModel):
+    name: str | None = None
+    outfit_style: str | None = None
+    voice_name: str | None = None
+    speech_rate: float | None = None
+    volume: float | None = None
+    default_emotion: str | None = None
+    background_style: str | None = None
+
+
+class AdminAvatarVoiceTestRequest(BaseModel):
+    text: str | None = None
+    voice_name: str | None = None
+
+
+class AdminAvatarClipGenerateRequest(BaseModel):
+    title: str | None = None
+    clip_id: str | None = None
+    attraction_id: str | None = None
 
 
 def _dump_model(payload: BaseModel, *, exclude_unset: bool = False) -> dict[str, Any]:
@@ -494,6 +579,46 @@ def admin_update_operation_event(event_id: str, payload: OperationEventUpdateReq
     return update_operation_event(event_id, _dump_model(payload, exclude_unset=True))
 
 
+@router.get("/admin/knowledge/assets")
+def admin_knowledge_assets() -> dict[str, object]:
+    return list_admin_knowledge_assets()
+
+
+@router.post("/admin/knowledge/assets", status_code=status.HTTP_201_CREATED)
+def admin_create_knowledge_asset(payload: AdminKnowledgeAssetCreateRequest) -> dict[str, object]:
+    return create_admin_knowledge_asset(_dump_model(payload, exclude_unset=True))
+
+
+@router.patch("/admin/knowledge/assets/{asset_id}")
+def admin_update_knowledge_asset(asset_id: str, payload: AdminKnowledgeAssetUpdateRequest) -> dict[str, object]:
+    return update_admin_knowledge_asset(asset_id, _dump_model(payload, exclude_unset=True))
+
+
+@router.get("/admin/knowledge/faqs")
+def admin_knowledge_faqs() -> dict[str, object]:
+    return list_admin_faqs()
+
+
+@router.post("/admin/knowledge/faqs", status_code=status.HTTP_201_CREATED)
+def admin_create_faq(payload: AdminFaqCreateRequest) -> dict[str, object]:
+    return create_admin_faq(_dump_model(payload, exclude_unset=True))
+
+
+@router.patch("/admin/knowledge/faqs/{faq_id}")
+def admin_update_faq(faq_id: str, payload: AdminFaqUpdateRequest) -> dict[str, object]:
+    return update_admin_faq(faq_id, _dump_model(payload, exclude_unset=True))
+
+
+@router.post("/admin/knowledge/reindex")
+def admin_reindex_knowledge() -> dict[str, object]:
+    return rebuild_admin_knowledge_index()
+
+
+@router.post("/admin/knowledge/publish")
+def admin_publish_knowledge(payload: AdminKnowledgePublishRequest) -> dict[str, object]:
+    return publish_admin_knowledge(_dump_model(payload, exclude_unset=True))
+
+
 @router.get("/admin/knowledge/gaps")
 def admin_knowledge_gaps(status: str | None = Query(default=None)) -> dict[str, object]:
     status_filter = status if isinstance(status, str) else None
@@ -545,6 +670,31 @@ def admin_add_knowledge_gap_to_eval(gap_id: str) -> dict[str, object]:
 @router.get("/admin/evals/overview")
 def admin_eval_reports_overview() -> dict[str, object]:
     return eval_reports_overview()
+
+
+@router.get("/admin/avatar/profile")
+def admin_avatar_profile() -> dict[str, object]:
+    return get_admin_avatar_profile()
+
+
+@router.patch("/admin/avatar/profile")
+def admin_update_avatar_profile(payload: AdminAvatarProfileUpdateRequest) -> dict[str, object]:
+    return update_admin_avatar_profile(_dump_model(payload, exclude_unset=True))
+
+
+@router.post("/admin/avatar/voice-test")
+def admin_avatar_voice_test(payload: AdminAvatarVoiceTestRequest) -> dict[str, object]:
+    return run_admin_avatar_voice_test(_dump_model(payload, exclude_unset=True))
+
+
+@router.post("/admin/avatar/clips/generate")
+def admin_avatar_generate_clip(payload: AdminAvatarClipGenerateRequest) -> dict[str, object]:
+    return create_admin_avatar_clip_job(_dump_model(payload, exclude_unset=True))
+
+
+@router.get("/admin/avatar/clips/jobs")
+def admin_avatar_clip_jobs() -> dict[str, object]:
+    return list_admin_avatar_clip_jobs()
 
 
 @router.post("/routes/recommend")

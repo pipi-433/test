@@ -134,6 +134,65 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_status_created
   ON knowledge_gaps(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_query_status
   ON knowledge_gaps(query, status);
+
+CREATE TABLE IF NOT EXISTS admin_knowledge_assets (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  asset_type TEXT NOT NULL,
+  scenic_area TEXT,
+  attraction_id TEXT,
+  status TEXT NOT NULL,
+  chunk_count INTEGER NOT NULL,
+  source_filename TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_knowledge_assets_status
+  ON admin_knowledge_assets(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS admin_faqs (
+  id TEXT PRIMARY KEY,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  scenic_area TEXT,
+  attraction_id TEXT,
+  tags_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  source_gap_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_faqs_status
+  ON admin_faqs(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS admin_avatar_profile (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  outfit_style TEXT NOT NULL,
+  voice_name TEXT NOT NULL,
+  speech_rate REAL NOT NULL,
+  volume REAL NOT NULL,
+  default_emotion TEXT NOT NULL,
+  background_style TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS admin_avatar_clip_jobs (
+  id TEXT PRIMARY KEY,
+  clip_id TEXT,
+  title TEXT NOT NULL,
+  attraction_id TEXT,
+  status TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_avatar_clip_jobs_created
+  ON admin_avatar_clip_jobs(created_at DESC);
 """
 
 DEMO_OPERATION_EVENTS = [
@@ -254,6 +313,10 @@ def initialize_database(
                 DROP TABLE IF EXISTS interaction_events;
                 DROP TABLE IF EXISTS operation_events;
                 DROP TABLE IF EXISTS knowledge_gaps;
+                DROP TABLE IF EXISTS admin_knowledge_assets;
+                DROP TABLE IF EXISTS admin_faqs;
+                DROP TABLE IF EXISTS admin_avatar_profile;
+                DROP TABLE IF EXISTS admin_avatar_clip_jobs;
                 DROP TABLE IF EXISTS attractions;
                 """
             )
@@ -340,4 +403,8 @@ def initialize_database(
         "feedback_events": 0,
         "operation_events": operation_events_count,
         "knowledge_gaps": 0,
+        "admin_knowledge_assets": 0,
+        "admin_faqs": 0,
+        "admin_avatar_profiles": 0,
+        "admin_avatar_clip_jobs": 0,
     }

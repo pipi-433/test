@@ -299,6 +299,7 @@ export function AvatarRtcViewer({
   const busy = rtcState === "connecting";
   const showStartup = busy || rtcState === "idle";
   const showRetry = rtcState === "failed" || rtcState === "unsupported";
+  const showStatePanel = showStartup || showRetry;
   const statusText = connected ? "直播接收中" : busy ? "启动中" : showRetry ? "备用展示" : "准备中";
   const preview = chrome === "preview";
 
@@ -317,9 +318,9 @@ export function AvatarRtcViewer({
         <span className="avatar-rtc-viewer__dot" aria-hidden="true" />
         <span>{statusText}</span>
       </div> : null}
-      {showStartup && !preview ? (
-        <div className="avatar-rtc-viewer__startup" role="status" aria-live="polite">
-          <LoaderCircle aria-hidden="true" />
+      {showStatePanel ? (
+        <div className={`avatar-rtc-viewer__startup ${preview ? "avatar-rtc-viewer__startup--preview" : ""}`} role="status" aria-live="polite">
+          {showRetry ? <RotateCcw aria-hidden="true" /> : <LoaderCircle aria-hidden="true" />}
           <strong>数字人启动中</strong>
           <span>{caption || "正在接入本页观看画面"}</span>
         </div>

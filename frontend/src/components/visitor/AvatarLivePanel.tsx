@@ -54,12 +54,12 @@ export function AvatarLivePanel({
 
       <div className="avatar-live-panel__frame is-live">
         <AvatarRtcViewer
-          autoStart={!sidecarKnownDown}
+          autoStart
           broadcastDisabled={broadcastDisabled}
           broadcasting={broadcasting}
           caption={caption || helperText}
           chrome={chrome}
-          disabled={sidecarKnownDown}
+          disabled={false}
           onStartBroadcast={onStartBroadcast}
           onStopBroadcast={onStopBroadcast}
           variant={variant}

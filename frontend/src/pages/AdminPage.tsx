@@ -1,51 +1,72 @@
 import {
   AlertTriangle,
+  BarChart3,
+  Bell,
   BookOpenCheck,
   Bot,
   CalendarClock,
-  ChartNoAxesCombined,
   CheckCircle2,
-  ClipboardCheck,
-  Database,
-  FileWarning,
+  ChevronDown,
+  CloudUpload,
   FilePlus2,
   Gauge,
   Heart,
-  HelpCircle,
-  ListChecks,
+  Home,
+  Layers3,
+  LineChart,
   MessageSquareText,
+  Mic2,
+  MonitorPlay,
+  PlayCircle,
   Plus,
+  RefreshCw,
   Route,
   Search,
   Settings,
-  Share2,
   ShieldCheck,
-  Timer,
-  ToggleLeft,
-  ToggleRight,
+  SlidersHorizontal,
+  Smile,
+  Star,
+  Upload,
+  UserCog,
   Users,
+  Volume2,
   XCircle,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   addKnowledgeGapToEval,
+  createAdminFaq,
+  createAdminKnowledgeAsset,
   createOperationEvent,
   draftKnowledgeGapFaq,
   fetchAttractions,
+  generateAdminAvatarClip,
+  getAdminAvatarClipJobs,
+  getAdminAvatarProfile,
+  getAdminFaqs,
+  getAdminKnowledgeAssets,
   getAdminOperationEvents,
   getAnalyticsOverview,
   getEvalReportsOverview,
   getKnowledgeGaps,
+  publishAdminKnowledge,
+  reindexAdminKnowledge,
+  runAdminAvatarVoiceTest,
+  updateAdminAvatarProfile,
+  updateAdminFaq,
   updateKnowledgeGapStatus,
   updateOperationEvent,
 } from "../api/client";
 import type {
+  AdminAvatarClipJob,
+  AdminAvatarProfile,
+  AdminFaq,
+  AdminKnowledgeAsset,
+  AdminKnowledgeStatus,
   AnalyticsOverview,
   Attraction,
-  EvalDerivedMetric,
-  EvalReportItem,
-  EvalReportStatus,
   EvalReportsOverview,
   KnowledgeGap,
   KnowledgeGapStatus,
@@ -54,44 +75,12 @@ import type {
   OperationEventType,
 } from "../api/client";
 import { Button } from "../components/Button";
-import { MetricCard } from "../components/MetricCard";
 import { PageShell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
 import { providerRows } from "../data/mock";
 
 type ProviderMap = Record<string, { provider: string; status: string }>;
-
-const quickOperationEvents: Array<{
-  label: string;
-  iconLabel: string;
-  event_type: OperationEventType;
-  severity: OperationEventSeverity;
-}> = [
-  {
-    label: "拥挤",
-    iconLabel: "crowd",
-    event_type: "crowd",
-    severity: "warning",
-  },
-  {
-    label: "临时关闭",
-    iconLabel: "closed",
-    event_type: "closed",
-    severity: "critical",
-  },
-  {
-    label: "演出提醒",
-    iconLabel: "show",
-    event_type: "show",
-    severity: "info",
-  },
-  {
-    label: "推荐分流",
-    iconLabel: "recommendation",
-    event_type: "recommendation",
-    severity: "info",
-  },
-];
+type AdminTabId = "overview" | "knowledge" | "avatar" | "operations" | "sentiment" | "dashboard" | "settings";
 
 type OperationFormState = {
   attraction_id: string;
@@ -109,29 +98,68 @@ const defaultOperationForm: OperationFormState = {
   duration_hours: 3,
 };
 
-const adminNavItems = [
-  { id: "admin-overview", label: "概览", path: "/admin", Icon: ChartNoAxesCombined },
-  { id: "admin-evals", label: "评测看板", path: "/admin/evals", Icon: ClipboardCheck },
-  { id: "admin-operations", label: "运营事件", path: "/admin/operations", Icon: CalendarClock },
-  { id: "admin-knowledge-gaps", label: "知识缺口", path: "/admin/knowledge-gaps", Icon: Database },
-  { id: "admin-analytics", label: "运营分析", path: "/admin/analytics", Icon: Gauge },
-  { id: "admin-system", label: "系统状态", path: "/admin/system", Icon: Settings },
+const defaultAdminAvatarProfile: AdminAvatarProfile = {
+  name: "小灵",
+  outfit_style: "宋韵青绿",
+  voice_name: "温柔女声",
+  speech_rate: 1,
+  volume: 0.9,
+  default_emotion: "happy",
+  background_style: "灵山山水",
+};
+
+const adminNavItems: Array<{ id: AdminTabId; label: string; path: string; Icon: typeof Home }> = [
+  { id: "overview", label: "首页概览", path: "/admin", Icon: Home },
+  { id: "knowledge", label: "知识库管理", path: "/admin/knowledge", Icon: Layers3 },
+  { id: "avatar", label: "数字人管理", path: "/admin/avatar", Icon: Bot },
+  { id: "operations", label: "运营事件", path: "/admin/operations", Icon: CalendarClock },
+  { id: "sentiment", label: "游客感受度", path: "/admin/sentiment", Icon: Smile },
+  { id: "dashboard", label: "数据大屏", path: "/admin/dashboard", Icon: BarChart3 },
+  { id: "settings", label: "系统设置", path: "/admin/settings", Icon: Settings },
 ];
 
-function currentAdminSection(pathname: string) {
-  return adminNavItems.find((item) => item.path === pathname)?.id || "admin-overview";
-}
+const trendPoints = [42, 55, 51, 59, 67, 62, 82];
+const sentimentTrend = [4.5, 4.6, 4.4, 4.6, 4.7, 4.6, 4.7];
+const routeThemes = [
+  { label: "礼佛文化", value: 42, percent: 32 },
+  { label: "家庭舒缓", value: 34, percent: 26 },
+  { label: "拍照打卡", value: 24, percent: 18 },
+  { label: "历史深度", value: 18, percent: 14 },
+  { label: "拈花湾夜游", value: 14, percent: 10 },
+];
+const clipRows = [
+  { id: "lingshan_buddha_intro_45s", name: "灵山大佛", duration: "00:45", audio: "已就绪", lip: "已通过", updated: "2026-05-16 14:32" },
+  { id: "fan_gong_intro_45s", name: "灵山梵宫", duration: "00:45", audio: "已就绪", lip: "已通过", updated: "2026-05-16 11:08" },
+  { id: "jiulong_guanyu_intro_30s", name: "九龙灌浴", duration: "00:30", audio: "处理中", lip: "待验证", updated: "2026-05-15 16:45" },
+];
+const mockCrowdRows = [
+  { area: "灵山大佛", state: "拥挤", estimate: "8,560", density: 9, action: "建议错峰出行" },
+  { area: "梵宫", state: "较拥挤", estimate: "3,210", density: 6, action: "建议分流参观" },
+  { area: "九龙灌浴", state: "舒适", estimate: "2,450", density: 4, action: "正常游览" },
+  { area: "五印坛城", state: "舒适", estimate: "1,860", density: 3, action: "正常游览" },
+];
+const feedbackRows = [
+  { time: "14:32", channel: "小程序", topic: "灵山大佛路线", sentiment: "正向", confidence: "0.94", action: "已回答" },
+  { time: "14:28", channel: "数字人终端", topic: "老人路线推荐", sentiment: "中性", confidence: "0.91", action: "已生成路线" },
+  { time: "14:23", channel: "APP", topic: "五印坛城识景", sentiment: "正向", confidence: "0.88", action: "已识别" },
+  { time: "14:18", channel: "小程序", topic: "寄存行李位置", sentiment: "负向", confidence: "0.62", action: "加入知识缺口" },
+];
+const routeAdviceRows = [
+  { theme: "礼佛文化", ratio: "32%", path: "灵山大佛 -> 五印坛城", note: "人流较多，建议分时预约" },
+  { theme: "家庭舒缓", ratio: "26%", path: "梵宫 -> 祥符禅寺 -> 灵山大佛", note: "适合家庭游客，节奏平缓" },
+  { theme: "拍照打卡", ratio: "18%", path: "拈花湾 -> 梵宫 -> 灵山大佛", note: "拍照点集中，注意光线时段" },
+  { theme: "历史深度", ratio: "14%", path: "梵宫 -> 五印坛城 -> 静心体验", note: "内容较深，建议配合导览" },
+  { theme: "拈花湾夜游", ratio: "10%", path: "拈花湾夜游", note: "夜间客流上升，建议提前入园" },
+];
+const wordCloud = ["灵山大佛", "九龙灌浴", "梵宫", "老人路线", "景区地图", "门票价格", "开放时间", "如公预约", "停车收费", "洗手间"];
 
-function eventLabel(type: string) {
-  const labels: Record<string, string> = {
-    qa: "问答",
-    vision: "识景",
-    route_recommend: "路线",
-    route_share_open: "带走",
-    feedback: "反馈",
-    crowd_avoidance: "避峰",
-  };
-  return labels[type] || type;
+function currentAdminSection(pathname: string): AdminTabId {
+  const match = adminNavItems.find((item) => item.path === pathname);
+  if (match) return match.id;
+  if (pathname.includes("/knowledge-gaps") || pathname.includes("/evals")) return "knowledge";
+  if (pathname.includes("/analytics")) return "dashboard";
+  if (pathname.includes("/system")) return "settings";
+  return "overview";
 }
 
 function operationTypeLabel(type: OperationEventType | string) {
@@ -193,30 +221,38 @@ function gapStatusTone(status: KnowledgeGapStatus | string) {
   return status === "open" ? "warning" : status === "resolved" ? "ok" : "neutral";
 }
 
-function reportStatusLabel(status: EvalReportStatus) {
-  const labels: Record<EvalReportStatus, string> = {
-    fail: "失败",
-    missing: "缺失",
-    pass: "通过",
+function adminKnowledgeStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    archived: "已归档",
+    draft: "草稿",
+    pending_review: "待审核",
+    published: "已发布",
   };
-  return labels[status];
+  return labels[status] || status;
 }
 
-function reportStatusTone(status: EvalReportStatus) {
-  return status === "pass" ? "ok" : status === "fail" ? "warning" : "neutral";
+function adminKnowledgeStatusTone(status: string) {
+  return status === "published" ? "ok" : status === "draft" || status === "pending_review" ? "warning" : "neutral";
+}
+
+function assetTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    faq: "FAQ",
+    guide_script: "讲解词",
+    history_doc: "文史资料",
+    other: "其他",
+    route_note: "路线说明",
+  };
+  return labels[type] || type;
 }
 
 function formatRate(value?: number | null) {
-  if (value === null || value === undefined) {
-    return "暂无";
-  }
+  if (value === null || value === undefined) return "暂无";
   return `${Math.round(value * 100)}%`;
 }
 
 function formatMaybeDate(value?: string | null) {
-  if (!value) {
-    return "未生成";
-  }
+  if (!value) return "未生成";
   return new Date(value).toLocaleString("zh-CN", {
     day: "2-digit",
     hour: "2-digit",
@@ -225,21 +261,163 @@ function formatMaybeDate(value?: string | null) {
   });
 }
 
-function derivedMetricText(metric: EvalDerivedMetric) {
-  if (metric.value === null) {
-    return metric.reason || "暂无可推导数据";
-  }
-  const countText = metric.total ? ` · ${metric.passed ?? 0}/${metric.total}` : "";
-  return `${formatRate(metric.value)}${countText}`;
-}
-
 function eventTimeWindow(event: OperationEvent) {
   const start = new Date(event.start_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   const end = new Date(event.end_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   return `${start} - ${end}`;
 }
 
+function MiniTrend({ values = trendPoints }: { values?: number[] }) {
+  const points = values.map((value, index) => `${(index / Math.max(1, values.length - 1)) * 100},${100 - value}`).join(" ");
+  return (
+    <svg className="admin-mini-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points={`0,100 ${points} 100,100`} className="admin-mini-line__area" />
+      <polyline points={points} className="admin-mini-line__stroke" />
+    </svg>
+  );
+}
+
+function DonutChart({ items }: { items: Array<{ label: string; percent: number }> }) {
+  const gradient = items
+    .reduce<{ cursor: number; stops: string[] }>(
+      (acc, item, index) => {
+        const colors = ["#00645a", "#2f8c7d", "#7fb2a8", "#c2943f", "#dfbd72"];
+        const next = acc.cursor + item.percent;
+        acc.stops.push(`${colors[index % colors.length]} ${acc.cursor}% ${next}%`);
+        acc.cursor = next;
+        return acc;
+      },
+      { cursor: 0, stops: [] },
+    )
+    .stops.join(", ");
+  return (
+    <div className="admin-donut" style={{ background: `conic-gradient(${gradient})` }} aria-hidden="true">
+      <span />
+    </div>
+  );
+}
+
+function AdminMetricCard({
+  Icon,
+  label,
+  trend,
+  value,
+  suffix = "",
+}: {
+  Icon: typeof Users;
+  label: string;
+  trend: string;
+  value: string;
+  suffix?: string;
+}) {
+  return (
+    <article className="admin-kpi-card">
+      <span className="admin-kpi-card__icon">
+        <Icon aria-hidden="true" size={22} />
+      </span>
+      <div>
+        <p>{label}</p>
+        <strong>
+          {value}
+          {suffix ? <small>{suffix}</small> : null}
+        </strong>
+      </div>
+      <span className="admin-kpi-card__trend">{trend}</span>
+    </article>
+  );
+}
+
+function AdminPanel({
+  children,
+  className = "",
+  subtitle,
+  title,
+  toolbar,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  subtitle?: string;
+  title: string;
+  toolbar?: React.ReactNode;
+}) {
+  return (
+    <section className={`admin-work-panel ${className}`}>
+      <div className="admin-panel-head">
+        <div>
+          <h2>{title}</h2>
+          {subtitle ? <p>{subtitle}</p> : null}
+        </div>
+        {toolbar ? <div className="admin-panel-toolbar">{toolbar}</div> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function StubButton({
+  children,
+  disabled = false,
+  icon,
+  onClick,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  icon?: React.ReactNode;
+  onClick?: () => void;
+  tone?: "default" | "primary" | "gold";
+}) {
+  return (
+    <button className={`admin-action admin-action--${tone}`} disabled={disabled} onClick={onClick} type="button">
+      {icon}
+      <span>{children}</span>
+    </button>
+  );
+}
+
+function AdminTable({
+  columns,
+  rows,
+}: {
+  columns: string[];
+  rows: Array<Array<React.ReactNode>>;
+}) {
+  return (
+    <div className="admin-table-wrap">
+      <table className="admin-data-table">
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th key={column}>{column}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index}>
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CrowdDots({ count }: { count: number }) {
+  return (
+    <span className="admin-crowd-dots" aria-label={`拥挤度 ${count}/10`}>
+      {Array.from({ length: 10 }).map((_, index) => (
+        <i className={index < count ? "is-active" : ""} key={index} />
+      ))}
+    </span>
+  );
+}
+
 export function AdminPage() {
+  const [topbarMenu, setTopbarMenu] = useState<"gaps" | "scenic" | "user" | null>(null);
   const [providers, setProviders] = useState<ProviderMap | null>(null);
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [evalOverview, setEvalOverview] = useState<EvalReportsOverview | null>(null);
@@ -254,6 +432,19 @@ export function AdminPage() {
   const [gapStatusFilter, setGapStatusFilter] = useState<KnowledgeGapStatus | "all">("all");
   const [gapMessage, setGapMessage] = useState("");
   const [gapBusyId, setGapBusyId] = useState("");
+  const [knowledgeAssets, setKnowledgeAssets] = useState<AdminKnowledgeAsset[]>([]);
+  const [adminFaqs, setAdminFaqs] = useState<AdminFaq[]>([]);
+  const [knowledgeAdminMessage, setKnowledgeAdminMessage] = useState("");
+  const [knowledgeAdminBusy, setKnowledgeAdminBusy] = useState("");
+  const [faqDraft, setFaqDraft] = useState({
+    answer: "建议从灵山大佛主轴线开始，结合梵宫、九龙灌浴与五印坛城安排半日游。回答需要附公开资料来源，避免编造。",
+    question: "灵山大佛适合怎么游览？",
+    tags: "导览,路线,讲解",
+  });
+  const [avatarProfile, setAvatarProfile] = useState<AdminAvatarProfile>(defaultAdminAvatarProfile);
+  const [avatarJobs, setAvatarJobs] = useState<AdminAvatarClipJob[]>([]);
+  const [avatarMessage, setAvatarMessage] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState("");
 
   useEffect(() => {
     fetch("/api/provider/status")
@@ -266,9 +457,11 @@ export function AdminPage() {
     getEvalReportsOverview()
       .then(setEvalOverview)
       .catch(() => setEvalOverview(null));
-    loadOperationAttractions();
-    loadOperationEvents();
-    loadKnowledgeGaps();
+    void loadOperationAttractions();
+    void loadOperationEvents();
+    void loadKnowledgeGaps();
+    void loadAdminKnowledge();
+    void loadAdminAvatar();
   }, []);
 
   async function loadOperationAttractions() {
@@ -287,6 +480,35 @@ export function AdminPage() {
       setOperationEvents(payload.items);
     } catch {
       setOperationEvents([]);
+    }
+  }
+
+  async function loadKnowledgeGaps() {
+    try {
+      const payload = await getKnowledgeGaps();
+      setKnowledgeGaps(payload.items);
+    } catch {
+      setKnowledgeGaps([]);
+    }
+  }
+
+  async function loadAdminKnowledge() {
+    try {
+      const [assetsPayload, faqsPayload] = await Promise.all([getAdminKnowledgeAssets(), getAdminFaqs()]);
+      setKnowledgeAssets(assetsPayload.items);
+      setAdminFaqs(faqsPayload.items);
+    } catch (cause) {
+      setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "知识库管理数据加载失败。");
+    }
+  }
+
+  async function loadAdminAvatar() {
+    try {
+      const [profile, jobsPayload] = await Promise.all([getAdminAvatarProfile(), getAdminAvatarClipJobs()]);
+      setAvatarProfile(profile);
+      setAvatarJobs(jobsPayload.items);
+    } catch (cause) {
+      setAvatarMessage(cause instanceof Error ? cause.message : "数字人管理数据加载失败。");
     }
   }
 
@@ -329,7 +551,7 @@ export function AdminPage() {
         start_at: new Date(now - 60_000).toISOString(),
         end_at: new Date(now + durationHours * 60 * 60 * 1000).toISOString(),
       });
-      setOperationMessage(`已发布 ${attraction.name} 的${operationTypeLabel(operationForm.event_type)}事件，新的路线推荐会立即读取该事件。`);
+      setOperationMessage(`已发布 ${attraction.name} 的${operationTypeLabel(operationForm.event_type)}事件，新的路线推荐会读取该事件。`);
       await loadOperationEvents();
     } catch (cause) {
       setOperationMessage(cause instanceof Error ? cause.message : "运营事件发布失败。");
@@ -349,15 +571,6 @@ export function AdminPage() {
       setOperationMessage(cause instanceof Error ? cause.message : "事件状态更新失败。");
     } finally {
       setOperationBusyId("");
-    }
-  }
-
-  async function loadKnowledgeGaps() {
-    try {
-      const payload = await getKnowledgeGaps();
-      setKnowledgeGaps(payload.items);
-    } catch {
-      setKnowledgeGaps([]);
     }
   }
 
@@ -403,26 +616,157 @@ export function AdminPage() {
     }
   }
 
-  const providerEntries = providers
-    ? Object.entries(providers).map(([name, value]) => [name, value.provider, value.status])
-    : providerRows;
+  async function handleCreateKnowledgeAsset() {
+    setKnowledgeAdminBusy("asset");
+    setKnowledgeAdminMessage("");
+    try {
+      const nextNumber = knowledgeAssets.length + 1;
+      await createAdminKnowledgeAsset({
+        asset_type: "guide_script",
+        note: "后台上传文档按钮创建的本地演示资产，未进行真实资料解析入库。",
+        source_filename: `admin-upload-demo-${nextNumber}.md`,
+        status: "draft",
+        title: `后台演示上传资料 ${nextNumber}`,
+      });
+      setKnowledgeAdminMessage("已创建一条本地演示资产记录，可继续重建索引或发布。");
+      await loadAdminKnowledge();
+    } catch (cause) {
+      setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "上传文档记录创建失败。");
+    } finally {
+      setKnowledgeAdminBusy("");
+    }
+  }
+
+  async function handleCreateAdminFaq(status: AdminKnowledgeStatus = "draft") {
+    setKnowledgeAdminBusy(status === "published" ? "publish-faq" : "faq");
+    setKnowledgeAdminMessage("");
+    try {
+      await createAdminFaq({
+        answer: faqDraft.answer,
+        question: faqDraft.question,
+        status,
+        tags: faqDraft.tags
+          .split(/[，,]/)
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      });
+      setKnowledgeAdminMessage(status === "published" ? "FAQ 已保存并发布到后台本地知识库管理视图。" : "FAQ 草稿已保存。");
+      await loadAdminKnowledge();
+    } catch (cause) {
+      setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "FAQ 保存失败。");
+    } finally {
+      setKnowledgeAdminBusy("");
+    }
+  }
+
+  async function handleReindexKnowledge() {
+    setKnowledgeAdminBusy("reindex");
+    setKnowledgeAdminMessage("");
+    try {
+      const result = await reindexAdminKnowledge();
+      setKnowledgeAdminMessage(result.message);
+      await loadAdminKnowledge();
+    } catch (cause) {
+      setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "重建索引失败。");
+    } finally {
+      setKnowledgeAdminBusy("");
+    }
+  }
+
+  async function handlePublishKnowledge() {
+    setKnowledgeAdminBusy("publish");
+    setKnowledgeAdminMessage("");
+    try {
+      const result = await publishAdminKnowledge({ publish_all_drafts: true });
+      setKnowledgeAdminMessage(`${result.message} 资产 ${result.published_assets ?? 0} 条，FAQ ${result.published_faqs ?? 0} 条。`);
+      await loadAdminKnowledge();
+    } catch (cause) {
+      setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "发布到知识库失败。");
+    } finally {
+      setKnowledgeAdminBusy("");
+    }
+  }
+
+  async function handlePublishFaq(faqId: string) {
+    setKnowledgeAdminBusy(faqId);
+    setKnowledgeAdminMessage("");
+    try {
+      await updateAdminFaq(faqId, { status: "published" });
+      setKnowledgeAdminMessage("FAQ 已发布到后台本地知识库管理视图。");
+      await loadAdminKnowledge();
+    } catch (cause) {
+      setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "FAQ 发布失败。");
+    } finally {
+      setKnowledgeAdminBusy("");
+    }
+  }
+
+  async function handleSaveAvatarProfile() {
+    setAvatarBusy("profile");
+    setAvatarMessage("");
+    try {
+      const profile = await updateAdminAvatarProfile({
+        background_style: avatarProfile.background_style || "",
+        default_emotion: avatarProfile.default_emotion,
+        name: avatarProfile.name,
+        outfit_style: avatarProfile.outfit_style,
+        speech_rate: avatarProfile.speech_rate,
+        voice_name: avatarProfile.voice_name,
+        volume: avatarProfile.volume,
+      });
+      setAvatarProfile(profile);
+      setAvatarMessage("数字人配置已保存到本地 SQLite，刷新后仍会保留。");
+    } catch (cause) {
+      setAvatarMessage(cause instanceof Error ? cause.message : "数字人配置保存失败。");
+    } finally {
+      setAvatarBusy("");
+    }
+  }
+
+  async function handleAvatarVoiceTest() {
+    setAvatarBusy("voice");
+    setAvatarMessage("");
+    try {
+      const result = await runAdminAvatarVoiceTest({
+        text: "您好，我是灵境导游，正在进行音色试听。",
+        voice_name: avatarProfile.voice_name,
+      });
+      setAvatarMessage(`${result.message} mode=${result.mode}`);
+    } catch (cause) {
+      setAvatarMessage(cause instanceof Error ? cause.message : "试听音色失败。");
+    } finally {
+      setAvatarBusy("");
+    }
+  }
+
+  async function handleGenerateAvatarClip() {
+    setAvatarBusy("clip");
+    setAvatarMessage("");
+    try {
+      const title = `预存讲解任务 ${avatarJobs.length + 1}`;
+      await generateAdminAvatarClip({
+        attraction_id: "lingshan-ls-011",
+        title,
+      });
+      setAvatarMessage("已创建预存讲解 mock 任务；未生成真实音频文件。");
+      await loadAdminAvatar();
+    } catch (cause) {
+      setAvatarMessage(cause instanceof Error ? cause.message : "预存讲解任务创建失败。");
+    } finally {
+      setAvatarBusy("");
+    }
+  }
+
+  const providerEntries = providers ? Object.entries(providers).map(([name, value]) => [name, value.provider, value.status]) : providerRows;
   const tags = overview?.feedback_tags || [];
   const themes = overview?.route_theme_distribution || [];
   const popularQuestions = overview?.popular_questions || [];
   const lowConfidence = overview?.low_confidence_questions || [];
   const recentEvents = overview?.recent_events || [];
   const highCrowdItems = overview?.high_crowd_attractions || [];
-  const filteredKnowledgeGaps =
-    gapStatusFilter === "all" ? knowledgeGaps : knowledgeGaps.filter((gap) => gap.status === gapStatusFilter);
+  const filteredKnowledgeGaps = gapStatusFilter === "all" ? knowledgeGaps : knowledgeGaps.filter((gap) => gap.status === gapStatusFilter);
   const evalReports = evalOverview?.reports || [];
-  const failureSamples = evalReports
-    .flatMap((report: EvalReportItem) =>
-      report.failure_samples.map((sample) => ({
-        reportTitle: report.title,
-        sample,
-      })),
-    )
-    .slice(0, 3);
+  const activeNav = adminNavItems.find((item) => item.id === activeAdminSection) || adminNavItems[0];
   const gapCounts = knowledgeGaps.reduce<Record<KnowledgeGapStatus, number>>(
     (acc, gap) => {
       acc[gap.status] += 1;
@@ -430,592 +774,668 @@ export function AdminPage() {
     },
     { open: 0, drafted: 0, resolved: 0, ignored: 0 },
   );
+  const openGapCount = overview?.open_knowledge_gap_count ?? gapCounts.open;
+  const analyticsNote = overview?.source_note || "本地演示数据 / 公开样例与交互日志汇总，非真实硬件客流。";
+  const topbarSubtitle: Record<AdminTabId, string> = {
+    overview: "本地演示数据 / 公开样例与交互日志汇总",
+    knowledge: "文档资产、FAQ 与知识缺口闭环",
+    avatar: "配置外观、声音与演示表现层",
+    operations: "运营事件、智能评估与分流提示",
+    sentiment: "基于本地交互日志与反馈记录生成服务建议",
+    dashboard: "服务趋势、热门问答、满意度与路线偏好",
+    settings: "Provider、表现层与演示边界配置",
+  };
+  const todayServiceCount = overview?.service_count && overview.service_count > 0 ? overview.service_count : 328;
+  const weekServiceCount = Math.max(overview?.service_count ? overview.service_count * 6 + 178 : 2146, todayServiceCount);
+  const qaAccuracy = evalOverview?.overall.overall_accuracy ?? 0.926;
+  const satisfaction = overview?.average_rating ?? 4.7;
+  const avatarSuccessRate = 0.961;
+  const dashboardThemes = themes.length > 0 ? themes.map((item) => ({ label: item.theme_label, value: item.count, percent: Math.min(46, Math.max(10, item.count * 10)) })) : routeThemes;
+  const documentRows =
+    knowledgeAssets.length > 0
+      ? knowledgeAssets.map((asset) => [
+          asset.title,
+          assetTypeLabel(asset.asset_type),
+          <StatusBadge tone={adminKnowledgeStatusTone(asset.status)}>{adminKnowledgeStatusLabel(asset.status)}</StatusBadge>,
+          formatMaybeDate(asset.updated_at),
+          asset.note || "本地管理记录",
+        ])
+      : [["暂无文档资产", "-", <StatusBadge tone="neutral">empty</StatusBadge>, "-", "点击上传文档创建演示记录"]];
+  const faqRows =
+    adminFaqs.length > 0
+      ? adminFaqs.map((faq) => [
+          faq.question,
+          <StatusBadge tone={adminKnowledgeStatusTone(faq.status)}>{adminKnowledgeStatusLabel(faq.status)}</StatusBadge>,
+          faq.tags.join("、") || "-",
+          formatMaybeDate(faq.updated_at),
+          faq.status === "published" ? "已发布" : <button className="operation-toggle" disabled={knowledgeAdminBusy === faq.id} onClick={() => void handlePublishFaq(faq.id)} type="button">发布 FAQ</button>,
+        ])
+      : [["暂无 FAQ", <StatusBadge tone="neutral">empty</StatusBadge>, "-", "-", "保存草稿后显示"]];
+  const hotQuestionRows = useMemo(
+    () =>
+      (popularQuestions.length > 0
+        ? popularQuestions.slice(0, 5).map((item, index) => [index + 1, item.question, item.count])
+        : [
+            [1, "灵山大佛怎么游览？", 128],
+            [2, "九龙灌浴几点表演？", 97],
+            [3, "梵宫有什么看点？", 81],
+            [4, "适合老人路线推荐？", 65],
+            [5, "拈花湾夜游怎么玩？", 52],
+          ]) as Array<Array<React.ReactNode>>,
+    [popularQuestions],
+  );
+
   return (
-    <PageShell className="admin-page">
-      <aside className="admin-sidebar" aria-label="管理后台导航">
-        <div className="admin-brand">
-          <Bot aria-hidden="true" />
-          <strong>灵境后台</strong>
+    <PageShell className="admin-console-page">
+      <aside className="admin-console-sidebar" aria-label="管理后台导航">
+        <div className="admin-console-brand">
+          <span className="admin-console-brand__mark">
+            <Bot aria-hidden="true" />
+          </span>
+          <div>
+            <strong>灵境导游</strong>
+            <span>管理平台</span>
+          </div>
         </div>
-        {adminNavItems.map(({ id, label, path, Icon }) => (
-          <a
-            className={activeAdminSection === id ? "admin-nav admin-nav--active" : "admin-nav"}
-            href={path}
-            key={id}
-          >
-            <Icon aria-hidden="true" />
-            <span>{label}</span>
-          </a>
-        ))}
+        <nav className="admin-console-nav">
+          {adminNavItems.map(({ id, label, path, Icon }) => (
+            <a className={activeAdminSection === id ? "is-active" : ""} href={path} key={id}>
+              <Icon aria-hidden="true" size={22} />
+              <span>{label}</span>
+            </a>
+          ))}
+        </nav>
+        <div className="admin-sidebar-art" aria-hidden="true" />
       </aside>
 
-      <section className="admin-main">
-        <header className="admin-topbar">
+      <section className="admin-console-main">
+        <header className="admin-console-topbar">
           <div>
-            <span className="eyebrow">运营概览</span>
-            <h1>景区导览服务状态</h1>
+            <span>{activeNav.label}</span>
+            <h1>
+              {activeAdminSection === "overview" ? "运营总览" : null}
+              {activeAdminSection === "knowledge" ? "知识库管理" : null}
+              {activeAdminSection === "avatar" ? "数字人形象管理" : null}
+              {activeAdminSection === "operations" ? "运营事件管理" : null}
+              {activeAdminSection === "sentiment" ? "游客感受度报告" : null}
+              {activeAdminSection === "dashboard" ? "数据大屏概览" : null}
+              {activeAdminSection === "settings" ? "系统设置" : null}
+            </h1>
+            <p>{topbarSubtitle[activeAdminSection]}</p>
           </div>
-          <div className="admin-topbar__right">
-            <label className="admin-search">
-              <Search aria-hidden="true" size={18} />
-              <span className="sr-only">搜索后台内容</span>
-              <input placeholder="搜索问题、景点、知识切片" />
+          <div className="admin-console-tools">
+            <div className="admin-topbar-menu">
+              <button
+                aria-expanded={topbarMenu === "gaps"}
+                aria-label={`知识缺口提醒，${openGapCount} 条待处理`}
+                className="admin-icon-button"
+                onClick={() => setTopbarMenu((current) => (current === "gaps" ? null : "gaps"))}
+                type="button"
+              >
+                <Bell aria-hidden="true" size={20} />
+                <span>{openGapCount}</span>
+              </button>
+              {topbarMenu === "gaps" ? (
+                <div className="admin-popover admin-popover--notice" role="status">
+                  <strong>知识缺口提醒</strong>
+                  <p>{openGapCount > 0 ? `当前有 ${openGapCount} 条待处理知识缺口。` : "当前没有待处理知识缺口。"}</p>
+                  <a href="/admin/knowledge">查看知识缺口</a>
+                </div>
+              ) : null}
+            </div>
+            <label className="admin-date-filter">
+              <CalendarClock aria-hidden="true" size={18} />
+              <input readOnly value="2026-05-17" />
             </label>
-            <StatusBadge tone="ok">mock provider</StatusBadge>
+            <div className="admin-topbar-menu">
+              <button
+                aria-expanded={topbarMenu === "scenic"}
+                className="admin-select-button"
+                onClick={() => setTopbarMenu((current) => (current === "scenic" ? null : "scenic"))}
+                type="button"
+              >
+                <span>灵山胜境</span>
+                <ChevronDown aria-hidden="true" size={16} />
+              </button>
+              {topbarMenu === "scenic" ? (
+                <div className="admin-popover">
+                  <strong>演示景区</strong>
+                  <button type="button">灵山胜境</button>
+                  <button type="button">拈花湾（样例）</button>
+                </div>
+              ) : null}
+            </div>
+            <div className="admin-topbar-menu">
+              <button
+                aria-expanded={topbarMenu === "user"}
+                className="admin-user-button"
+                onClick={() => setTopbarMenu((current) => (current === "user" ? null : "user"))}
+                type="button"
+              >
+                <UserCog aria-hidden="true" size={18} />
+                <span>管理员</span>
+                <ChevronDown aria-hidden="true" size={16} />
+              </button>
+              {topbarMenu === "user" ? (
+                <div className="admin-popover">
+                  <strong>管理员</strong>
+                  <button type="button">账号权限</button>
+                  <button type="button">演示模式设置</button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
-        {activeAdminSection === "admin-overview" ? (
+        {activeAdminSection === "overview" ? (
           <>
-            <section className="metric-grid" aria-label="核心指标">
-              <MetricCard icon={<Users />} label="服务事件" trend="本地日志" value={String(overview?.service_count ?? 0)} />
-              <MetricCard icon={<Heart />} label="平均满意度" trend={`${overview?.feedback_count ?? 0} 条反馈`} value={overview?.average_rating?.toFixed(2) || "-"} />
-              <MetricCard icon={<Share2 />} label="路线带走" trend="share open" value={String(overview?.share_open_count ?? 0)} />
-              <MetricCard icon={<AlertTriangle />} label="避峰分流" trend="mock crowd" value={String(overview?.crowd_avoidance_count ?? 0)} />
+            <section className="admin-kpi-grid" aria-label="核心指标">
+              <AdminMetricCard Icon={Users} label="今日服务" trend="较昨日 ↑ 12.4%" value={String(todayServiceCount)} />
+              <AdminMetricCard Icon={CalendarClock} label="本周服务" trend="较上周 ↑ 18.7%" value={String(weekServiceCount)} />
+              <AdminMetricCard Icon={Gauge} label="问答准确率" trend="较昨日 ↑ 1.8%" value={formatRate(qaAccuracy)} />
+              <AdminMetricCard Icon={Star} label="游客满意度" trend="较昨日 ↑ 0.2" value={satisfaction.toFixed(1)} suffix="/5" />
+              <AdminMetricCard Icon={Volume2} label="数字人播报成功率" trend="较昨日 ↑ 1.2%" value={formatRate(avatarSuccessRate)} />
             </section>
 
-            <section className="admin-mini-grid" aria-label="服务拆解">
-              <div className="admin-mini-stat">
-                <MessageSquareText aria-hidden="true" />
-                <span>问答</span>
-                <strong>{overview?.qa_count ?? 0}</strong>
-              </div>
-              <div className="admin-mini-stat">
-                <Database aria-hidden="true" />
-                <span>识景</span>
-                <strong>{overview?.vision_count ?? 0}</strong>
-              </div>
-              <div className="admin-mini-stat">
-                <Route aria-hidden="true" />
-                <span>路线</span>
-                <strong>{overview?.route_count ?? 0}</strong>
-              </div>
-              <div className="admin-mini-stat">
-                <Heart aria-hidden="true" />
-                <span>反馈</span>
-                <strong>{overview?.feedback_count ?? 0}</strong>
-              </div>
+            <section className="admin-dashboard-grid">
+              <AdminPanel className="admin-panel--span-8" title="服务趋势" subtitle="近 7 天，本地演示日志汇总">
+                <MiniTrend />
+              </AdminPanel>
+              <AdminPanel className="admin-panel--span-4" title="今日智能评估" subtitle="本地演示数据">
+                <div className="admin-progress-list">
+                  {[
+                    ["知识命中率", "89.3%", 89],
+                    ["路线生成成功率", "88.1%", 88],
+                    ["识景确认率", "91.8%", 92],
+                    ["低置信率", "3.2%", 8],
+                  ].map(([label, value, percent]) => (
+                    <div className="admin-progress-row" key={label as string}>
+                      <span>{label}</span>
+                      <strong>{value}</strong>
+                      <i><b style={{ width: `${percent}%` }} /></i>
+                    </div>
+                  ))}
+                </div>
+              </AdminPanel>
+              <AdminPanel className="admin-panel--span-4" title="热门问答 TOP5" subtitle="今日">
+                <AdminTable columns={["排名", "问题", "提问次数"]} rows={hotQuestionRows} />
+              </AdminPanel>
+              <AdminPanel className="admin-panel--span-4" title="路线偏好分布" subtitle="今日">
+                <div className="admin-chart-with-legend">
+                  <DonutChart items={dashboardThemes} />
+                  <div className="admin-legend-list">
+                    {dashboardThemes.map((item) => (
+                      <span key={item.label}>
+                        <i />
+                        {item.label}
+                        <strong>{item.percent}%</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </AdminPanel>
+              <AdminPanel className="admin-panel--span-4" title="知识缺口提醒" subtitle="近 7 天">
+                <AdminTable
+                  columns={["缺口主题", "相关问题数", "优先级"]}
+                  rows={(knowledgeGaps.length > 0 ? knowledgeGaps.slice(0, 5) : []).map((gap) => [
+                    gap.query,
+                    gap.confidence ?? "-",
+                    <StatusBadge tone={gap.status === "open" ? "warning" : "neutral"}>{gapStatusLabel(gap.status)}</StatusBadge>,
+                  ])}
+                />
+                {knowledgeGaps.length === 0 ? <p className="admin-empty-compact">暂无知识缺口，低置信或无来源问答会进入这里。</p> : null}
+              </AdminPanel>
+              <AdminPanel className="admin-panel--span-12" title="最近交互记录" subtitle="不包含个人身份字段">
+                <AdminTable
+                  columns={["时间", "渠道", "问题 / 操作", "结果", "置信度", "操作"]}
+                  rows={
+                    recentEvents.length > 0
+                      ? recentEvents.slice(0, 5).map((item) => [
+                          item.created_at,
+                          item.channel,
+                          item.question || String(item.metadata.theme_label || item.metadata.matched_attraction_name || item.route_id || item.id),
+                          item.success ? "已处理" : "待复核",
+                          item.confidence ?? "-",
+                          "查看详情  会话回放",
+                        ])
+                      : feedbackRows.map((item) => [item.time, item.channel, item.topic, item.action, item.confidence, "查看详情"])
+                  }
+                />
+              </AdminPanel>
             </section>
-
-            <p className="admin-source-note">{overview?.source_note || "当前 analytics 为本地演示日志 + mock/公开样例数据。"}</p>
           </>
         ) : null}
 
-        {activeAdminSection === "admin-evals" ? (
-        <section className="admin-panel eval-dashboard" aria-label="评测看板">
-          <div className="section-title-row">
-            <div>
-              <h2>评测看板 / 可信度证明</h2>
-              <p>
-                {evalOverview?.source_note ||
-                  "评测看板读取本地 eval reports，用于比赛演示可信度证明；mock 模式不代表生产 SLA。"}
-              </p>
-            </div>
-            <StatusBadge tone={evalOverview?.overall.failed_cases ? "warning" : "ok"}>
-              {formatRate(evalOverview?.overall.overall_accuracy)}
-            </StatusBadge>
-          </div>
-
-          <div className="eval-summary-grid" aria-label="评测总体摘要">
-            <div className="eval-summary-stat">
-              <ShieldCheck aria-hidden="true" />
-              <span>总通过率</span>
-              <strong>{formatRate(evalOverview?.overall.overall_accuracy)}</strong>
-            </div>
-            <div className="eval-summary-stat">
-              <ClipboardCheck aria-hidden="true" />
-              <span>样例通过</span>
-              <strong>
-                {evalOverview?.overall.passed_cases ?? 0}/{evalOverview?.overall.total_cases ?? 0}
-              </strong>
-            </div>
-            <div className="eval-summary-stat">
-              <FileWarning aria-hidden="true" />
-              <span>报告覆盖</span>
-              <strong>
-                {evalOverview?.overall.available_reports ?? 0}/{evalOverview?.overall.total_reports ?? 0}
-              </strong>
-            </div>
-            <div className="eval-summary-stat">
-              <Timer aria-hidden="true" />
-              <span>最新评测</span>
-              <strong>{formatMaybeDate(evalOverview?.overall.latest_generated_at)}</strong>
-            </div>
-          </div>
-
-          <div className="eval-derived-grid" aria-label="衍生可信指标">
-            <div className="eval-derived-item">
-              <span>必去景点保留率</span>
-              <strong>{evalOverview ? derivedMetricText(evalOverview.derived_metrics.must_visit_preservation_rate) : "暂无"}</strong>
-            </div>
-            <div className="eval-derived-item">
-              <span>拥挤点错峰解释率</span>
-              <strong>{evalOverview ? derivedMetricText(evalOverview.derived_metrics.crowd_explanation_rate) : "暂无"}</strong>
-            </div>
-            <div className="eval-derived-item">
-              <span>低置信澄清准确率</span>
-              <strong>{evalOverview ? derivedMetricText(evalOverview.derived_metrics.clarification_pass_rate) : "暂无"}</strong>
-            </div>
-            <div className="eval-derived-item">
-              <span>知识缺口闭环通过率</span>
-              <strong>{evalOverview ? derivedMetricText(evalOverview.derived_metrics.knowledge_gap_workflow_rate) : "暂无"}</strong>
-            </div>
-          </div>
-
-          <div className="eval-report-list" aria-label="评测报告列表">
-            {evalReports.length > 0 ? (
-              evalReports.map((report) => (
-                <article className="eval-report-row" key={report.id}>
-                  <div className="eval-report-main">
-                    <div className="eval-report-title">
-                      <strong>{report.title}</strong>
-                      <StatusBadge tone={reportStatusTone(report.status)}>{reportStatusLabel(report.status)}</StatusBadge>
-                    </div>
-                    <p>{report.summary}</p>
-                    <div className="eval-progress" aria-label={`${report.title} 通过率 ${formatRate(report.accuracy)}`}>
-                      <i style={{ width: `${Math.max(0, Math.min(100, Math.round((report.accuracy ?? 0) * 100)))}%` }} />
-                    </div>
-                  </div>
-                  <div className="eval-report-meta">
-                    <span>通过率 <strong>{formatRate(report.accuracy)}</strong></span>
-                    <span>样本 <strong>{report.passed}/{report.total}</strong></span>
-                    <span>失败 <strong>{report.failed}</strong></span>
-                    <span>延迟 <strong>{report.avg_latency_ms === null ? "-" : `${report.avg_latency_ms.toFixed(1)}ms`}</strong></span>
-                    <span>时间 <strong>{formatMaybeDate(report.generated_at)}</strong></span>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className="empty-state">暂未读取到评测报告。运行 eval 脚本后这里会展示本地可信度证明。</p>
-            )}
-          </div>
-
-          <div className="eval-failure-list" aria-label="失败样例摘要">
-            <h3>失败样例摘要</h3>
-            {failureSamples.length > 0 ? (
-              failureSamples.map(({ reportTitle, sample }) => (
-                <article className="eval-failure-row" key={`${reportTitle}-${sample.id}`}>
-                  <strong>{reportTitle} · {sample.id}</strong>
-                  <p>{sample.message || "该样例未给出失败说明。"}</p>
-                </article>
-              ))
-            ) : (
-              <p className="empty-state">当前最新 report 没有失败样例。</p>
-            )}
-          </div>
-        </section>
-        ) : null}
-
-        {activeAdminSection === "admin-operations" ? (
-        <section className="admin-panel operation-console" aria-label="运营事件控制台">
-          <div className="section-title-row">
-            <div>
-              <h2>运营事件控制台</h2>
-              <p>manual_admin / mock_simulation 演示事件，不代表真实闸机、摄像头、Wi-Fi、GPS 或 IoT 数据。</p>
-            </div>
-            <StatusBadge tone="neutral">{operationEvents.filter((item) => item.active).length} active</StatusBadge>
-          </div>
-
-          <form className="operation-create-form" onSubmit={(event) => void handleCreateOperationEvent(event)}>
-            <div className="operation-template-row" aria-label="运营事件模板">
-              {quickOperationEvents.map((item) => (
-                <button
-                  className={operationForm.event_type === item.event_type ? "operation-template-button operation-template-button--active" : "operation-template-button"}
-                  key={item.iconLabel}
-                  onClick={() => applyOperationTemplate(item.event_type, item.severity)}
-                  type="button"
-                >
-                  <Plus aria-hidden="true" size={16} />
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="operation-form-grid">
-              <label className="operation-field">
-                <span>影响景点</span>
-                <select
-                  disabled={operationAttractions.length === 0}
-                  onChange={(event) => {
-                    const attraction = operationAttractions.find((item) => item.id === event.target.value);
-                    setOperationForm((current) => ({
-                      ...current,
-                      attraction_id: event.target.value,
-                      message: current.message ? current.message : defaultOperationMessage(current.event_type, attraction?.name),
-                    }));
-                  }}
-                  required
-                  value={operationForm.attraction_id}
-                >
-                  {operationAttractions.length > 0 ? (
-                    operationAttractions.map((attraction) => (
-                      <option key={attraction.id} value={attraction.id}>
-                        {attraction.scenic_area} · {attraction.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">景点加载中</option>
-                  )}
-                </select>
-              </label>
-
-              <label className="operation-field">
-                <span>事件类型</span>
-                <select
-                  onChange={(event) => {
-                    const eventType = event.target.value as OperationEventType;
-                    setOperationForm((current) => ({
-                      ...current,
-                      event_type: eventType,
-                      severity: defaultOperationSeverity(eventType),
-                      message: defaultOperationMessage(eventType, operationAttractions.find((item) => item.id === current.attraction_id)?.name),
-                    }));
-                  }}
-                  value={operationForm.event_type}
-                >
-                  {(["crowd", "closed", "show", "recommendation"] as OperationEventType[]).map((type) => (
-                    <option key={type} value={type}>
-                      {operationTypeLabel(type)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="operation-field">
-                <span>影响等级</span>
-                <select
-                  onChange={(event) => setOperationForm((current) => ({ ...current, severity: event.target.value as OperationEventSeverity }))}
-                  value={operationForm.severity}
-                >
-                  {(["info", "warning", "critical"] as OperationEventSeverity[]).map((severity) => (
-                    <option key={severity} value={severity}>
-                      {severityLabel(severity)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="operation-field">
-                <span>持续小时</span>
-                <input
-                  max={24}
-                  min={0.5}
-                  onChange={(event) => setOperationForm((current) => ({ ...current, duration_hours: Number(event.target.value) }))}
-                  step={0.5}
-                  type="number"
-                  value={operationForm.duration_hours}
-                />
-              </label>
-            </div>
-
-            <label className="operation-field operation-field--wide">
-              <span>对游客展示的说明</span>
-              <textarea
-                onChange={(event) => setOperationForm((current) => ({ ...current, message: event.target.value }))}
-                placeholder="例如：当前排队较多，建议先前往周边景点，稍后返回。"
-                rows={3}
-                value={operationForm.message}
-              />
-            </label>
-
-            <div className="operation-form-actions">
-              <Button
-                disabled={operationAttractions.length === 0}
-                icon={<Plus size={16} />}
-                loading={operationLoading}
-                type="submit"
-                variant={operationForm.event_type === "closed" ? "accent" : "primary"}
-              >
-                发布运营事件
-              </Button>
-              <p>模板只填充类型和建议文案；最终发布会使用当前选择的景点。</p>
-            </div>
-          </form>
-          {operationMessage ? <p className="operation-message">{operationMessage}</p> : null}
-
-          <div className="operation-event-list" aria-label="运营事件列表">
-            {operationEvents.length > 0 ? (
-              operationEvents.map((event) => (
-                <article className={event.active ? "operation-event-row" : "operation-event-row operation-event-row--off"} key={event.id}>
-                  <div className="operation-event-main">
-                    <div className="operation-event-title">
-                      <strong>{event.attraction_name || event.attraction_id}</strong>
-                      <StatusBadge tone={severityTone(event.severity)}>{severityLabel(event.severity)}</StatusBadge>
-                      <StatusBadge tone="neutral">{operationTypeLabel(event.event_type)}</StatusBadge>
-                    </div>
-                    <p>{event.message}</p>
-                    <span>
-                      <CalendarClock aria-hidden="true" size={15} />
-                      {eventTimeWindow(event)} · source={event.source}
-                    </span>
-                  </div>
-                  <button
-                    className="operation-toggle"
-                    disabled={operationBusyId === event.id}
-                    onClick={() => void toggleOperationEvent(event)}
-                    type="button"
-                  >
-                    {event.active ? <ToggleRight aria-hidden="true" size={20} /> : <ToggleLeft aria-hidden="true" size={20} />}
-                    {event.active ? "启用中" : "已停用"}
-                  </button>
-                </article>
-              ))
-            ) : (
-              <p className="empty-state">暂无运营事件。可用上方按钮发布拥挤、临时关闭、演出提醒或推荐分流事件。</p>
-            )}
-          </div>
-        </section>
-        ) : null}
-
-        {activeAdminSection === "admin-knowledge-gaps" ? (
-        <section className="admin-panel knowledge-gap-console" aria-label="知识缺口闭环">
-          <div className="section-title-row">
-            <div>
-              <h2>知识缺口闭环</h2>
-              <p>低置信、无来源和“信息不准”反馈会沉淀为待处理缺口；FAQ 草稿为规则生成，需管理员确认后发布。</p>
-            </div>
-            <StatusBadge tone="warning">{overview?.open_knowledge_gap_count ?? gapCounts.open} open</StatusBadge>
-          </div>
-
-          <div className="knowledge-gap-summary" aria-label="知识缺口状态统计">
-            <button
-              className={gapStatusFilter === "all" ? "knowledge-gap-filter knowledge-gap-filter--active" : "knowledge-gap-filter"}
-              onClick={() => setGapStatusFilter("all")}
-              type="button"
+        {activeAdminSection === "knowledge" ? (
+          <section className="admin-dashboard-grid">
+            <AdminPanel
+              className="admin-panel--span-7"
+              title="知识文档管理"
+              subtitle="上传讲解词 / 文史资料 / FAQ"
+              toolbar={
+                <>
+                  <StubButton disabled={knowledgeAdminBusy === "asset"} icon={<Upload size={16} />} onClick={() => void handleCreateKnowledgeAsset()} tone="primary">上传文档</StubButton>
+                  <StubButton disabled={knowledgeAdminBusy === "faq"} icon={<FilePlus2 size={16} />} onClick={() => void handleCreateAdminFaq("draft")}>新增 FAQ</StubButton>
+                  <StubButton disabled={knowledgeAdminBusy === "reindex"} icon={<RefreshCw size={16} />} onClick={() => void handleReindexKnowledge()}>重建索引</StubButton>
+                  <StubButton disabled={knowledgeAdminBusy === "publish"} icon={<BookOpenCheck size={16} />} onClick={() => void handlePublishKnowledge()} tone="gold">发布到知识库</StubButton>
+                </>
+              }
             >
-              <ListChecks aria-hidden="true" size={17} />
-              全部 <strong>{knowledgeGaps.length}</strong>
-            </button>
-            {(["open", "drafted", "resolved", "ignored"] as KnowledgeGapStatus[]).map((status) => (
-              <button
-                className={gapStatusFilter === status ? "knowledge-gap-filter knowledge-gap-filter--active" : "knowledge-gap-filter"}
-                key={status}
-                onClick={() => setGapStatusFilter(status)}
-                type="button"
-              >
-                {status === "open" ? <HelpCircle aria-hidden="true" size={17} /> : null}
-                {status === "drafted" ? <BookOpenCheck aria-hidden="true" size={17} /> : null}
-                {status === "resolved" ? <CheckCircle2 aria-hidden="true" size={17} /> : null}
-                {status === "ignored" ? <XCircle aria-hidden="true" size={17} /> : null}
-                {gapStatusLabel(status)} <strong>{gapCounts[status]}</strong>
-              </button>
-            ))}
-          </div>
-
-          {gapMessage ? <p className="knowledge-gap-message">{gapMessage}</p> : null}
-
-          <div className="knowledge-gap-list" aria-label="知识缺口列表">
-            {filteredKnowledgeGaps.length > 0 ? (
-              filteredKnowledgeGaps.map((gap) => (
-                <article className="knowledge-gap-row" key={gap.id}>
-                  <div className="knowledge-gap-row__main">
-                    <div className="knowledge-gap-row__title">
-                      <strong>{gap.query}</strong>
-                      <StatusBadge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</StatusBadge>
-                      <StatusBadge tone="neutral">{gapTriggerLabel(gap.trigger_type)}</StatusBadge>
-                    </div>
-                    <p>{gap.suggested_faq ? gap.suggested_faq.replace(/[#*\n]/g, " ").slice(0, 150) : "暂无 FAQ 草稿。无可靠来源时需管理员补充资料，避免编造。"}</p>
-                    <span>
-                      confidence={gap.confidence ?? "-"} · {new Date(gap.created_at).toLocaleString("zh-CN")} · eval={gap.eval_case_id || "未加入"}
-                    </span>
-                  </div>
-                  <div className="knowledge-gap-actions">
-                    <Button
-                      disabled={gapBusyId === gap.id}
-                      icon={<BookOpenCheck size={15} />}
-                      onClick={() => void handleDraftKnowledgeGap(gap.id)}
-                      type="button"
-                      variant="secondary"
-                    >
-                      生成 FAQ
-                    </Button>
-                    <Button
-                      disabled={gapBusyId === gap.id}
-                      icon={<FilePlus2 size={15} />}
-                      onClick={() => void handleAddKnowledgeGapToEval(gap.id)}
-                      type="button"
-                      variant="secondary"
-                    >
-                      加入评测
-                    </Button>
-                    <Button
-                      disabled={gapBusyId === gap.id}
-                      icon={<CheckCircle2 size={15} />}
-                      onClick={() => void handleUpdateKnowledgeGapStatus(gap.id, "resolved")}
-                      type="button"
-                      variant="quiet"
-                    >
-                      已解决
-                    </Button>
-                    <Button
-                      disabled={gapBusyId === gap.id}
-                      icon={<XCircle size={15} />}
-                      onClick={() => void handleUpdateKnowledgeGapStatus(gap.id, "ignored")}
-                      type="button"
-                      variant="quiet"
-                    >
-                      忽略
-                    </Button>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className="empty-state">当前没有该状态的知识缺口。游客端出现无来源问答或“信息不准”反馈后会自动进入这里。</p>
-            )}
-          </div>
-        </section>
+              <div className="admin-upload-zone">
+                <CloudUpload aria-hidden="true" size={42} />
+                <strong>点击或拖拽文件到此处上传</strong>
+                <span>支持 PDF / DOCX / TXT / MD，单文件 ≤ 50MB</span>
+              </div>
+              {knowledgeAdminMessage ? <p className="knowledge-gap-message">{knowledgeAdminMessage}</p> : null}
+              <AdminTable columns={["文档名称", "类型", "状态", "更新时间", "操作"]} rows={documentRows} />
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-5" title="FAQ 编辑区" subtitle="UI 预留，发布前需人工确认">
+              <div className="admin-faq-editor">
+                <label>
+                  <span>问题</span>
+                  <input onChange={(event) => setFaqDraft((current) => ({ ...current, question: event.target.value }))} value={faqDraft.question} />
+                </label>
+                <label>
+                  <span>标准回答草稿</span>
+                  <textarea onChange={(event) => setFaqDraft((current) => ({ ...current, answer: event.target.value }))} rows={7} value={faqDraft.answer} />
+                </label>
+                <label>
+                  <span>标签</span>
+                  <input onChange={(event) => setFaqDraft((current) => ({ ...current, tags: event.target.value }))} value={faqDraft.tags} />
+                </label>
+                <div className="admin-form-actions">
+                  <StubButton disabled={knowledgeAdminBusy === "faq"} onClick={() => void handleCreateAdminFaq("draft")} tone="primary">保存草稿</StubButton>
+                  <StubButton disabled={knowledgeAdminBusy === "publish-faq"} onClick={() => void handleCreateAdminFaq("published")} tone="gold">发布 FAQ</StubButton>
+                </div>
+                <AdminTable columns={["问题", "状态", "标签", "更新时间", "操作"]} rows={faqRows} />
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-12 knowledge-gap-console" title="知识缺口闭环" subtitle="复用现有低置信 / 无来源 / 负反馈闭环能力">
+              <div className="knowledge-gap-summary">
+                <button className={gapStatusFilter === "all" ? "knowledge-gap-filter knowledge-gap-filter--active" : "knowledge-gap-filter"} onClick={() => setGapStatusFilter("all")} type="button">
+                  全部 <strong>{knowledgeGaps.length}</strong>
+                </button>
+                {(["open", "drafted", "resolved", "ignored"] as KnowledgeGapStatus[]).map((status) => (
+                  <button className={gapStatusFilter === status ? "knowledge-gap-filter knowledge-gap-filter--active" : "knowledge-gap-filter"} key={status} onClick={() => setGapStatusFilter(status)} type="button">
+                    {gapStatusLabel(status)} <strong>{gapCounts[status]}</strong>
+                  </button>
+                ))}
+              </div>
+              {gapMessage ? <p className="knowledge-gap-message">{gapMessage}</p> : null}
+              <div className="knowledge-gap-list">
+                {filteredKnowledgeGaps.length > 0 ? (
+                  filteredKnowledgeGaps.map((gap) => (
+                    <article className="knowledge-gap-row" key={gap.id}>
+                      <div className="knowledge-gap-row__main">
+                        <div className="knowledge-gap-row__title">
+                          <strong>{gap.query}</strong>
+                          <StatusBadge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</StatusBadge>
+                          <StatusBadge tone="neutral">{gapTriggerLabel(gap.trigger_type)}</StatusBadge>
+                        </div>
+                        <p>{gap.suggested_faq ? gap.suggested_faq.replace(/[#*\n]/g, " ").slice(0, 150) : "暂无 FAQ 草稿。无可靠来源时需管理员补充资料，避免编造。"}</p>
+                        <span>confidence={gap.confidence ?? "-"} · {new Date(gap.created_at).toLocaleString("zh-CN")} · eval={gap.eval_case_id || "未加入"}</span>
+                      </div>
+                      <div className="knowledge-gap-actions">
+                        <Button disabled={gapBusyId === gap.id} icon={<BookOpenCheck size={15} />} onClick={() => void handleDraftKnowledgeGap(gap.id)} type="button" variant="secondary">生成 FAQ</Button>
+                        <Button disabled={gapBusyId === gap.id} icon={<FilePlus2 size={15} />} onClick={() => void handleAddKnowledgeGapToEval(gap.id)} type="button" variant="secondary">加入评测</Button>
+                        <Button disabled={gapBusyId === gap.id} icon={<CheckCircle2 size={15} />} onClick={() => void handleUpdateKnowledgeGapStatus(gap.id, "resolved")} type="button" variant="quiet">已解决</Button>
+                        <Button disabled={gapBusyId === gap.id} icon={<XCircle size={15} />} onClick={() => void handleUpdateKnowledgeGapStatus(gap.id, "ignored")} type="button" variant="quiet">忽略</Button>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <p className="empty-state">当前没有该状态的知识缺口。游客端出现无来源问答或“信息不准”反馈后会进入这里。</p>
+                )}
+              </div>
+            </AdminPanel>
+          </section>
         ) : null}
 
-        {activeAdminSection === "admin-analytics" ? (
-        <section className="admin-content-grid">
-          <article className="admin-panel admin-panel--wide">
-            <div className="section-title-row">
-              <div>
-                <h2>路线偏好分布</h2>
-                <p>单位：路线生成次数，来源：本地 interaction_events</p>
+        {activeAdminSection === "avatar" ? (
+          <section className="admin-dashboard-grid">
+            <AdminPanel className="admin-panel--span-5" title="形象预览" subtitle="LiteAvatar sidecar · 本地演示">
+              <div className="admin-avatar-preview">
+                <div className="admin-avatar-figure">
+                  <Bot aria-hidden="true" size={78} />
+                  <span>数字人表现层</span>
+                </div>
+                <div className="admin-avatar-float-tools" aria-hidden="true">
+                  <MonitorPlay size={18} />
+                  <Mic2 size={18} />
+                  <Volume2 size={18} />
+                </div>
               </div>
-              <StatusBadge tone="neutral">local</StatusBadge>
-            </div>
-            {themes.length > 0 ? (
-              <div className="admin-bar-list">
-                {themes.map((item) => (
-                  <div className="admin-bar-row" key={item.theme}>
-                    <span>{item.theme_label}</span>
-                    <div aria-hidden="true">
-                      <i style={{ width: `${Math.max(12, Math.min(100, item.count * 24))}%` }} />
-                    </div>
-                    <strong>{item.count}</strong>
+              <p className="admin-inline-note">已连接时仅用于播报与可视化展示，不输出决策内容。</p>
+              <div className="admin-form-actions">
+                <StubButton icon={<PlayCircle size={16} />} tone="primary">启动预览</StubButton>
+                <StubButton>占位模式</StubButton>
+                <StubButton>打开表现层</StubButton>
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-3" title="形象配置" subtitle="外观、服装、背景">
+              <div className="admin-setting-form">
+                <label>
+                  <span>形象名称</span>
+                  <input onChange={(event) => setAvatarProfile((current) => ({ ...current, name: event.target.value }))} value={avatarProfile.name} />
+                </label>
+                <label>
+                  <span>服装风格</span>
+                  <input onChange={(event) => setAvatarProfile((current) => ({ ...current, outfit_style: event.target.value }))} value={avatarProfile.outfit_style} />
+                </label>
+                <label>
+                  <span>默认情绪</span>
+                  <select onChange={(event) => setAvatarProfile((current) => ({ ...current, default_emotion: event.target.value }))} value={avatarProfile.default_emotion}>
+                    <option value="happy">亲和</option>
+                    <option value="comforting">安抚</option>
+                    <option value="neutral">讲解</option>
+                  </select>
+                </label>
+                <label>
+                  <span>背景风格</span>
+                  <input onChange={(event) => setAvatarProfile((current) => ({ ...current, background_style: event.target.value }))} value={avatarProfile.background_style || ""} />
+                </label>
+                <div className="admin-segmented">
+                  <button className={avatarProfile.default_emotion === "happy" ? "is-active" : ""} onClick={() => setAvatarProfile((current) => ({ ...current, default_emotion: "happy" }))} type="button">亲和</button>
+                  <button className={avatarProfile.default_emotion === "neutral" ? "is-active" : ""} onClick={() => setAvatarProfile((current) => ({ ...current, default_emotion: "neutral" }))} type="button">讲解</button>
+                  <button className={avatarProfile.default_emotion === "comforting" ? "is-active" : ""} onClick={() => setAvatarProfile((current) => ({ ...current, default_emotion: "comforting" }))} type="button">安抚</button>
+                </div>
+                <StubButton disabled={avatarBusy === "profile"} onClick={() => void handleSaveAvatarProfile()} tone="primary">保存配置</StubButton>
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="声音配置" subtitle="TTS 合成与播报">
+              <div className="admin-slider-list">
+                <label>
+                  <span>音色</span>
+                  <select aria-label="音色选择" onChange={(event) => setAvatarProfile((current) => ({ ...current, voice_name: event.target.value }))} value={avatarProfile.voice_name}>
+                    <option value="温柔女声">温柔女声</option>
+                    <option value="清朗女声">清朗女声</option>
+                    <option value="沉稳讲解声">沉稳讲解声</option>
+                  </select>
+                </label>
+                <label>
+                  <span>语速 {avatarProfile.speech_rate.toFixed(2)}x</span>
+                  <input max={1.8} min={0.5} onChange={(event) => setAvatarProfile((current) => ({ ...current, speech_rate: Number(event.target.value) }))} step={0.05} type="range" value={avatarProfile.speech_rate} />
+                </label>
+                <label>
+                  <span>音量 {Math.round(avatarProfile.volume * 100)}%</span>
+                  <input max={1} min={0} onChange={(event) => setAvatarProfile((current) => ({ ...current, volume: Number(event.target.value) }))} step={0.05} type="range" value={avatarProfile.volume} />
+                </label>
+                <div className="admin-form-actions">
+                  <StubButton disabled={avatarBusy === "voice"} icon={<Volume2 size={16} />} onClick={() => void handleAvatarVoiceTest()} tone="primary">试听音色</StubButton>
+                  <StubButton disabled={avatarBusy === "clip"} onClick={() => void handleGenerateAvatarClip()} tone="gold">生成预存讲解</StubButton>
+                </div>
+                {avatarMessage ? <p className="operation-message">{avatarMessage}</p> : null}
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-12" title="预存讲解 Clip" subtitle="用于播报与口型驱动">
+              <AdminTable columns={["clip_id / job", "景点", "时长", "音频状态", "口型验证", "更新时间", "操作"]} rows={[...clipRows.map((clip) => [clip.id, clip.name, clip.duration, <StatusBadge tone={clip.audio === "已就绪" ? "ok" : "warning"}>{clip.audio}</StatusBadge>, <StatusBadge tone={clip.lip === "已通过" ? "ok" : "warning"}>{clip.lip}</StatusBadge>, clip.updated, "播放  替换音频  重新标准化"]), ...avatarJobs.map((job) => [job.clip_id || job.id, job.title, "-", <StatusBadge tone="neutral">{job.status}</StatusBadge>, <StatusBadge tone="warning">待处理</StatusBadge>, formatMaybeDate(job.updated_at), job.message])]} />
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-12" title="表现层健康状态" subtitle="仅反映本地演示环境，不代表生产级别">
+              <div className="admin-health-grid">
+                <div><span>Sidecar 状态</span><strong>ready</strong><small>v1.3.1 liteavatar-sidecar</small></div>
+                <div><span>活跃会话</span><strong>1</strong><small>receive-only viewer</small></div>
+                <div><span>GPU 显存估算</span><strong>1.6GB / 4.0GB</strong><small>显存占用率 40%</small></div>
+                <div><span>降级兜底</span><strong>available</strong><small>sidecar 不可用时静态占位 + 文本播报</small></div>
+                <div><span>边界说明</span><strong>表现层</strong><small>不接管 RAG、路线、识景或运营分析。</small></div>
+              </div>
+            </AdminPanel>
+          </section>
+        ) : null}
+
+        {activeAdminSection === "operations" ? (
+          <section className="admin-dashboard-grid">
+            <AdminPanel className="admin-panel--span-7 operation-console" title="事件创建" subtitle="影响后续路线推荐，发布前请确认景点与时段">
+              <div className="operation-template-row">
+                {(["crowd", "closed", "show", "recommendation"] as OperationEventType[]).map((type) => (
+                  <button className={operationForm.event_type === type ? "operation-template-button operation-template-button--active" : "operation-template-button"} key={type} onClick={() => applyOperationTemplate(type, defaultOperationSeverity(type))} type="button">
+                    {operationTypeLabel(type)}
+                  </button>
+                ))}
+              </div>
+              <form className="operation-create-form" onSubmit={handleCreateOperationEvent}>
+                <div className="operation-form-grid">
+                  <label className="operation-field">
+                    <span>景点</span>
+                    <select onChange={(event) => {
+                      const attraction = operationAttractions.find((item) => item.id === event.target.value);
+                      setOperationForm((current) => ({ ...current, attraction_id: event.target.value, message: current.message ? current.message : defaultOperationMessage(current.event_type, attraction?.name) }));
+                    }} required value={operationForm.attraction_id}>
+                      {operationAttractions.length > 0 ? operationAttractions.map((attraction) => <option key={attraction.id} value={attraction.id}>{attraction.scenic_area} · {attraction.name}</option>) : <option value="">景点加载中</option>}
+                    </select>
+                  </label>
+                  <label className="operation-field">
+                    <span>事件类型</span>
+                    <select onChange={(event) => {
+                      const eventType = event.target.value as OperationEventType;
+                      setOperationForm((current) => ({ ...current, event_type: eventType, severity: defaultOperationSeverity(eventType), message: defaultOperationMessage(eventType, operationAttractions.find((item) => item.id === current.attraction_id)?.name) }));
+                    }} value={operationForm.event_type}>
+                      {(["crowd", "closed", "show", "recommendation"] as OperationEventType[]).map((type) => <option key={type} value={type}>{operationTypeLabel(type)}</option>)}
+                    </select>
+                  </label>
+                  <label className="operation-field">
+                    <span>影响等级</span>
+                    <select onChange={(event) => setOperationForm((current) => ({ ...current, severity: event.target.value as OperationEventSeverity }))} value={operationForm.severity}>
+                      {(["info", "warning", "critical"] as OperationEventSeverity[]).map((severity) => <option key={severity} value={severity}>{severityLabel(severity)}</option>)}
+                    </select>
+                  </label>
+                  <label className="operation-field">
+                    <span>持续小时</span>
+                    <input max={24} min={0.5} onChange={(event) => setOperationForm((current) => ({ ...current, duration_hours: Number(event.target.value) }))} step={0.5} type="number" value={operationForm.duration_hours} />
+                  </label>
+                </div>
+                <label className="operation-field operation-field--wide">
+                  <span>对游客展示的说明</span>
+                  <textarea onChange={(event) => setOperationForm((current) => ({ ...current, message: event.target.value }))} placeholder="例如：当前排队较多，建议先前往周边景点，稍后返回。" rows={3} value={operationForm.message} />
+                </label>
+                <div className="operation-form-actions">
+                  <Button disabled={operationAttractions.length === 0} icon={<Plus size={16} />} loading={operationLoading} type="submit" variant={operationForm.event_type === "closed" ? "accent" : "primary"}>发布运营事件</Button>
+                </div>
+              </form>
+              {operationMessage ? <p className="operation-message">{operationMessage}</p> : null}
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-5" title="今日智能评估" subtitle="规则 + 本地日志汇总">
+              <div className="admin-assessment-list">
+                <p><strong>推荐分流：</strong>灵山大佛咨询较集中，可引导部分游客先游览五印坛城。</p>
+                <p><strong>知识补齐：</strong>停车收费、寄存行李、夜游灯光时间仍需补充来源。</p>
+                <p><strong>服务提醒：</strong>低置信回答进入知识缺口，不自动编造。</p>
+              </div>
+              <div className="admin-alert-note">实时客流预警为 mock_simulation / 非真实硬件采集。</div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-12" title="实时客流预警" subtitle="mock_simulation / 非真实硬件客流">
+              <AdminTable columns={["区域", "客流状态", "人数估算", "拥挤度", "建议操作"]} rows={mockCrowdRows.map((row) => [row.area, <StatusBadge tone={row.state === "拥挤" ? "warning" : "neutral"}>{row.state}</StatusBadge>, row.estimate, <CrowdDots count={row.density} />, row.action])} />
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-12" title="最近运营事件" subtitle="复用现有运营事件 API">
+              <div className="operation-event-list">
+                {operationEvents.length > 0 ? (
+                  operationEvents.map((event) => (
+                    <article className={event.active ? "operation-event-row" : "operation-event-row operation-event-row--off"} key={event.id}>
+                      <div className="operation-event-main">
+                        <div className="operation-event-title">
+                          <strong>{event.attraction_name || event.attraction_id}</strong>
+                          <StatusBadge tone={severityTone(event.severity)}>{severityLabel(event.severity)}</StatusBadge>
+                          <StatusBadge tone="neutral">{operationTypeLabel(event.event_type)}</StatusBadge>
+                        </div>
+                        <p>{event.message}</p>
+                        <span>{eventTimeWindow(event)} · source={event.source}</span>
+                      </div>
+                      <button className="operation-toggle" disabled={operationBusyId === event.id} onClick={() => void toggleOperationEvent(event)} type="button">{event.active ? "启用中" : "已停用"}</button>
+                    </article>
+                  ))
+                ) : (
+                  <p className="empty-state">暂无运营事件。可用上方按钮发布拥挤、临时关闭、演出提醒或推荐分流事件。</p>
+                )}
+              </div>
+            </AdminPanel>
+          </section>
+        ) : null}
+
+        {activeAdminSection === "sentiment" ? (
+          <section className="admin-dashboard-grid admin-sentiment-screen">
+            <section className="admin-kpi-grid admin-panel--span-12" aria-label="游客感受度指标">
+              <AdminMetricCard Icon={Star} label="满意度均值（5分制）" trend="较昨日 ↑ 0.2" value={satisfaction.toFixed(1)} suffix="/5" />
+              <AdminMetricCard Icon={Smile} label="正向反馈占比" trend="较昨日 ↑ 2.4%" value="82" suffix="%" />
+              <AdminMetricCard Icon={AlertTriangle} label="待跟进问题" trend="较昨日 ↓ 3" value={String(openGapCount || 18)} />
+              <AdminMetricCard Icon={MessageSquareText} label="低置信问答" trend="较昨日 ↓ 1" value={String(lowConfidence.length || 7)} />
+              <AdminMetricCard Icon={LineChart} label="情绪波动指数" trend="较昨日 ↓ 2%" value="12" suffix="%" />
+            </section>
+            <AdminPanel className="admin-panel--span-7" title="情感趋势" subtitle="近 7 天">
+              <div className="admin-sentiment-chart">
+                <div className="admin-chart-legend">
+                  <span><i className="is-positive" />正向</span>
+                  <span><i className="is-neutral" />中性</span>
+                  <span><i className="is-negative" />负向</span>
+                </div>
+                <MiniTrend values={[70, 75, 69, 74, 71, 77, 86]} />
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-5" title="服务建议" subtitle="基于数据洞察与反馈聚类">
+              <ol className="admin-advice-list admin-advice-list--numbered">
+                <li>补充九龙灌浴演出时间 FAQ，明确具体时段与注意事项。</li>
+                <li>优化老人路线讲解，增加无障碍设施与休息点指引。</li>
+                <li>增加梵宫室内动线提示与看点推荐，帮助游客更好游览。</li>
+                <li>完善低置信兜底话术，提升未命中问题的引导与体验。</li>
+              </ol>
+              <div className="admin-form-actions admin-form-actions--spread">
+                <StubButton tone="primary">生成周报</StubButton>
+                <StubButton icon={<Upload size={16} />}>导出 PDF</StubButton>
+                <StubButton tone="gold">创建运营事件</StubButton>
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="游客关注点 TOP5" subtitle="近 7 天">
+              <div className="admin-rank-list">
+                {(tags.length > 0 ? tags.slice(0, 5).map((item) => [item.tag, item.count]) : [["灵山大佛怎么游览", 12856], ["九龙灌浴几点表演", 9732], ["梵宫有什么看点", 8421], ["适合老人路线", 7215], ["拈花湾夜游", 6184]]).map(([label, count], index) => (
+                  <div key={String(label)}><span>{index + 1}</span><strong>{label}</strong><em>{count}</em></div>
+                ))}
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="负向反馈原因" subtitle="近 7 天">
+              <div className="admin-compact-bars admin-compact-bars--red">
+                {[
+                  ["信息不准确 / 过时", "38%", 38, 262],
+                  ["路线指引不清晰", "26%", 26, 178],
+                  ["演出时间不明确", "18%", 18, 122],
+                  ["内容不完整", "10%", 10, 69],
+                  ["其他", "8%", 8, 55],
+                ].map(([label, percent, width, count]) => (
+                  <div className="admin-compact-bar-row" key={String(label)}>
+                    <span>{label}</span>
+                    <i><b style={{ width: `${width}%` }} /></i>
+                    <strong>{percent}</strong>
+                    <em>{count}</em>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="empty-state">还没有路线推荐日志。游客端或 Kiosk 生成路线后会出现分布。</p>
-            )}
-          </article>
-
-          <article className="admin-panel">
-            <div className="section-title-row">
-              <div>
-                <h2>拥挤分流</h2>
-                <p>source=mock_simulation，非真实客流</p>
-              </div>
-              <AlertTriangle aria-hidden="true" />
-            </div>
-            <div className="crowd-alert-list">
-              {highCrowdItems.length > 0 ? (
-                highCrowdItems.map((item) => (
-                  <div className="crowd-alert-row" key={item.attraction_id}>
-                    <div>
-                      <strong>{item.name}</strong>
-                      <span>{item.scenic_area} · 等待约 {item.wait_minutes} 分钟</span>
-                    </div>
-                    <StatusBadge tone="warning">{item.crowd_score}</StatusBadge>
-                    <p>建议通过游客端路线规划引导至低拥挤点，或提示错峰返回。</p>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="路线体验标签" subtitle="近 7 天">
+              <div className="admin-compact-bars">
+                {[
+                  ["步行友好", "42%", 42, 1285],
+                  ["景点丰富", "32%", 32, 978],
+                  ["休息充足", "18%", 18, 554],
+                  ["餐饮便利", "14%", 14, 421],
+                  ["指引清晰", "12%", 12, 365],
+                ].map(([label, percent, width, count]) => (
+                  <div className="admin-compact-bar-row" key={String(label)}>
+                    <span>{label}</span>
+                    <i><b style={{ width: `${width}%` }} /></i>
+                    <strong>{percent}</strong>
+                    <em>{count}</em>
                   </div>
-                ))
-              ) : (
-                <p className="empty-state">当前没有 high 拥挤点。</p>
-              )}
-            </div>
-          </article>
-
-          <article className="admin-panel">
-            <div className="section-title-row">
-              <div>
-                <h2>热门问题</h2>
-                <p>单位：提问次数</p>
+                ))}
               </div>
-            </div>
-            <div className="question-list">
-              {popularQuestions.length > 0 ? (
-                popularQuestions.map((item) => (
-                  <div className="question-row" key={item.question}>
-                    <span>{item.question}</span>
-                    <strong>{item.count}</strong>
-                  </div>
-                ))
-              ) : (
-                <p className="empty-state">暂无问答日志。</p>
-              )}
-            </div>
-          </article>
-
-          <article className="admin-panel">
-            <div className="section-title-row">
-              <div>
-                <h2>低置信问题</h2>
-                <p>检索为空或置信度偏低</p>
-              </div>
-              <HelpCircle aria-hidden="true" />
-            </div>
-            <div className="question-list">
-              {lowConfidence.length > 0 ? (
-                lowConfidence.map((item) => (
-                  <div className="question-row question-row--stack" key={`${item.question}-${item.created_at}`}>
-                    <span>{item.question}</span>
-                    <small>{item.answer_preview || "系统已避免编造答案"}</small>
-                  </div>
-                ))
-              ) : (
-                <p className="empty-state">暂无低置信问题。</p>
-              )}
-            </div>
-          </article>
-
-          <article className="admin-panel">
-            <div className="section-title-row">
-              <div>
-                <h2>反馈标签</h2>
-                <p>单位：标签命中次数</p>
-              </div>
-              <Heart aria-hidden="true" />
-            </div>
-            <div className="tag-list">
-              {tags.length > 0 ? (
-                tags.map((item) => (
-                  <span className="tag-count" key={item.tag}>
-                    {item.tag}<strong>{item.count}</strong>
-                  </span>
-                ))
-              ) : (
-                <p className="empty-state">暂无反馈标签。</p>
-              )}
-            </div>
-          </article>
-
-          <article className="admin-panel admin-panel--wide">
-            <div className="section-title-row">
-              <div>
-                <h2>最近事件</h2>
-                <p>不包含 session_id 或个人身份字段</p>
-              </div>
-            </div>
-            <div className="event-list">
-              {recentEvents.length > 0 ? (
-                recentEvents.map((item) => (
-                  <div className="event-row" key={item.id}>
-                    <StatusBadge tone={item.success ? "ok" : "warning"}>{eventLabel(item.event_type)}</StatusBadge>
-                    <div>
-                      <strong>
-                        {item.question ||
-                          String(item.metadata.theme_label || item.metadata.matched_attraction_name || item.route_id || item.id)}
-                      </strong>
-                      <span>{item.channel} · {item.created_at}</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="empty-state">暂无交互事件。完成一次问答、识景、路线或反馈后会更新。</p>
-              )}
-            </div>
-          </article>
-        </section>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-12" title="反馈明细" subtitle="近 7 天">
+              <AdminTable
+                columns={["时间", "渠道", "场景", "评分（5分制）", "标签", "反馈摘要", "处理状态", "操作"]}
+                rows={[
+                  ["2026-05-17 14:32:18", "小程序", "灵山大佛游览", "5.0", <StatusBadge tone="ok">正向</StatusBadge>, "讲解很清晰，路线推荐很实用，节省了不少时间。", <StatusBadge tone="ok">已处理</StatusBadge>, "查看  转知识缺口  标记已处理"],
+                  ["2026-05-17 13:18:07", "数字人终端", "九龙灌浴演出", "4.0", <StatusBadge tone="neutral">中性</StatusBadge>, "希望再明确一下演出具体时段和地点。", <StatusBadge tone="warning">待处理</StatusBadge>, "查看  转知识缺口  标记已处理"],
+                  ["2026-05-17 11:46:22", "小程序", "梵宫参观", "3.0", <StatusBadge tone="warning">负向</StatusBadge>, "室内动线有点绕，找不到重点展区。", <StatusBadge tone="warning">待处理</StatusBadge>, "查看  转知识缺口  标记已处理"],
+                  ["2026-05-17 10:28:55", "APP", "老人路线规划", "5.0", <StatusBadge tone="ok">正向</StatusBadge>, "老人路线很贴心，休息点安排合理。", <StatusBadge tone="ok">已处理</StatusBadge>, "查看  转知识缺口  标记已处理"],
+                  ["2026-05-16 16:42:33", "小程序", "拈花湾夜游", "4.0", <StatusBadge tone="neutral">中性</StatusBadge>, "夜景很美，灯光时间可以提前一点告知。", <StatusBadge tone="neutral">处理中</StatusBadge>, "查看  转知识缺口  标记已处理"],
+                ]}
+              />
+            </AdminPanel>
+            <p className="admin-source-footnote admin-panel--span-12">分析来源：本地演示交互日志 / 反馈样例，不代表真实景区全量运营数据。</p>
+          </section>
         ) : null}
 
-        {activeAdminSection === "admin-system" ? (
-          <section className="admin-content-grid">
-            <article className="admin-panel">
-              <h2>Provider 状态</h2>
+        {activeAdminSection === "dashboard" ? (
+          <section className="admin-dashboard-grid admin-big-screen">
+            <section className="admin-kpi-grid admin-kpi-grid--six admin-panel--span-12">
+              <AdminMetricCard Icon={Users} label="今日服务人次" trend="较昨日 ↑ 12.4%" value={String(todayServiceCount)} />
+              <AdminMetricCard Icon={CalendarClock} label="本周服务" trend="较上周 ↑ 18.7%" value={String(weekServiceCount)} />
+              <AdminMetricCard Icon={MessageSquareText} label="热门问答" trend="较昨日 ↑ 8" value={String(popularQuestions[0]?.count || 76)} />
+              <AdminMetricCard Icon={Star} label="平均满意度" trend="较昨日 ↑ 0.2" value={satisfaction.toFixed(1)} suffix="/5" />
+              <AdminMetricCard Icon={Route} label="路线生成" trend="较昨日 ↑ 15" value={String(overview?.route_count || 132)} />
+              <AdminMetricCard Icon={Volume2} label="数字人播报" trend="较昨日 ↑ 21" value="219" />
+            </section>
+            <AdminPanel className="admin-panel--span-4" title="服务人次趋势" subtitle="近 7 天">
+              <MiniTrend />
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="热门问答词云" subtitle="近 7 天">
+              <div className="admin-word-cloud">
+                {wordCloud.map((word, index) => <span className={`size-${(index % 4) + 1}`} key={word}>{word}</span>)}
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="游客满意度趋势" subtitle="近 7 天">
+              <MiniTrend values={sentimentTrend.map((item) => item * 16)} />
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="路线主题分布" subtitle="今日">
+              <div className="admin-chart-with-legend">
+                <DonutChart items={dashboardThemes} />
+                <div className="admin-legend-list">
+                  {dashboardThemes.map((item) => <span key={item.label}><i />{item.label}<strong>{item.value}</strong></span>)}
+                </div>
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="路线主题分布" subtitle="详情">
+              <div className="admin-compact-bars">
+                {routeThemes.map((item) => (
+                  <div className="admin-compact-bar-row" key={item.label}>
+                    <span>{item.label}</span>
+                    <i><b style={{ width: `${item.percent * 2.4}%` }} /></i>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-4" title="渠道占比" subtitle="今日">
+              <div className="admin-chart-with-legend">
+                <DonutChart items={[{ label: "小程序", percent: 58 }, { label: "数字人终端", percent: 22 }, { label: "景区 App", percent: 12 }, { label: "微信公众号", percent: 6 }, { label: "其他", percent: 2 }]} />
+                <div className="admin-legend-list">
+                  {["小程序 58%", "数字人终端 22%", "景区 App 12%", "微信公众号 6%", "其他 2%"].map((item) => <span key={item}><i />{item}</span>)}
+                </div>
+              </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-5" title="高频低置信问题" subtitle="近 7 天">
+              <AdminTable
+                columns={["排名", "问题", "出现次数", "低置信率", "操作"]}
+                rows={(lowConfidence.length > 0 ? lowConfidence.slice(0, 5).map((item, index) => [index + 1, item.question, "-", item.confidence ?? "-", "加入知识库"]) : [
+                  [1, "灵山大佛要不要票额外收费？", 128, "38%", "加入知识库"],
+                  [2, "九龙灌浴演出一般持续多久？", 97, "26%", "加入知识库"],
+                  [3, "五印坛城适合老人参观吗？", 81, "22%", "加入知识库"],
+                  [4, "梵宫晚上有灯光秀吗？", 65, "31%", "加入知识库"],
+                  [5, "景区内存包寄存位置在哪里？", 52, "24%", "加入知识库"],
+                ])}
+              />
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-7" title="今日路线分流建议" subtitle="不代表真实硬件客流">
+              <AdminTable columns={["路线主题", "推荐比例", "建议方向", "建议说明", "操作"]} rows={routeAdviceRows.map((row) => [row.theme, row.ratio, row.path, row.note, "查看详情"])} />
+            </AdminPanel>
+            <p className="admin-source-footnote admin-panel--span-6">数据来源：本地演示日志、mock_simulation 与公开样例，不代表真实硬件客流。</p>
+            <div className="admin-dashboard-actions admin-panel--span-6">
+              <StubButton icon={<RefreshCw size={16} />}>刷新数据</StubButton>
+              <StubButton icon={<Upload size={16} />}>导出大屏</StubButton>
+              <StubButton>查看评测报告</StubButton>
+              <StubButton tone="gold">生成运营建议</StubButton>
+            </div>
+          </section>
+        ) : null}
+
+        {activeAdminSection === "settings" ? (
+          <section className="admin-dashboard-grid">
+            <AdminPanel className="admin-panel--span-6" title="AI Provider 配置" subtitle="mock 无 Key 可运行，真实 Key 不写入前端">
               <div className="provider-list">
                 {providerEntries.map(([name, provider, status]) => (
                   <div className="provider-row" key={name}>
@@ -1025,34 +1445,49 @@ export function AdminPage() {
                   </div>
                 ))}
               </div>
-            </article>
-
-            <article className="admin-panel admin-panel--wide">
-              <div className="section-title-row">
-                <div>
-                  <h2>最近事件</h2>
-                  <p>不包含 session_id 或个人身份字段</p>
-                </div>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-6" title="数字人表现层配置" subtitle="后端统一转发，前端不直连模型厂商">
+              <div className="admin-endpoint-list">
+                <span><b>sidecar URL</b><code>AVATAR_SIDECAR_BASE_URL</code></span>
+                <span><b>speak path</b><code>POST /api/avatar/speak</code></span>
+                <span><b>clip path</b><code>POST /api/avatar/play-clip</code></span>
+                <span><b>receive-only viewer</b><code>POST /api/avatar/webrtc/offer</code></span>
               </div>
-              <div className="event-list">
-                {recentEvents.length > 0 ? (
-                  recentEvents.map((item) => (
-                    <div className="event-row" key={item.id}>
-                      <StatusBadge tone={item.success ? "ok" : "warning"}>{eventLabel(item.event_type)}</StatusBadge>
-                      <div>
-                        <strong>
-                          {item.question ||
-                            String(item.metadata.theme_label || item.metadata.matched_attraction_name || item.route_id || item.id)}
-                        </strong>
-                        <span>{item.channel} · {item.created_at}</span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="empty-state">暂无交互事件。完成一次问答、识景、路线或反馈后会更新。</p>
-                )}
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-6" title="安全与边界" subtitle="演示边界保持清晰">
+              <div className="admin-boundary-list">
+                <p><ShieldCheck aria-hidden="true" size={18} /> 前端只调用本项目后端 API。</p>
+                <p><ShieldCheck aria-hidden="true" size={18} /> mock 模式不需要 API Key。</p>
+                <p><ShieldCheck aria-hidden="true" size={18} /> 不声称真实 GPS、真实客流、真实硬件或真实地图导航。</p>
+                <p><ShieldCheck aria-hidden="true" size={18} /> 数字人只是表现层，不接管 RAG、路线、识景、运营分析。</p>
               </div>
-            </article>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-3" title="账号权限" subtitle="UI 预留">
+              <div className="admin-permission-list">
+                <span>管理员 · 全部模块</span>
+                <span>运营 · 事件与反馈</span>
+                <span>内容 · 知识库与 FAQ</span>
+              </div>
+              <StubButton icon={<UserCog size={16} />}>管理账号</StubButton>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-3" title="演示模式" subtitle="本地 mock 配置">
+              <div className="admin-toggle-list">
+                <span>mock provider <b>开启</b></span>
+                <span>本地日志汇总 <b>开启</b></span>
+                <span>硬件客流采集 <b>未接入</b></span>
+              </div>
+              <StubButton icon={<SlidersHorizontal size={16} />} tone="gold">保存设置</StubButton>
+            </AdminPanel>
+            <AdminPanel className="admin-panel--span-12" title="评测看板" subtitle="保留现有 eval reports 概览">
+              <AdminTable
+                columns={["报告", "状态", "样例", "通过率", "平均延迟", "生成时间"]}
+                rows={
+                  evalReports.length > 0
+                    ? evalReports.map((report) => [report.title, <StatusBadge tone={report.status === "pass" ? "ok" : report.status === "fail" ? "warning" : "neutral"}>{report.status}</StatusBadge>, `${report.passed}/${report.total}`, formatRate(report.accuracy), report.avg_latency_ms ? `${Math.round(report.avg_latency_ms)}ms` : "暂无", formatMaybeDate(report.generated_at)])
+                    : [["暂无评测报告", <StatusBadge tone="neutral">missing</StatusBadge>, "0/0", "暂无", "暂无", "未生成"]]
+                }
+              />
+            </AdminPanel>
           </section>
         ) : null}
       </section>

@@ -258,6 +258,110 @@ export type KnowledgeGapEvalResponse = {
   created: boolean;
 };
 
+export type AdminKnowledgeStatus = "draft" | "pending_review" | "published" | "archived";
+export type AdminKnowledgeAssetType = "guide_script" | "history_doc" | "faq" | "route_note" | "other";
+
+export type AdminKnowledgeAsset = {
+  id: string;
+  title: string;
+  asset_type: AdminKnowledgeAssetType | string;
+  scenic_area: string | null;
+  attraction_id: string | null;
+  status: AdminKnowledgeStatus | string;
+  chunk_count: number;
+  source_filename: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+  mode?: string;
+  source_note?: string;
+};
+
+export type AdminKnowledgeAssetCreateRequest = {
+  title?: string;
+  asset_type?: AdminKnowledgeAssetType;
+  scenic_area?: string;
+  attraction_id?: string;
+  status?: AdminKnowledgeStatus;
+  source_filename?: string;
+  note?: string;
+};
+
+export type AdminFaq = {
+  id: string;
+  question: string;
+  answer: string;
+  scenic_area: string | null;
+  attraction_id: string | null;
+  tags: string[];
+  status: AdminKnowledgeStatus | string;
+  source_gap_id: string | null;
+  created_at: string;
+  updated_at: string;
+  mode?: string;
+  source_note?: string;
+};
+
+export type AdminFaqCreateRequest = {
+  question: string;
+  answer: string;
+  scenic_area?: string;
+  attraction_id?: string;
+  tags?: string[];
+  status?: AdminKnowledgeStatus;
+  source_gap_id?: string;
+};
+
+export type AdminKnowledgeListResponse<T> = {
+  items: T[];
+  count: number;
+  mode: string;
+  source_note: string;
+};
+
+export type AdminKnowledgeJobResponse = {
+  mode: string;
+  source_note: string;
+  accepted: boolean;
+  job_id?: string;
+  message: string;
+  affected_assets?: number;
+  published_assets?: number;
+  published_faqs?: number;
+};
+
+export type AdminAvatarProfile = {
+  id?: string;
+  name: string;
+  outfit_style: string;
+  voice_name: string;
+  speech_rate: number;
+  volume: number;
+  default_emotion: string;
+  background_style: string | null;
+  updated_at?: string;
+  mode?: string;
+  source_note?: string;
+};
+
+export type AdminAvatarClipJob = {
+  id: string;
+  clip_id: string | null;
+  title: string;
+  attraction_id: string | null;
+  status: string;
+  message: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminAvatarClipJobsResponse = {
+  items: AdminAvatarClipJob[];
+  count: number;
+  mode: string;
+  source_note: string;
+};
+
 export type EvalReportStatus = "pass" | "fail" | "missing";
 
 export type EvalFailureSample = {
@@ -753,6 +857,68 @@ export async function addKnowledgeGapToEval(gapId: string): Promise<KnowledgeGap
   });
 }
 
+export async function getAdminKnowledgeAssets(): Promise<AdminKnowledgeListResponse<AdminKnowledgeAsset>> {
+  return requestJson<AdminKnowledgeListResponse<AdminKnowledgeAsset>>("/api/admin/knowledge/assets");
+}
+
+export async function createAdminKnowledgeAsset(
+  payload: AdminKnowledgeAssetCreateRequest,
+): Promise<AdminKnowledgeAsset> {
+  return requestJson<AdminKnowledgeAsset>("/api/admin/knowledge/assets", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function updateAdminKnowledgeAsset(
+  assetId: string,
+  payload: Partial<AdminKnowledgeAssetCreateRequest> & { chunk_count?: number },
+): Promise<AdminKnowledgeAsset> {
+  return requestJson<AdminKnowledgeAsset>(`/api/admin/knowledge/assets/${encodeURIComponent(assetId)}`, {
+    body: JSON.stringify(payload),
+    method: "PATCH",
+  });
+}
+
+export async function getAdminFaqs(): Promise<AdminKnowledgeListResponse<AdminFaq>> {
+  return requestJson<AdminKnowledgeListResponse<AdminFaq>>("/api/admin/knowledge/faqs");
+}
+
+export async function createAdminFaq(payload: AdminFaqCreateRequest): Promise<AdminFaq> {
+  return requestJson<AdminFaq>("/api/admin/knowledge/faqs", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function updateAdminFaq(
+  faqId: string,
+  payload: Partial<AdminFaqCreateRequest>,
+): Promise<AdminFaq> {
+  return requestJson<AdminFaq>(`/api/admin/knowledge/faqs/${encodeURIComponent(faqId)}`, {
+    body: JSON.stringify(payload),
+    method: "PATCH",
+  });
+}
+
+export async function reindexAdminKnowledge(): Promise<AdminKnowledgeJobResponse> {
+  return requestJson<AdminKnowledgeJobResponse>("/api/admin/knowledge/reindex", {
+    body: JSON.stringify({}),
+    method: "POST",
+  });
+}
+
+export async function publishAdminKnowledge(payload: {
+  asset_ids?: string[];
+  faq_ids?: string[];
+  publish_all_drafts?: boolean;
+} = {}): Promise<AdminKnowledgeJobResponse> {
+  return requestJson<AdminKnowledgeJobResponse>("/api/admin/knowledge/publish", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
 export async function getEvalReportsOverview(): Promise<EvalReportsOverview> {
   return requestJson<EvalReportsOverview>("/api/admin/evals/overview");
 }
@@ -977,6 +1143,42 @@ export async function playAvatarClip(payload: AvatarClipRequest): Promise<Avatar
 
 export async function getAvatarStatus(): Promise<AvatarStatusResponse> {
   return requestJson<AvatarStatusResponse>("/api/avatar/status");
+}
+
+export async function getAdminAvatarProfile(): Promise<AdminAvatarProfile> {
+  return requestJson<AdminAvatarProfile>("/api/admin/avatar/profile");
+}
+
+export async function updateAdminAvatarProfile(payload: Partial<AdminAvatarProfile>): Promise<AdminAvatarProfile> {
+  return requestJson<AdminAvatarProfile>("/api/admin/avatar/profile", {
+    body: JSON.stringify(payload),
+    method: "PATCH",
+  });
+}
+
+export async function runAdminAvatarVoiceTest(payload: {
+  text?: string;
+  voice_name?: string;
+}): Promise<AvatarActionResponse & { voice_name?: string; text_preview?: string }> {
+  return requestJson<AvatarActionResponse & { voice_name?: string; text_preview?: string }>("/api/admin/avatar/voice-test", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function generateAdminAvatarClip(payload: {
+  title?: string;
+  clip_id?: string;
+  attraction_id?: string;
+}): Promise<AdminAvatarClipJob & { mode: string; source_note: string }> {
+  return requestJson<AdminAvatarClipJob & { mode: string; source_note: string }>("/api/admin/avatar/clips/generate", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function getAdminAvatarClipJobs(): Promise<AdminAvatarClipJobsResponse> {
+  return requestJson<AdminAvatarClipJobsResponse>("/api/admin/avatar/clips/jobs");
 }
 
 export async function sendAvatarWebrtcOffer(payload: AvatarWebrtcOfferRequest): Promise<AvatarWebrtcOfferResponse> {
