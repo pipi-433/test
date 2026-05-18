@@ -2,24 +2,26 @@
 
 ## 演示前准备
 
-启动前先确认当前分支工作区干净，且没有真实 API Key 写入代码或文档。
+先确认不提交真实 API Key，并尽量保证主仓库工作区只包含本轮计划内改动。
 
 ```powershell
 cd D:\py\dota
+git status --short
 python .\scripts\init_db.py
 python .\scripts\validate_api_data.py
+python .\scripts\validate_scenic_graph.py
 python .\scripts\eval_qa.py
 python .\scripts\eval_query_understanding.py
 python .\scripts\eval_query_capability.py
 python .\scripts\eval_vision.py
 python .\scripts\eval_routes.py
 python .\scripts\eval_crowd_routes.py
-python .\scripts\validate_scenic_graph.py
-python .\scripts\eval_route_topology.py
-python .\scripts\eval_route_share.py
-python .\scripts\eval_analytics.py
 python .\scripts\eval_route_conversation.py
 python .\scripts\eval_route_constraints.py
+python .\scripts\eval_route_full_pool.py
+python .\scripts\eval_route_share.py
+python .\scripts\eval_route_topology.py
+python .\scripts\eval_analytics.py
 python .\scripts\eval_operation_events.py
 python .\scripts\eval_knowledge_gaps.py
 python .\scripts\eval_eval_reports.py
@@ -27,7 +29,7 @@ python -m compileall backend/app scripts
 npm --prefix .\frontend run build
 ```
 
-启动演示服务：
+启动主服务：
 
 ```powershell
 cd D:\py\dota
@@ -35,20 +37,12 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 npm --prefix .\frontend run dev -- --host 127.0.0.1 --port 5174
 ```
 
-如果演示真实数字人表现层，使用统一启动脚本串起 8282 sidecar、8000 后端和 5174 游客端。脚本会优先使用 Task 07.6G 的 ignored fast 配置：
+如需演示 LiteAvatar 表现层：
 
 ```powershell
 cd D:\py\dota
 & .\scripts\stop_avatar_demo.ps1
 & .\scripts\start_avatar_demo.ps1 -OpenVisitor
-```
-
-Task 07.6I 后不需要打开 8282 原 WebUI，也不需要点击“开始对话”。游客端和 Kiosk 内置数字人播放器会通过 `POST /api/avatar/webrtc/offer` 建立无摄像头/麦克授权的观看连接。
-
-打开游客端或 Kiosk 后，点击“启动数字人直播”建立观看 session；数字人按钮会通过主后端触发 LiteAvatar。页面不再 iframe 嵌入 8282 WebUI，也不要求演示者在 8282 页面点击“开始对话”。如果 sidecar 未启动或 WebRTC 建连失败，页面会保留 React/CSS fallback，不影响主流程演示。演示结束后：
-
-```powershell
-& .\scripts\stop_avatar_demo.ps1
 ```
 
 演示入口：
@@ -58,13 +52,20 @@ Task 07.6I 后不需要打开 8282 原 WebUI，也不需要点击“开始对话
 - 管理后台：http://127.0.0.1:5174/admin
 - 数字人 sidecar readiness：http://127.0.0.1:8282/readiness
 
-## 0:00-0:30 开场
+关键边界开场就要记住：拥挤度是 `mock_simulation`，运营事件是 `manual_admin` 或 `mock_simulation`，路线拓扑是导览图人工抽象，不是 GPS 导航；OpenAvatarChat + LiteAvatar 只是数字人表现层，不接管业务大脑。
+
+## 0:00-0:40 开场：定位和国一卖点
 
 一句话：
 
-灵境导游不是普通聊天机器人，而是“手机游客端 + 景区 Kiosk + 管理后台 + 数字人表现层”的景区 AI 导览闭环：能问、能拍、能听、能规划路线、能避开拥挤，也能把可信后端生成的短句或预存讲解 clip 交给数字人发声和口型表现。
+灵境导游是面向灵山胜境与拈花湾的“手机游客端 + 景区 Kiosk + 管理后台 + 数字人表现层”一体化 AI 导览系统。它不只是聊天机器人，而是能问答、识景、讲解、规划路线、错峰分流、扫码带走路线，并把游客反馈沉淀为后台知识改进闭环。
 
-## 0:30-1:40 可信问答与资料外拦截
+展示页面：
+
+- 快速打开 `/`、`/kiosk`、`/admin` 三个入口。
+- 指出 mock 模式无 API Key 可运行，前端只调用灵境后端 API。
+
+## 0:40-1:40 游客端数字人问答 / 讲解
 
 打开游客端 `/`。
 
@@ -76,14 +77,9 @@ Task 07.6I 后不需要打开 8282 原 WebUI，也不需要点击“开始对话
 
 预期现象：
 
-- 数字人进入 thinking，再进入 speaking。
-- 问答区出现游客问题和灵境回答。
-- 识别标签为本地 RAG 或景区问答。
-- 下方出现“来源依据”，至少有 1 条 source。
-
-讲解重点：
-
-事实问题必须经过 Query Gate，再进入本地 RAG。回答不是模型自由编造，而是来自本地知识切片。
+- 用户问题立即出现在问答区。
+- 数字人状态从 thinking 到 speaking；sidecar 在线时可发声和口型，离线时保留前端 fallback。
+- 回答区展示 RAG 回答和 sources。
 
 继续输入：
 
@@ -93,13 +89,9 @@ Task 07.6I 后不需要打开 8282 原 WebUI，也不需要点击“开始对话
 
 预期现象：
 
-- 识别为资料外。
+- Query Understanding Gate 识别资料外。
 - sources 为空。
 - 文案明确“不在本地景区知识库范围内，不编造”。
-
-兜底话术：
-
-如果评委问为什么不回答，这正是可信边界：系统宁可承认资料外，也不把非景区内容硬套成景区讲解。
 
 继续输入：
 
@@ -109,52 +101,15 @@ Task 07.6I 后不需要打开 8282 原 WebUI，也不需要点击“开始对话
 
 预期现象：
 
-- 识别为澄清。
-- 出现灵山胜境、拈花湾、两个都介绍等选项。
-
-## 1:40-2:40 自然语言推荐
-
-输入：
-
-```text
-我对历史感兴趣，有什么景点推荐？
-```
-
-预期现象：
-
-- 识别为兴趣推荐。
-- 展示推荐景点列表、规则分、推荐理由和“一键问”按钮。
+- 触发澄清，给出“灵山胜境 / 拈花湾 / 两个都介绍”等选项。
 
 讲解重点：
 
-这不是 RAG，也不是路线；系统把“历史兴趣”抽成结构化 slots，再基于 22 个景点的标签、类别和简介做规则评分。
+系统不是让 LLM 自由回答。所有文本先经过 Query Understanding Gate；事实类问题必须进入本地 RAG 并展示来源；范围外问题宁可兜底，也不编造景区知识。
 
-输入：
+## 1:40-2:40 识景 Top3 确认 + 景点讲解
 
-```text
-灵山和拈花湾哪个适合拍照？
-```
-
-预期现象：
-
-- 识别为景点/景区对比。
-- 展示对比建议、对比维度和理由。
-
-输入：
-
-```text
-现在人多吗？
-```
-
-预期现象：
-
-- 识别为拥挤运营状态。
-- 展示 mock_simulation 拥挤点、等待时间和 manual_admin/mock_simulation 运营事件。
-- 页面明确说明不代表真实硬件客流。
-
-## 2:40-3:30 图片识景确认
-
-在游客端点击“上传”，选择：
+切到游客端“识景”tab，上传样例：
 
 ```text
 D:\py\dota\evals\vision_samples\lingshan_dafo_mock.jpg
@@ -162,25 +117,23 @@ D:\py\dota\evals\vision_samples\lingshan_dafo_mock.jpg
 
 预期现象：
 
-- 展示 Top3 候选或至少候选列表。
+- 展示 1-3 个候选景点。
 - 每个候选有景点名、景区、置信度、判断依据和确认按钮。
-- 未确认前不直接进入事实讲解。
+- 低置信或候选接近时提示用户确认。
 
-点击 Top1 的“确认”。
+点击 Top1 “确认”后：
 
-预期现象：
+- 当前讲解景点切换到确认景点。
+- 展示 suggested questions。
+- 点击“一键讲解”后进入 RAG 问答，仍展示 sources。
 
-- 当前讲解景点更新为确认景点。
-- 出现 suggested questions。
-- 点击“一键讲解”后走 RAG 问答。
+讲解重点：
 
-兜底：
+当前识景是 mock 规则候选，不接真实 VLM。它为后续真实 VLM 预留稳定 UX：VLM 只负责候选识别，事实讲解仍由 RAG sources 生成。
 
-如果样例上传被浏览器限制，可直接说明当前识景是 mock 规则闭环，并展示 `python .\scripts\eval_vision.py` 的通过结果。
+## 2:40-3:50 个性化路线 + 拥挤度分流 + 导览图拓扑
 
-## 3:30-4:40 自然语言路线规划
-
-在游客端主输入框输入：
+在游客端输入：
 
 ```text
 带老人孩子，3小时，灵山大佛一定要去，别太挤
@@ -188,34 +141,29 @@ D:\py\dota\evals\vision_samples\lingshan_dafo_mock.jpg
 
 预期现象：
 
-- 识别为路线规划。
-- 生成路线并滚动到路线区域。
-- 路线包含综合评分、score_breakdown、decision_trace。
-- 灵山大佛显示“必去”标签。
-- 每站显示 crowd_level、crowd_score、wait_minutes、crowd_note。
-- 出现“导览图拓扑”模块，展示顺路指数、总步行估算、涉及游线、回头路次数和观光车建议。
+- 自然语言被识别为路线规划。
+- Route Memory 保存老人孩子、3 小时、避拥挤、灵山大佛必去等约束。
+- 生成路线，展示综合评分、评分拆解、必去标签、拥挤状态、等待时间和 decision_trace。
+- 显示“导览图拓扑”模块：顺路指数、总步行估算、涉及游线、回头路次数、观光车建议。
 - 时间线每站展示所属游线、下一站步行估算、交通方式、回头路风险和顺路原因。
-- 页面明确标注 mock_simulation 拥挤度不是现场硬件采集数据。
-- 路线拓扑说明写明“导览图人工抽象，不是 GPS 导航”。
 
-讲解重点：
+必须说清：
 
-Route Memory Agent 只记偏好和约束，真正路线由受约束 Route Planner 评分生成。路线顺序会读取基于导览图人工抽象的半真实游线拓扑，用来解释为什么沿中轴线、东线或拈花湾环线推进；它不是 GPS 导航。必去点遇到拥挤不会被静默删除，只会错峰、保留提醒或进入澄清。
+- 拥挤度来自 `mock_simulation`，不代表真实客流，也没有接入闸机、摄像头、Wi-Fi 探针、GPS 或 IoT。
+- 运营事件来自 `manual_admin` / `mock_simulation`，是后台演示配置。
+- scenic_graph 是基于线路导览图、手绘观光车图和地图人工抽象的半真实游线拓扑，用于顺路解释、步行估算、回头路风险和观光车建议；它不是 GPS 导航，不是地图导航服务，也不代表实时定位。
+- 路线规划由受约束 Route Planner 生成，LLM 不能自由决定路线点位；必去点不会因为拥挤被静默删除。
 
-## 4:40-5:30 Kiosk 到手机接力
+## 3:50-4:40 Kiosk 生成路线 + 手机扫码带走
 
 打开 `/kiosk`。
 
-点击生成推荐路线。
+操作：
 
-预期现象：
+- 点击生成推荐路线。
+- 展示路线名称、评分、拥挤说明、二维码、短码和手机链接。
 
-- Kiosk 大屏生成路线摘要。
-- 显示二维码、短码、手机打开链接。
-- 文案说明分享码 30 分钟后失效。
-- 这条路线仍是同一条受约束路线：包含必去约束、拥挤策略、运营事件和导览图拓扑说明。
-
-复制或打开页面中的 share_url，形如：
+打开 Kiosk 上的 share_url，形如：
 
 ```text
 http://127.0.0.1:5174/route/{route_id}/share?code={share_code}
@@ -224,114 +172,103 @@ http://127.0.0.1:5174/route/{route_id}/share?code={share_code}
 预期现象：
 
 - 手机分享页显示同一条路线。
-- 显示站点时间线、评分、拥挤说明、逐站讲解问题。
-- 分享页也展示拓扑摘要：顺路指数、总步行估算、涉及游线和观光车建议。
-- 每站继续展示所属游线、到下一站的步行估算、交通方式和回头路风险。
-- 分享页保留“导览图人工抽象，不是 GPS 导航”的边界说明。
+- 展示同样的路线评分、站点、拥挤说明和分享校验结果。
+- 分享页也展示拓扑摘要：顺路指数、总步行估算、涉及游线、观光车建议。
+- 每站展示所属游线、到下一站的步行估算、交通方式和回头路风险。
 
 兜底：
 
-如果现场扫码不方便，直接点击 Kiosk 上的链接或复制 share_url 到浏览器地址栏。
+现场扫码不方便时，直接复制 Kiosk 的 share_url 到浏览器地址栏。share_code 是当前后端进程内 mock 短期有效机制，默认 30 分钟。
 
-## 5:30-6:05 数字人可信播报
-
-不打开 8282 原 WebUI。先在游客端“游灵山”tab 点击“启动数字人直播”，建立观看 session 后在 PowerShell 中检查：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8282/lingjing/avatar/sessions
-```
-
-预期现象：
-
-- `active_session_id` 不为空。
-- 游客端“游灵山”tab 和 Kiosk 左侧主视觉区同屏显示数字人观看画面。
-- 打开游客端/Kiosk 不会出现摄像头或麦克风授权弹窗。
-- 若 sidecar 或 WebRTC 连接不可用，页面显示占位模式，不白屏。
-
-优先用实际 UI 演示：
-
-- 游客端路线 tab 点击 `数字人播报路线`。
-- 游客端识景 tab 确认灵山大佛后点击 `数字人讲解`。
-- 游灵山 tab 点击 `发送给数字人` / `数字人播报`。
-- Kiosk 点击固定景点讲解或 `播报推荐路线`。
-
-PowerShell 直调用作兜底验证短句可信文本播报：
-
-```powershell
-$body = @{
-  text = '您好，我是灵境导游。路线已生成，请跟随我开始游览。'
-  emotion = 'happy'
-  source = 'route'
-  interrupt = $true
-} | ConvertTo-Json -Compress
-$bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:8000/api/avatar/speak `
-  -ContentType 'application/json; charset=utf-8' `
-  -Body $bytes
-```
-
-PowerShell 直调用作兜底验证预存景点讲解 clip：
-
-```powershell
-Invoke-RestMethod -Method Post `
-  -Uri http://127.0.0.1:8000/api/avatar/play-clip `
-  -ContentType 'application/json' `
-  -Body '{"clip_id":"lingshan_buddha_intro_45s","source":"attraction","interrupt":true}'
-```
-
-讲解重点：
-
-数字人不是业务大脑。路线、识景、问答和运营分析仍由灵境后端完成；OpenAvatarChat + LiteAvatar 只作为表现层，接收可信短文本或白名单预存音频 clip，负责发声和口型。短句不经过 `SendHumanText`，预存 clip 不经过 LLM，前端也不直连模型厂商。Task 07.6G 后，演示启动脚本默认优先使用 LiteAvatar fast 配置，并把后端端口对齐游客端代理的 `8000`。
-
-兜底：
-
-如果数字人观看面板没有声音或 session 掉线，运行 `scripts/avatar_sidecar_healthcheck.ps1` 检查 8282/8000，再用 `scripts/stop_avatar_demo.ps1` 和 `scripts/start_avatar_demo.ps1 -OpenVisitor` 重启表现层。主游客端、Kiosk 和后台仍可用 mock fallback 完成演示。
-
-## 6:05-6:40 Admin 运营闭环
+## 4:40-5:40 Admin 知识库 / 数字人 / 运营事件
 
 打开 `/admin`。
 
-预期能看到：
+知识库管理：
 
-- 服务统计和 provider 状态。
-- 拥挤点预警。
-- 运营事件控制台。
-- 知识缺口闭环。
-- 评测看板。
-- 最近事件和热门问题。
+- 切到“知识库管理”。
+- 点击“上传文档”创建本地演示资产。
+- 点击“新增 FAQ / 保存草稿”。
+- 点击“重建索引”或“发布到知识库”。
 
-可选操作：
+说明：
 
-在运营事件控制台创建一条临时关闭或拥挤事件，再生成路线，查看路线 `decision_trace` 是否提到 manual_admin 事件。
+Round 1 的知识库管理是后台本地闭环，不直接写入现有 RAG `knowledge_chunks`，不修改原始资料包。FAQ 草稿需要管理员确认后才进入后续发布流程。
 
-讲解重点：
+数字人管理：
 
-后台不是空壳大屏，而是把游客问答、识景、路线、反馈、知识缺口和评测结果汇成运营改进闭环。
+- 切到“数字人管理”。
+- 修改数字人 profile 并保存。
+- 点击“试听音色”。
+- 点击“生成预存讲解”创建 mock job。
 
-## 6:40-7:00 评测可信证明
+说明：
 
-在 Admin 评测看板展示：
+数字人配置保存在本地 SQLite。OpenAvatarChat + LiteAvatar 只接收灵境后端的可信短文本或白名单预存 clip，负责发声和口型表现，不接管 RAG、路线、识景、运营分析。
 
-- QA 准确率。
-- Query Understanding / Query Capability 通过率。
-- Vision、Route、Crowd、Share、Analytics、Knowledge Gaps 等 report。
-- 衍生指标：必去景点保留率、拥挤解释率、澄清通过率、知识缺口闭环通过率。
+运营事件：
+
+- 切到“运营事件”。
+- 创建 crowd / closed / show / recommendation 事件。
+- 再回游客端生成路线，看 `decision_trace` 是否出现 `manual_admin` 事件影响。
+
+说明：
+
+运营事件是人工配置或 mock 演示，不代表真实硬件或客流采集。
+
+## 5:40-6:30 游客感受度报告 + 数据大屏 + 系统设置
+
+游客感受度：
+
+- 切到“游客感受度”。
+- 点击“生成周报”。
+- 展示满意度、正向反馈占比、待跟进问题、低置信问答、情绪波动指数、关注点、负向原因、路线体验标签和反馈明细。
+
+说明：
+
+报告来自本地演示交互日志、反馈样例和 mock 数据，不代表真实全园运营数据。PDF 导出当前是安全 stub。
+
+数据大屏：
+
+- 切到“数据大屏”。
+- 展示服务人次、热门问答、路线偏好、满意度趋势和评测看板。
+
+系统设置：
+
+- 切到“系统设置”。
+- 修改演示景区名称或数据边界提示，点击保存。
+- 点击“运行健康检查”，展示 backend、database、avatar mock、sidecar status、knowledge local。
+
+说明：
+
+系统设置保存在本地 SQLite，healthcheck 不依赖 API Key。页面明确 mock 模式、前端只调后端、不接真实 GPS/客流/硬件/地图导航。
+
+## 6:30-7:00 技术闭环和边界说明
 
 收尾话术：
 
-灵境导游的核心不是“让 LLM 随便答”，而是 Query Gate 先理解边界，RAG 只用本地来源回答事实，Route Planner 用规则约束规划路线，后台用日志和评测持续改进。mock 模式无 API Key 可运行，后续接 LLM 也只能增强结构化理解和表达，不能绕过证据和约束。
+灵境导游的核心是三条闭环：
+
+1. 可信导览：Query Gate 先判断边界，RAG 只基于本地 sources 回答，低置信进入知识缺口和评测。
+2. 路线分流：Route Planner 不是 LLM 自由规划，而是全量 22 景点候选池 + 必去/可选/避开 + 拥挤度 + 运营事件 + 导览图拓扑。
+3. 运营改进：游客问答、识景、路线、扫码带走和反馈沉淀到后台，管理员能补 FAQ、配置事件、看评测、生成感受度报告。
+
+最后强调：
+
+- mock 模式无 API Key 可运行。
+- 前端只调用后端 API。
+- scenic_graph 是导览图人工抽象拓扑，不是 GPS 导航。
+- 拥挤度与运营事件是 mock/local 演示，不代表真实客流或硬件。
+- OpenAvatarChat + LiteAvatar 是数字人表现层，不是业务大脑。
 
 ## 常见异常与兜底
 
 | 异常 | 处理 |
-|------|------|
+| --- | --- |
 | 后端 8000 端口被占用 | 停掉旧 `uvicorn`，或换端口并同步 Vite proxy |
 | 前端 5174 端口被占用 | 停掉旧 Vite，或使用 `--port 5175` |
-| 数字人 sidecar 打不开 | 运行 `scripts/avatar_sidecar_healthcheck.ps1`；若 8282 无监听，运行 `scripts/stop_avatar_demo.ps1` 清理后再 `scripts/start_avatar_demo.ps1 -OpenVisitor` |
-| 数字人 session 为空 | 在游客端“游灵山”tab 或 Kiosk 左侧面板点击“启动数字人直播”，再查 `/lingjing/avatar/sessions` |
-| TTS 没声音 | 说明浏览器语音能力、WebRTC session 或 sidecar 状态可能受本机环境影响，主流程仍可用 mock fallback 演示 |
-| 图片上传无候选 | 使用 `evals/vision_samples` 的 mock 样例，或展示 `eval_vision.py` 报告 |
+| 识景没有候选 | 使用 `evals/vision_samples` 样例，或展示 `eval_vision.py` 报告 |
 | 分享页 code 无效 | 重新在 Kiosk 生成路线；share_code 是当前进程内 30 分钟 mock 机制 |
 | Admin 计数为空 | 先在游客端完成几次 QA、路线、反馈，或说明当前为本地演示日志 |
+| sidecar 无法连接 | 运行 `scripts/avatar_sidecar_healthcheck.ps1`；主流程仍可用前端 fallback 和 mock accepted |
+| 数字人没声音 | 说明 sidecar / WebRTC 受本机环境影响，QA、路线、识景和后台主流程不受影响 |
