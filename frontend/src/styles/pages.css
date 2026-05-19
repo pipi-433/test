@@ -1783,6 +1783,23 @@
   background: var(--color-primary-600);
 }
 
+.guide-provider-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--color-ink-500);
+  font-size: 12px;
+}
+
+.guide-provider-row span {
+  min-height: 24px;
+  border: 1px solid rgb(31 91 74 / 14%);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgb(255 253 248 / 82%);
+}
+
 .guide-action-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2373,6 +2390,7 @@
 }
 
 .vision-confirm-note,
+.vision-provider-note,
 .vision-pending-note,
 .vision-fallback {
   border: 1px solid rgb(31 91 74 / 16%);

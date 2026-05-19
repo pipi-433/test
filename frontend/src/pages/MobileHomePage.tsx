@@ -1370,6 +1370,11 @@ export function MobileHomePage() {
                   <span>{qaResult.sources.length > 0 ? "数据来源充足" : "暂无本地来源"}</span>
                 </div>
               </div>
+              <div className="guide-provider-row">
+                <span>{qaResult.grounding_mode === "rag_sources_only" ? "基于本地资料库生成" : "本地规则响应"}</span>
+                <span>Provider: {qaResult.provider || qaResult.mode}</span>
+                {qaResult.fallback_reason ? <span>Fallback: {qaResult.fallback_reason}</span> : null}
+              </div>
               <section className="guide-action-grid" aria-label="讲解操作">
                 <button type="button" onClick={() => void speakLatestAnswer()} disabled={avatarPlaybackLocked || avatarActionLoading !== null || (!qaResult && !routeResult && !visionResult)}>
                   <Volume2 aria-hidden="true" size={24} />
@@ -1662,10 +1667,16 @@ export function MobileHomePage() {
                 {visionResult.candidates.length ? `候选 ${visionResult.candidates.length} 个` : "未命中"}
               </StatusBadge>
               <span>
-                {visionResult.latency_ms} ms · {visionResult.mode}
+                {visionResult.latency_ms} ms · {visionResult.provider || visionResult.mode}
               </span>
             </div>
             <p>{visionResult.explanation}</p>
+            {visionResult.vlm_observations ? (
+              <p className="vision-provider-note">视觉观察：{visionResult.vlm_observations}</p>
+            ) : null}
+            {visionResult.fallback_reason ? (
+              <p className="vision-provider-note">已降级：{visionResult.fallback_reason}</p>
+            ) : null}
             {visionResult.confirmation_reason ? (
               <p className={visionResult.needs_confirmation ? "vision-confirm-note vision-confirm-note--warning" : "vision-confirm-note"}>
                 {visionResult.confirmation_reason}

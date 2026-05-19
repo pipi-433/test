@@ -26,6 +26,10 @@ export type QAResponse = {
   sources: Source[];
   mode: string;
   latency_ms: number;
+  grounding_mode?: "rag_sources_only" | "local_structured_data" | "general_knowledge" | "no_sources" | "not_applicable" | string;
+  provider?: "mock" | "dashscope" | "openai" | "fallback" | string;
+  fallback_reason?: string | null;
+  provider_latency_ms?: number | null;
   understanding?: QueryUnderstandingResult;
   recommendations?: RecommendationItem[];
   scenic_area_intro?: ScenicAreaIntro;
@@ -160,6 +164,11 @@ export type VisionResponse = {
   suggested_questions: string[];
   mode: string;
   latency_ms: number;
+  provider?: "mock" | "dashscope" | "openai" | "fallback" | string;
+  provider_latency_ms?: number | null;
+  vlm_observations?: string | null;
+  fallback_reason?: string | null;
+  source_note?: string;
 };
 
 export type CrowdLevel = "low" | "medium" | "high";

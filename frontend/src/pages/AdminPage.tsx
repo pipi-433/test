@@ -87,7 +87,16 @@ import { PageShell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
 import { providerRows } from "../data/mock";
 
-type ProviderMap = Record<string, { provider: string; status: string }>;
+type ProviderMap = Record<
+  string,
+  {
+    provider: string;
+    status: string;
+    model?: string | null;
+    configured?: boolean;
+    mode?: string;
+  }
+>;
 type AdminTabId = "overview" | "knowledge" | "avatar" | "operations" | "sentiment" | "dashboard" | "settings";
 
 type OperationFormState = {
@@ -950,7 +959,23 @@ export function AdminPage() {
     }
   }
 
-  const providerEntries = providers ? Object.entries(providers).map(([name, value]) => [name, value.provider, value.status]) : providerRows;
+  const providerEntries = providers
+    ? Object.entries(providers).map(([name, value]) => ({
+        name,
+        provider: value.provider,
+        status: value.status,
+        model: value.model,
+        configured: value.configured,
+        mode: value.mode,
+      }))
+    : providerRows.map(([name, provider, status]) => ({
+        name,
+        provider,
+        status,
+        model: null,
+        configured: true,
+        mode: "mock",
+      }));
   const tags = overview?.feedback_tags || [];
   const themes = overview?.route_theme_distribution || [];
   const popularQuestions = overview?.popular_questions || [];
@@ -1713,11 +1738,13 @@ export function AdminPage() {
           <section className="admin-dashboard-grid">
             <AdminPanel className="admin-panel--span-6" title="AI Provider 配置" subtitle="mock 无 Key 可运行，真实 Key 不写入前端">
               <div className="provider-list">
-                {providerEntries.map(([name, provider, status]) => (
-                  <div className="provider-row" key={name}>
-                    <span>{name}</span>
-                    <strong>{provider}</strong>
-                    <StatusBadge tone={status === "ok" ? "ok" : "warning"}>{status}</StatusBadge>
+                {providerEntries.map((item) => (
+                  <div className="provider-row" key={item.name}>
+                    <span>{item.name}</span>
+                    <strong>{item.provider}{item.model ? ` / ${item.model}` : ""}</strong>
+                    <StatusBadge tone={item.status === "ok" ? "ok" : "warning"}>
+                      {item.configured === false ? "missing key" : item.mode || item.status}
+                    </StatusBadge>
                   </div>
                 ))}
               </div>

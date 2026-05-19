@@ -13,8 +13,12 @@ class Settings(BaseModel):
     service_name: str = "lingjing-guide"
     mode: str = "mock"
     llm_provider: str = "mock"
+    llm_model: str = ""
+    llm_timeout_seconds: float = 10
     embedding_provider: str = "mock"
     vlm_provider: str = "mock"
+    vlm_model: str = ""
+    vlm_timeout_seconds: float = 12
     tts_provider: str = "mock"
     avatar_speaker_mode: str = "mock"
     avatar_sidecar_base_url: str = ""
@@ -57,8 +61,12 @@ def get_settings() -> Settings:
         service_name=os.getenv("SERVICE_NAME", "lingjing-guide"),
         mode=os.getenv("APP_MODE", "mock"),
         llm_provider=os.getenv("LLM_PROVIDER", "mock"),
+        llm_model=os.getenv("LLM_MODEL", ""),
+        llm_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "10")),
         embedding_provider=os.getenv("EMBEDDING_PROVIDER", "mock"),
         vlm_provider=os.getenv("VLM_PROVIDER", "mock"),
+        vlm_model=os.getenv("VLM_MODEL", ""),
+        vlm_timeout_seconds=float(os.getenv("VLM_TIMEOUT_SECONDS", "12")),
         tts_provider=os.getenv("TTS_PROVIDER", "mock"),
         avatar_speaker_mode=os.getenv("AVATAR_SPEAKER_MODE", "mock"),
         avatar_sidecar_base_url=os.getenv("AVATAR_SIDECAR_BASE_URL", ""),

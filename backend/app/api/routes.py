@@ -70,7 +70,7 @@ from app.services.route_service import (
     recommend_route,
     route_theme_options,
 )
-from app.services.vision_service import recognize_image_mock
+from app.services.vision_service import recognize_image
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -493,6 +493,10 @@ def guide_query(payload: GuideQueryRequest) -> dict[str, object]:
         "suggested_questions": result.get("suggested_questions", []),
         "mode": result.get("mode") or "mock",
         "latency_ms": result.get("latency_ms", 0),
+        "grounding_mode": result.get("grounding_mode"),
+        "provider": result.get("provider"),
+        "fallback_reason": result.get("fallback_reason"),
+        "provider_latency_ms": result.get("provider_latency_ms"),
     }
 
 
@@ -1220,11 +1224,13 @@ async def vision_recognize(request: Request) -> dict[str, object]:
         )
     content = file_info.get("content", b"")
     file_size = len(content) if isinstance(content, bytes) else None
-    result = recognize_image_mock(
+    result = recognize_image(
         filename=str(file_info.get("filename") or ""),
         hint=str(fields.get("hint") or ""),
         text_hint=str(fields.get("text_hint") or ""),
         file_size=file_size,
+        image_bytes=content if isinstance(content, bytes) else b"",
+        content_type=str(file_info.get("content_type") or "application/octet-stream"),
     )
     matched = result.get("matched_attraction")
     metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
@@ -1237,6 +1243,8 @@ async def vision_recognize(request: Request) -> dict[str, object]:
         metadata={
             "filename": file_info.get("filename"),
             "mode": result.get("mode"),
+            "provider": result.get("provider"),
+            "fallback_reason": result.get("fallback_reason"),
             "matched_attraction_name": matched.get("name") if isinstance(matched, dict) else None,
             "latency_ms": result.get("latency_ms"),
             "strategy": metadata.get("strategy"),

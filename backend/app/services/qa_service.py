@@ -11,6 +11,7 @@ from app.repositories.content_repository import (
     list_attractions,
     list_knowledge_chunks,
 )
+from app.providers.llm import generate_grounded_answer
 from app.services.crowd_service import get_crowd_snapshot
 from app.services.operation_service import list_operation_events
 from app.services.query_understanding_service import build_gate_answer, understand_query
@@ -305,6 +306,36 @@ def build_mock_answer(
     return "\n".join(lines)
 
 
+def _qa_provider_meta(
+    *,
+    provider: str = "mock",
+    grounding_mode: str = "not_applicable",
+    fallback_reason: str | None = None,
+    provider_latency_ms: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "grounding_mode": grounding_mode,
+        "provider": provider,
+        "fallback_reason": fallback_reason,
+        "provider_latency_ms": provider_latency_ms,
+    }
+
+
+def _source_payloads(sources: list[ScoredChunk]) -> list[dict[str, Any]]:
+    return [
+        {
+            "chunk_id": item.chunk["id"],
+            "title": item.chunk["title"],
+            "source_file": item.chunk["source_file"],
+            "source_section": item.chunk["source_section"],
+            "attraction_id": item.chunk["attraction_id"],
+            "score": item.score,
+            "content": item.chunk.get("content", ""),
+        }
+        for item in sources
+    ]
+
+
 def _answer_scenic_area_intro(understanding: dict[str, Any]) -> dict[str, Any]:
     slots = understanding.get("slots") if isinstance(understanding.get("slots"), dict) else {}
     scenic_area = slots.get("scenic_area")
@@ -413,6 +444,7 @@ def answer_question(
                 "should_retrieve": False,
                 "reasons": [*(understanding.get("reasons") or []), "invalid_attraction_id"],
             },
+            **_qa_provider_meta(grounding_mode="no_sources", fallback_reason="invalid_attraction_id"),
         }
 
     understanding = understand_query(question, selected_attraction_id=attraction_id)
@@ -485,22 +517,28 @@ def answer_question(
         attraction_id=retrieval_attraction_id,
         visitor_profile=visitor_profile,
     )
+    source_payloads = _source_payloads(sources)
+    llm_result = generate_grounded_answer(
+        question=question,
+        sources=source_payloads,
+        fallback_answer=answer,
+    )
+    answer = llm_result.answer
     latency_ms = int((time.perf_counter() - start) * 1000)
     return {
         "answer": answer,
         "type": "qa",
         "sources": [
-            {
-                "chunk_id": item.chunk["id"],
-                "title": item.chunk["title"],
-                "source_file": item.chunk["source_file"],
-                "source_section": item.chunk["source_section"],
-                "attraction_id": item.chunk["attraction_id"],
-                "score": item.score,
-            }
-            for item in sources
+            {key: value for key, value in source.items() if key != "content"}
+            for source in source_payloads
         ],
-        "mode": "mock",
+        "mode": "mock" if llm_result.provider in {"mock", "fallback"} else "real",
         "latency_ms": latency_ms,
         "understanding": understanding,
+        **_qa_provider_meta(
+            provider=llm_result.provider,
+            grounding_mode=llm_result.grounding_mode,
+            fallback_reason=llm_result.fallback_reason,
+            provider_latency_ms=llm_result.provider_latency_ms,
+        ),
     }

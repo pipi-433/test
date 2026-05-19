@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.providers.vlm import recognize_visual_candidates
 from app.repositories.content_repository import list_attractions
 
 
@@ -246,3 +247,93 @@ def recognize_image_mock(
             "top1_attraction_id": best.attraction["id"],
         },
     }
+
+
+def _with_provider_fields(
+    result: dict[str, Any],
+    *,
+    provider: str,
+    provider_latency_ms: int | None = None,
+    vlm_observations: str | None = None,
+    fallback_reason: str | None = None,
+) -> dict[str, Any]:
+    metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+    return {
+        **result,
+        "provider": provider,
+        "provider_latency_ms": provider_latency_ms,
+        "vlm_observations": vlm_observations,
+        "fallback_reason": fallback_reason,
+        "source_note": (
+            "VLM 只用于识景候选增强；候选仍需映射到本地 22 个景点，确认后的讲解继续走 RAG sources。"
+            if provider not in {"mock", "fallback"}
+            else "mock/fallback 识景只做候选确认，不生成景区事实讲解。"
+        ),
+        "metadata": {
+            **metadata,
+            "provider": provider,
+            "provider_latency_ms": provider_latency_ms,
+            "vlm_observations_available": bool(vlm_observations),
+            "fallback_reason": fallback_reason,
+        },
+    }
+
+
+def recognize_image(
+    *,
+    filename: str | None = None,
+    hint: str | None = None,
+    text_hint: str | None = None,
+    file_size: int | None = None,
+    image_bytes: bytes | None = None,
+    content_type: str | None = None,
+) -> dict[str, Any]:
+    provider_result = recognize_visual_candidates(
+        image_bytes=image_bytes or b"",
+        content_type=content_type or "image/jpeg",
+        hint=hint,
+        text_hint=text_hint,
+    )
+    if provider_result.provider == "mock":
+        return _with_provider_fields(
+            recognize_image_mock(filename=filename, hint=hint, text_hint=text_hint, file_size=file_size),
+            provider="mock",
+        )
+
+    if provider_result.provider == "fallback":
+        return _with_provider_fields(
+            recognize_image_mock(filename=filename, hint=hint, text_hint=text_hint, file_size=file_size),
+            provider="fallback",
+            provider_latency_ms=provider_result.provider_latency_ms,
+            fallback_reason=provider_result.fallback_reason,
+        )
+
+    enhanced_text_hint = " ".join(
+        part
+        for part in [
+            text_hint or "",
+            provider_result.observations or "",
+            " ".join(provider_result.candidate_names),
+        ]
+        if part
+    )
+    result = recognize_image_mock(
+        filename=filename,
+        hint=hint,
+        text_hint=enhanced_text_hint,
+        file_size=file_size,
+    )
+    if not result.get("candidates"):
+        return _with_provider_fields(
+            result,
+            provider=provider_result.provider,
+            provider_latency_ms=provider_result.provider_latency_ms,
+            vlm_observations=provider_result.observations,
+            fallback_reason="vlm_candidates_not_mapped_to_local_attractions",
+        )
+    return _with_provider_fields(
+        result,
+        provider=provider_result.provider,
+        provider_latency_ms=provider_result.provider_latency_ms,
+        vlm_observations=provider_result.observations,
+    )
