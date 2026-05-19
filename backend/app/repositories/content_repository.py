@@ -43,7 +43,7 @@ def list_knowledge_chunks(attraction_id: str | None = None) -> list[dict[str, An
     """
     params: tuple[str, ...] = ()
     if attraction_id:
-        query += " WHERE attraction_id = ?"
+        query += " WHERE attraction_id = ? OR attraction_id IS NULL"
         params = (attraction_id,)
     query += " ORDER BY priority DESC, id LIMIT 500"
 

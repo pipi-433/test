@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS knowledge_gaps (
   suggested_faq TEXT,
   status TEXT NOT NULL,
   eval_case_id TEXT,
+  linked_faq_id TEXT,
+  resolved_at TEXT,
+  resolution_note TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -40,6 +43,15 @@ def _dump(value: Any) -> str:
 
 def ensure_knowledge_gap_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(KNOWLEDGE_GAP_SCHEMA)
+    _ensure_column(conn, "knowledge_gaps", "linked_faq_id", "TEXT")
+    _ensure_column(conn, "knowledge_gaps", "resolved_at", "TEXT")
+    _ensure_column(conn, "knowledge_gaps", "resolution_note", "TEXT")
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def _row_to_gap(row: sqlite3.Row) -> dict[str, Any]:
@@ -56,9 +68,38 @@ def _row_to_gap(row: sqlite3.Row) -> dict[str, Any]:
         "suggested_faq": row["suggested_faq"],
         "status": row["status"],
         "eval_case_id": row["eval_case_id"],
+        "linked_faq_id": row["linked_faq_id"] if "linked_faq_id" in row.keys() else None,
+        "linked_faq_status": None,
+        "resolved_at": row["resolved_at"] if "resolved_at" in row.keys() else None,
+        "resolution_note": row["resolution_note"] if "resolution_note" in row.keys() else None,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+
+
+def _attach_linked_faq(conn: sqlite3.Connection, gap: dict[str, Any]) -> dict[str, Any]:
+    row = None
+    linked_faq_id = gap.get("linked_faq_id")
+    try:
+        if linked_faq_id:
+            row = conn.execute("SELECT id, status FROM admin_faqs WHERE id = ?", (linked_faq_id,)).fetchone()
+        if row is None:
+            row = conn.execute(
+                """
+                SELECT id, status
+                FROM admin_faqs
+                WHERE source_gap_id = ?
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT 1
+                """,
+                (gap["id"],),
+            ).fetchone()
+    except sqlite3.OperationalError:
+        row = None
+    if row is not None:
+        gap["linked_faq_id"] = row["id"]
+        gap["linked_faq_status"] = row["status"]
+    return gap
 
 
 def list_knowledge_gaps(*, status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
@@ -72,14 +113,15 @@ def list_knowledge_gaps(*, status: str | None = None, limit: int = 200) -> list[
     with connect() as conn:
         ensure_knowledge_gap_schema(conn)
         rows = conn.execute(query, tuple(params)).fetchall()
-    return [_row_to_gap(row) for row in rows]
+        gaps = [_attach_linked_faq(conn, _row_to_gap(row)) for row in rows]
+    return gaps
 
 
 def get_knowledge_gap(gap_id: str) -> dict[str, Any] | None:
     with connect() as conn:
         ensure_knowledge_gap_schema(conn)
         row = conn.execute("SELECT * FROM knowledge_gaps WHERE id = ?", (gap_id,)).fetchone()
-    return _row_to_gap(row) if row else None
+        return _attach_linked_faq(conn, _row_to_gap(row)) if row else None
 
 
 def find_existing_gap(query: str, *, statuses: tuple[str, ...] = ("open", "drafted")) -> dict[str, Any] | None:
@@ -99,7 +141,7 @@ def find_existing_gap(query: str, *, statuses: tuple[str, ...] = ("open", "draft
             """,
             (clean_query, *statuses),
         ).fetchone()
-    return _row_to_gap(row) if row else None
+        return _attach_linked_faq(conn, _row_to_gap(row)) if row else None
 
 
 def insert_knowledge_gap(
@@ -121,9 +163,10 @@ def insert_knowledge_gap(
             """
             INSERT OR REPLACE INTO knowledge_gaps (
               id, query, trigger_type, matched_sources_json, confidence,
-              suggested_faq, status, eval_case_id, created_at, updated_at
+              suggested_faq, status, eval_case_id, linked_faq_id,
+              resolved_at, resolution_note, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_id,
@@ -134,6 +177,9 @@ def insert_knowledge_gap(
                 suggested_faq,
                 status,
                 eval_case_id,
+                None,
+                None,
+                None,
                 created_at,
                 created_at,
             ),
@@ -148,7 +194,18 @@ def insert_knowledge_gap(
 def update_knowledge_gap(gap_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
     if not updates:
         return get_knowledge_gap(gap_id)
-    allowed = {"query", "trigger_type", "matched_sources", "confidence", "suggested_faq", "status", "eval_case_id"}
+    allowed = {
+        "query",
+        "trigger_type",
+        "matched_sources",
+        "confidence",
+        "suggested_faq",
+        "status",
+        "eval_case_id",
+        "linked_faq_id",
+        "resolved_at",
+        "resolution_note",
+    }
     clean = {key: value for key, value in updates.items() if key in allowed}
     if "matched_sources" in clean:
         clean["matched_sources_json"] = _dump(clean.pop("matched_sources") or [])

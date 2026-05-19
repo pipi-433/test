@@ -240,6 +240,11 @@ export type KnowledgeGap = {
   suggested_faq: string | null;
   status: KnowledgeGapStatus;
   eval_case_id: string | null;
+  linked_faq_id?: string | null;
+  linked_faq_status?: AdminKnowledgeStatus | string | null;
+  resolved_at?: string | null;
+  resolution_note?: string | null;
+  faq?: AdminFaq;
   created_at: string;
   updated_at: string;
   deduped?: boolean;
@@ -269,8 +274,12 @@ export type AdminKnowledgeAsset = {
   attraction_id: string | null;
   status: AdminKnowledgeStatus | string;
   chunk_count: number;
+  content?: string;
   source_filename: string | null;
   note: string | null;
+  published_chunk_ids?: string[];
+  published_at?: string | null;
+  last_publish_message?: string | null;
   created_at: string;
   updated_at: string;
   mode?: string;
@@ -283,6 +292,7 @@ export type AdminKnowledgeAssetCreateRequest = {
   scenic_area?: string;
   attraction_id?: string;
   status?: AdminKnowledgeStatus;
+  content?: string;
   source_filename?: string;
   note?: string;
 };
@@ -328,6 +338,18 @@ export type AdminKnowledgeJobResponse = {
   affected_assets?: number;
   published_assets?: number;
   published_faqs?: number;
+  published_chunks?: number;
+  asset_results?: Array<{ id: string; chunk_ids: string[]; message: string; published: boolean }>;
+  faq_results?: Array<{
+    id: string;
+    faq_id?: string;
+    source_gap_id?: string | null;
+    published_chunks?: number;
+    gap_status_after_publish?: string | null;
+    chunk_ids: string[];
+    message: string;
+    published: boolean;
+  }>;
 };
 
 export type AdminAvatarProfile = {

@@ -126,6 +126,9 @@ CREATE TABLE IF NOT EXISTS knowledge_gaps (
   suggested_faq TEXT,
   status TEXT NOT NULL,
   eval_case_id TEXT,
+  linked_faq_id TEXT,
+  resolved_at TEXT,
+  resolution_note TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -143,8 +146,12 @@ CREATE TABLE IF NOT EXISTS admin_knowledge_assets (
   attraction_id TEXT,
   status TEXT NOT NULL,
   chunk_count INTEGER NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
   source_filename TEXT,
   note TEXT,
+  published_chunk_ids_json TEXT NOT NULL DEFAULT '[]',
+  published_at TEXT,
+  last_publish_message TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

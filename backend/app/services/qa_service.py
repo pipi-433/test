@@ -91,6 +91,19 @@ def _score_chunk(chunk: dict[str, Any], terms: list[str], attraction: dict[str, 
     title = _norm(chunk.get("title"))
     content = _norm(chunk.get("content"))
     tags = [_norm(tag) for tag in chunk.get("tags", [])]
+    metadata = chunk.get("metadata") if isinstance(chunk.get("metadata"), dict) else {}
+    chunk_type = _norm(chunk.get("chunk_type"))
+    is_admin_chunk = chunk_type.startswith("admin_") or bool(metadata.get("admin_source"))
+    attraction_terms: set[str] = set()
+    if attraction:
+        attraction_name = _norm(attraction.get("name"))
+        if attraction_name:
+            attraction_terms.add(attraction_name)
+            for size in (2, 3, 4):
+                attraction_terms.update(_windows(attraction_name, size))
+    has_admin_specific_hit = is_admin_chunk and any(
+        term not in attraction_terms and (term in title or term in tags or term in content) for term in terms
+    )
     haystack = f"{title} {content} {' '.join(tags)}"
     score = 0.0
     reasons: list[str] = []
@@ -98,11 +111,17 @@ def _score_chunk(chunk: dict[str, Any], terms: list[str], attraction: dict[str, 
     priority = float(chunk.get("priority") or 0)
     score += min(priority, 100.0) / 100.0 * 0.18
 
+    if has_admin_specific_hit:
+        # Admin-published chunks are curated local updates. Boost only after
+        # lexical matching filters run, so generic queries still cannot leak in.
+        score += 1.15
+        reasons.append("admin_dynamic_chunk")
+
     if attraction and chunk.get("attraction_id") == attraction.get("id"):
         score += 1.2
         reasons.append("attraction_filter")
 
-    if attraction:
+    if attraction and not (is_admin_chunk and not has_admin_specific_hit):
         name = _norm(attraction.get("name"))
         if name and name in haystack:
             score += 0.7
@@ -110,6 +129,8 @@ def _score_chunk(chunk: dict[str, Any], terms: list[str], attraction: dict[str, 
 
     for term in terms:
         if len(term) < 2:
+            continue
+        if is_admin_chunk and not has_admin_specific_hit and term in attraction_terms:
             continue
         if term in title:
             score += 1.0 if len(term) >= 3 else 0.55
@@ -128,6 +149,23 @@ def _score_chunk(chunk: dict[str, Any], terms: list[str], attraction: dict[str, 
 
 def _has_query_term_hit(item: ScoredChunk) -> bool:
     return any(reason.startswith(("title:", "tag:", "content:")) for reason in item.reasons)
+
+
+def _answer_sources(sources: list[ScoredChunk]) -> list[ScoredChunk]:
+    picked = list(sources[:3])
+    admin_source = next(
+        (
+            item
+            for item in sources
+            if _norm(item.chunk.get("chunk_type")).startswith("admin_")
+            or (isinstance(item.chunk.get("metadata"), dict) and item.chunk["metadata"].get("admin_source"))
+        ),
+        None,
+    )
+    if admin_source and all(item.chunk.get("id") != admin_source.chunk.get("id") for item in picked):
+        if "admin_dynamic_chunk" in admin_source.reasons:
+            picked = [admin_source, *picked[:2]]
+    return picked
 
 
 def _is_generic_attraction_question(question: str) -> bool:
@@ -256,7 +294,7 @@ def build_mock_answer(
 
     place = attraction["name"] if attraction else "你问到的内容"
     lines = [f"我用本地 mock 知识库为你查到：{place}可以这样理解。"]
-    for index, item in enumerate(sources[:3], start=1):
+    for index, item in enumerate(_answer_sources(sources), start=1):
         lines.append(f"{index}. {_snippet(item.chunk.get('content', ''))}")
 
     hint = _profile_hint(visitor_profile)

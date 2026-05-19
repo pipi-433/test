@@ -58,9 +58,9 @@ import {
   reindexAdminKnowledge,
   runAdminSystemHealthcheck,
   runAdminAvatarVoiceTest,
+  updateAdminFaq,
   updateAdminSystemSettings,
   updateAdminAvatarProfile,
-  updateAdminFaq,
   updateKnowledgeGapStatus,
   updateOperationEvent,
 } from "../api/client";
@@ -466,12 +466,20 @@ export function AdminPage() {
   const [adminFaqs, setAdminFaqs] = useState<AdminFaq[]>([]);
   const [knowledgeAdminMessage, setKnowledgeAdminMessage] = useState("");
   const [knowledgeAdminBusy, setKnowledgeAdminBusy] = useState("");
+  const [knowledgeAssetDraft, setKnowledgeAssetDraft] = useState({
+    attraction_id: "lingshan-ls-011",
+    content: "灵山大佛夜间灯光秀为演示新增知识，建议游客在傍晚后前往观景区观看，具体开放以现场公告为准。",
+    scenic_area: "灵山胜境",
+    source_filename: "admin-night-light-demo.md",
+    title: "灵山大佛夜间灯光测试说明",
+  });
   const [faqDraft, setFaqDraft] = useState({
     answer: "建议从灵山大佛主轴线开始，结合梵宫、九龙灌浴与五印坛城安排半日游。回答需要附公开资料来源，避免编造。",
     question: "灵山大佛适合怎么游览？",
     tags: "导览,路线,讲解",
   });
   const [avatarProfile, setAvatarProfile] = useState<AdminAvatarProfile>(defaultAdminAvatarProfile);
+  const [faqEditingId, setFaqEditingId] = useState("");
   const [avatarJobs, setAvatarJobs] = useState<AdminAvatarClipJob[]>([]);
   const [avatarMessage, setAvatarMessage] = useState("");
   const [avatarBusy, setAvatarBusy] = useState("");
@@ -635,11 +643,62 @@ export function AdminPage() {
     setGapBusyId(gapId);
     setGapMessage("");
     try {
-      await draftKnowledgeGapFaq(gapId);
-      setGapMessage("FAQ 草稿已生成，发布前仍需管理员确认。");
+      const gap = await draftKnowledgeGapFaq(gapId);
+      setGapMessage(`FAQ 草稿已生成，linked_faq=${gap.linked_faq_id || gap.faq?.id || "待刷新"}，发布前仍需管理员确认。`);
       await loadKnowledgeGaps();
+      await loadAdminKnowledge();
     } catch (cause) {
       setGapMessage(cause instanceof Error ? cause.message : "FAQ 草稿生成失败。");
+    } finally {
+      setGapBusyId("");
+    }
+  }
+
+  async function handlePublishGapFaq(gap: KnowledgeGap) {
+    const faqId = gap.linked_faq_id || gap.faq?.id;
+    if (!faqId) {
+      setGapMessage("请先生成 FAQ 草稿，再发布到本地知识库。");
+      return;
+    }
+    setGapBusyId(gap.id);
+    setGapMessage("");
+    try {
+      const result = await publishAdminKnowledge({ faq_ids: [faqId] });
+      const faqResult = result.faq_results?.find((item) => (item.faq_id || item.id) === faqId);
+      setGapMessage(
+        `FAQ 已发布到本地 RAG，写入 ${faqResult?.published_chunks ?? result.published_chunks ?? 0} 个 chunk；gap=${faqResult?.gap_status_after_publish || "已刷新"}。`,
+      );
+      await loadKnowledgeGaps();
+      await loadAdminKnowledge();
+    } catch (cause) {
+      setGapMessage(cause instanceof Error ? cause.message : "FAQ 发布失败。");
+    } finally {
+      setGapBusyId("");
+    }
+  }
+
+  async function handleSaveGapFaqFromEditor(gap: KnowledgeGap) {
+    const faqId = gap.linked_faq_id || gap.faq?.id;
+    if (!faqId) {
+      setGapMessage("请先生成 FAQ 草稿，再用右侧 FAQ 编辑区保存。");
+      return;
+    }
+    setGapBusyId(gap.id);
+    setGapMessage("");
+    try {
+      await updateAdminFaq(faqId, {
+        answer: faqDraft.answer,
+        question: faqDraft.question || gap.query,
+        tags: faqDraft.tags
+          .split(/[，,锛?]/)
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      });
+      setGapMessage("已用右侧 FAQ 编辑区内容更新 linked FAQ 草稿，发布前仍需管理员确认。");
+      await loadAdminKnowledge();
+      await loadKnowledgeGaps();
+    } catch (cause) {
+      setGapMessage(cause instanceof Error ? cause.message : "FAQ 草稿更新失败。");
     } finally {
       setGapBusyId("");
     }
@@ -677,15 +736,16 @@ export function AdminPage() {
     setKnowledgeAdminBusy("asset");
     setKnowledgeAdminMessage("");
     try {
-      const nextNumber = knowledgeAssets.length + 1;
-      await createAdminKnowledgeAsset({
+      const asset = await createAdminKnowledgeAsset({
         asset_type: "guide_script",
-        note: "后台上传文档按钮创建的本地演示资产，未进行真实资料解析入库。",
-        source_filename: `admin-upload-demo-${nextNumber}.md`,
-        status: "draft",
-        title: `后台演示上传资料 ${nextNumber}`,
+        attraction_id: knowledgeAssetDraft.attraction_id || undefined,
+        content: knowledgeAssetDraft.content,
+        note: "管理员通过后台新增的本地知识正文，可发布进 SQLite RAG chunk。",
+        scenic_area: knowledgeAssetDraft.scenic_area || undefined,
+        source_filename: knowledgeAssetDraft.source_filename || "admin-knowledge.md",
+        title: knowledgeAssetDraft.title || "后台新增知识内容",
       });
-      setKnowledgeAdminMessage("已创建一条本地演示资产记录，可继续重建索引或发布。");
+      setKnowledgeAdminMessage(`已保存“${asset.title}”，可点击发布到知识库写入本地 RAG。`);
       await loadAdminKnowledge();
     } catch (cause) {
       setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "上传文档记录创建失败。");
@@ -698,16 +758,21 @@ export function AdminPage() {
     setKnowledgeAdminBusy(status === "published" ? "publish-faq" : "faq");
     setKnowledgeAdminMessage("");
     try {
-      await createAdminFaq({
+      const faq = await createAdminFaq({
         answer: faqDraft.answer,
         question: faqDraft.question,
-        status,
+        status: "draft",
         tags: faqDraft.tags
           .split(/[，,]/)
           .map((tag) => tag.trim())
           .filter(Boolean),
       });
-      setKnowledgeAdminMessage(status === "published" ? "FAQ 已保存并发布到后台本地知识库管理视图。" : "FAQ 草稿已保存。");
+      if (status === "published") {
+        const result = await publishAdminKnowledge({ faq_ids: [faq.id] });
+        setKnowledgeAdminMessage(`FAQ 已保存并发布到本地 RAG，写入 ${result.published_chunks ?? 0} 个 chunk。`);
+      } else {
+        setKnowledgeAdminMessage("FAQ 草稿已保存。");
+      }
       await loadAdminKnowledge();
     } catch (cause) {
       setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "FAQ 保存失败。");
@@ -748,11 +813,25 @@ export function AdminPage() {
     setKnowledgeAdminBusy(faqId);
     setKnowledgeAdminMessage("");
     try {
-      await updateAdminFaq(faqId, { status: "published" });
-      setKnowledgeAdminMessage("FAQ 已发布到后台本地知识库管理视图。");
+      const result = await publishAdminKnowledge({ faq_ids: [faqId] });
+      setKnowledgeAdminMessage(`FAQ 已发布到本地 RAG，写入 ${result.published_chunks ?? 0} 个 chunk。`);
       await loadAdminKnowledge();
     } catch (cause) {
       setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "FAQ 发布失败。");
+    } finally {
+      setKnowledgeAdminBusy("");
+    }
+  }
+
+  async function handlePublishAsset(assetId: string) {
+    setKnowledgeAdminBusy(assetId);
+    setKnowledgeAdminMessage("");
+    try {
+      const result = await publishAdminKnowledge({ asset_ids: [assetId] });
+      setKnowledgeAdminMessage(`知识资产已发布到本地 RAG，写入 ${result.published_chunks ?? 0} 个 chunk。`);
+      await loadAdminKnowledge();
+    } catch (cause) {
+      setKnowledgeAdminMessage(cause instanceof Error ? cause.message : "知识资产发布失败。");
     } finally {
       setKnowledgeAdminBusy("");
     }
@@ -916,14 +995,21 @@ export function AdminPage() {
           asset.title,
           assetTypeLabel(asset.asset_type),
           <StatusBadge tone={adminKnowledgeStatusTone(asset.status)}>{adminKnowledgeStatusLabel(asset.status)}</StatusBadge>,
+          asset.chunk_count > 0 ? `${asset.chunk_count} chunks` : "未写入",
           formatMaybeDate(asset.updated_at),
-          asset.note || "本地管理记录",
+          <div className="admin-inline-actions">
+            {asset.status === "published" && asset.chunk_count > 0 ? (
+              <span>{asset.last_publish_message || "已进入本地 RAG"}</span>
+            ) : (
+              <button className="operation-toggle" disabled={knowledgeAdminBusy === asset.id} onClick={() => void handlePublishAsset(asset.id)} type="button">发布资产</button>
+            )}
+          </div>,
         ])
-      : [["暂无文档资产", "-", <StatusBadge tone="neutral">empty</StatusBadge>, "-", "点击上传文档创建演示记录"]];
+      : [["暂无文档资产", "-", <StatusBadge tone="neutral">empty</StatusBadge>, "-", "-", "填写新增知识内容后保存"]];
   const faqRows =
     adminFaqs.length > 0
       ? adminFaqs.map((faq) => [
-          faq.question,
+          <span>{faq.question}{faq.source_gap_id ? <small className="admin-linked-meta"> gap:{faq.source_gap_id}</small> : null}</span>,
           <StatusBadge tone={adminKnowledgeStatusTone(faq.status)}>{adminKnowledgeStatusLabel(faq.status)}</StatusBadge>,
           faq.tags.join("、") || "-",
           formatMaybeDate(faq.updated_at),
@@ -1142,11 +1228,55 @@ export function AdminPage() {
             >
               <div className="admin-upload-zone">
                 <CloudUpload aria-hidden="true" size={42} />
-                <strong>点击或拖拽文件到此处上传</strong>
-                <span>支持 PDF / DOCX / TXT / MD，单文件 ≤ 50MB</span>
+                <strong>新增知识内容</strong>
+                <span>本轮使用 JSON 文本入口，发布后会写入本地 RAG，不修改原始资料包。</span>
+              </div>
+              <div className="admin-knowledge-asset-form">
+                <label>
+                  <span>标题</span>
+                  <input
+                    onChange={(event) => setKnowledgeAssetDraft((current) => ({ ...current, title: event.target.value }))}
+                    value={knowledgeAssetDraft.title}
+                  />
+                </label>
+                <label>
+                  <span>关联景点</span>
+                  <select
+                    onChange={(event) => {
+                      const attraction = operationAttractions.find((item) => item.id === event.target.value);
+                      setKnowledgeAssetDraft((current) => ({
+                        ...current,
+                        attraction_id: event.target.value,
+                        scenic_area: attraction?.scenic_area || current.scenic_area,
+                      }));
+                    }}
+                    value={knowledgeAssetDraft.attraction_id}
+                  >
+                    <option value="">不绑定景点</option>
+                    {operationAttractions.map((item) => (
+                      <option key={item.id} value={item.id}>{item.name} · {item.scenic_area}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>来源文件名</span>
+                  <input
+                    onChange={(event) => setKnowledgeAssetDraft((current) => ({ ...current, source_filename: event.target.value }))}
+                    value={knowledgeAssetDraft.source_filename}
+                  />
+                </label>
+                <label className="admin-knowledge-asset-form__content">
+                  <span>正文</span>
+                  <textarea
+                    maxLength={20000}
+                    onChange={(event) => setKnowledgeAssetDraft((current) => ({ ...current, content: event.target.value }))}
+                    rows={6}
+                    value={knowledgeAssetDraft.content}
+                  />
+                </label>
               </div>
               {knowledgeAdminMessage ? <p className="knowledge-gap-message">{knowledgeAdminMessage}</p> : null}
-              <AdminTable columns={["文档名称", "类型", "状态", "更新时间", "操作"]} rows={documentRows} />
+              <AdminTable columns={["文档名称", "类型", "状态", "RAG chunks", "更新时间", "操作"]} rows={documentRows} />
             </AdminPanel>
             <AdminPanel className="admin-panel--span-5" title="FAQ 编辑区" subtitle="UI 预留，发布前需人工确认">
               <div className="admin-faq-editor">
@@ -1190,12 +1320,24 @@ export function AdminPage() {
                           <strong>{gap.query}</strong>
                           <StatusBadge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</StatusBadge>
                           <StatusBadge tone="neutral">{gapTriggerLabel(gap.trigger_type)}</StatusBadge>
+                          {gap.linked_faq_id ? (
+                            <StatusBadge tone={gap.linked_faq_status === "published" ? "ok" : "warning"}>
+                              FAQ {gap.linked_faq_status || "draft"}
+                            </StatusBadge>
+                          ) : null}
                         </div>
                         <p>{gap.suggested_faq ? gap.suggested_faq.replace(/[#*\n]/g, " ").slice(0, 150) : "暂无 FAQ 草稿。无可靠来源时需管理员补充资料，避免编造。"}</p>
-                        <span>confidence={gap.confidence ?? "-"} · {new Date(gap.created_at).toLocaleString("zh-CN")} · eval={gap.eval_case_id || "未加入"}</span>
+                        {gap.resolution_note ? <p className="knowledge-gap-row__note">{gap.resolution_note}</p> : null}
+                        <span>confidence={gap.confidence ?? "-"} · {new Date(gap.created_at).toLocaleString("zh-CN")} · eval={gap.eval_case_id || "未加入"} · faq={gap.linked_faq_id || "未生成"}</span>
                       </div>
                       <div className="knowledge-gap-actions">
                         <Button disabled={gapBusyId === gap.id} icon={<BookOpenCheck size={15} />} onClick={() => void handleDraftKnowledgeGap(gap.id)} type="button" variant="secondary">生成 FAQ</Button>
+                        {gap.linked_faq_id && gap.linked_faq_status !== "published" ? (
+                          <Button disabled={gapBusyId === gap.id} icon={<FilePlus2 size={15} />} onClick={() => void handleSaveGapFaqFromEditor(gap)} type="button" variant="secondary">保存编辑</Button>
+                        ) : null}
+                        {gap.linked_faq_id && gap.linked_faq_status !== "published" ? (
+                          <Button disabled={gapBusyId === gap.id} icon={<BookOpenCheck size={15} />} onClick={() => void handlePublishGapFaq(gap)} type="button" variant="secondary">发布 FAQ</Button>
+                        ) : null}
                         <Button disabled={gapBusyId === gap.id} icon={<FilePlus2 size={15} />} onClick={() => void handleAddKnowledgeGapToEval(gap.id)} type="button" variant="secondary">加入评测</Button>
                         <Button disabled={gapBusyId === gap.id} icon={<CheckCircle2 size={15} />} onClick={() => void handleUpdateKnowledgeGapStatus(gap.id, "resolved")} type="button" variant="quiet">已解决</Button>
                         <Button disabled={gapBusyId === gap.id} icon={<XCircle size={15} />} onClick={() => void handleUpdateKnowledgeGapStatus(gap.id, "ignored")} type="button" variant="quiet">忽略</Button>

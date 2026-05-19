@@ -10,7 +10,10 @@ from app.repositories import admin_knowledge_repository as repo
 
 VALID_ASSET_TYPES = {"guide_script", "history_doc", "faq", "route_note", "other"}
 VALID_KNOWLEDGE_STATUSES = {"draft", "pending_review", "published", "archived"}
-SOURCE_NOTE = "后台本地知识库管理闭环为 mock/local 演示；发布仅更新后台管理状态，不直接改写现有 RAG knowledge_chunks。"
+SOURCE_NOTE = (
+    "后台本地知识库维护闭环为 mock/local 演示；发布会写入本地 SQLite knowledge_chunks，"
+    "供 lexical RAG 检索，不修改原始资料包，不接真实向量库或生产 CMS。"
+)
 
 
 def _validate_choice(value: str, choices: set[str], *, code: str, field_name: str) -> str:
@@ -29,6 +32,19 @@ def _validate_choice(value: str, choices: set[str], *, code: str, field_name: st
 def _clean_text(value: Any, *, fallback: str = "", max_length: int = 300) -> str:
     text = str(value or fallback).strip()
     return text[:max_length]
+
+
+def _clean_content(value: Any) -> str:
+    text = str(value or "").strip()
+    if len(text) > 20_000:
+        raise ApiError(
+            code="ADMIN_KNOWLEDGE_CONTENT_TOO_LONG",
+            message="知识正文过长，请控制在 20000 字以内。",
+            cause=f"Admin knowledge content length={len(text)} exceeds 20000.",
+            fix="请拆成多条知识资产后再保存。",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    return text
 
 
 def _with_meta(payload: dict[str, Any]) -> dict[str, Any]:
@@ -56,8 +72,10 @@ def create_admin_knowledge_asset(payload: dict[str, Any]) -> dict[str, Any]:
         code="ADMIN_KNOWLEDGE_ASSET_INVALID_TYPE",
         field_name="asset_type",
     )
+    content = _clean_content(payload.get("content"))
+    default_status = "pending_review" if content and "status" not in payload else "draft"
     status_value = _validate_choice(
-        payload.get("status") or "draft",
+        payload.get("status") or default_status,
         VALID_KNOWLEDGE_STATUSES,
         code="ADMIN_KNOWLEDGE_INVALID_STATUS",
         field_name="status",
@@ -69,8 +87,10 @@ def create_admin_knowledge_asset(payload: dict[str, Any]) -> dict[str, Any]:
         attraction_id=_clean_text(payload.get("attraction_id"), max_length=80) or None,
         status=status_value,
         chunk_count=max(0, int(payload.get("chunk_count") or 0)),
+        content=content,
         source_filename=_clean_text(payload.get("source_filename"), max_length=160) or None,
-        note=_clean_text(payload.get("note"), max_length=300) or "后台演示上传记录，未进行真实资料解析入库。",
+        note=_clean_text(payload.get("note"), max_length=300)
+        or ("包含管理员新增正文，可发布为本地 RAG chunk。" if content else "后台演示上传记录，尚未提供可发布正文。"),
     )
     return _with_meta(item)
 
@@ -80,6 +100,8 @@ def update_admin_knowledge_asset(asset_id: str, payload: dict[str, Any]) -> dict
     for field in ("title", "scenic_area", "attraction_id", "source_filename", "note"):
         if field in payload:
             updates[field] = _clean_text(payload.get(field), max_length=300) or None
+    if "content" in payload:
+        updates["content"] = _clean_content(payload.get("content"))
     if "asset_type" in payload:
         updates["asset_type"] = _validate_choice(
             payload.get("asset_type"),
@@ -178,7 +200,7 @@ def rebuild_admin_knowledge_index() -> dict[str, Any]:
         {
             "accepted": True,
             "job_id": f"reindex-{len(assets):03d}",
-            "message": "已完成本地演示索引重建；未改写线上 RAG chunks。",
+            "message": "已完成本地演示索引检查；发布动作会将管理员内容写入 SQLite knowledge_chunks。",
             "affected_assets": len(assets),
         }
     )
@@ -193,7 +215,7 @@ def publish_admin_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
     return _with_meta(
         {
             "accepted": True,
-            "message": "已发布到后台本地知识库管理视图；现有 RAG 索引需后续任务显式重建。",
+            "message": f"已发布到本地 RAG knowledge_chunks，共写入 {result.get('published_chunks', 0)} 个 chunk。",
             **result,
         }
     )

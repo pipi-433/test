@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from app.db import connect
+from app.repositories.knowledge_gap_repository import ensure_knowledge_gap_schema
 
 
 ADMIN_KNOWLEDGE_SCHEMA = """
@@ -18,8 +20,12 @@ CREATE TABLE IF NOT EXISTS admin_knowledge_assets (
   attraction_id TEXT,
   status TEXT NOT NULL,
   chunk_count INTEGER NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
   source_filename TEXT,
   note TEXT,
+  published_chunk_ids_json TEXT NOT NULL DEFAULT '[]',
+  published_at TEXT,
+  last_publish_message TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -53,11 +59,29 @@ def _dump_tags(tags: list[str] | None) -> str:
     return json.dumps(tags or [], ensure_ascii=False, separators=(",", ":"))
 
 
+def _dump_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 def ensure_admin_knowledge_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(ADMIN_KNOWLEDGE_SCHEMA)
+    _ensure_column(conn, "admin_knowledge_assets", "content", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "admin_knowledge_assets", "published_chunk_ids_json", "TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "admin_knowledge_assets", "published_at", "TEXT")
+    _ensure_column(conn, "admin_knowledge_assets", "last_publish_message", "TEXT")
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def _row_to_asset(row: sqlite3.Row) -> dict[str, Any]:
+    try:
+        published_chunk_ids = json.loads(row["published_chunk_ids_json"] or "[]")
+    except (IndexError, json.JSONDecodeError):
+        published_chunk_ids = []
     return {
         "id": row["id"],
         "title": row["title"],
@@ -66,8 +90,12 @@ def _row_to_asset(row: sqlite3.Row) -> dict[str, Any]:
         "attraction_id": row["attraction_id"],
         "status": row["status"],
         "chunk_count": int(row["chunk_count"]),
+        "content": row["content"] if "content" in row.keys() else "",
         "source_filename": row["source_filename"],
         "note": row["note"],
+        "published_chunk_ids": published_chunk_ids if isinstance(published_chunk_ids, list) else [],
+        "published_at": row["published_at"] if "published_at" in row.keys() else None,
+        "last_publish_message": row["last_publish_message"] if "last_publish_message" in row.keys() else None,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -102,9 +130,11 @@ def seed_admin_knowledge_if_empty(conn: sqlite3.Connection) -> None:
             """
             INSERT INTO admin_knowledge_assets (
               id, title, asset_type, scenic_area, attraction_id, status,
-              chunk_count, source_filename, note, created_at, updated_at
+              chunk_count, content, source_filename, note,
+              published_chunk_ids_json, published_at, last_publish_message,
+              created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -115,8 +145,12 @@ def seed_admin_knowledge_if_empty(conn: sqlite3.Connection) -> None:
                     None,
                     "published",
                     0,
+                    "",
                     "processed:knowledge_chunks.json",
                     "本地后台演示资产，真实 RAG chunks 不在此处直接改写。",
+                    _dump_json([]),
+                    None,
+                    None,
                     now,
                     now,
                 ),
@@ -128,8 +162,12 @@ def seed_admin_knowledge_if_empty(conn: sqlite3.Connection) -> None:
                     None,
                     "draft",
                     0,
+                    "",
                     "admin-seed",
                     "用于演示上传、草稿、发布和索引重建闭环。",
+                    _dump_json([]),
+                    None,
+                    None,
                     now,
                     now,
                 ),
@@ -184,6 +222,7 @@ def insert_asset(
     attraction_id: str | None = None,
     status: str = "draft",
     chunk_count: int = 0,
+    content: str = "",
     source_filename: str | None = None,
     note: str | None = None,
 ) -> dict[str, Any]:
@@ -195,9 +234,11 @@ def insert_asset(
             """
             INSERT INTO admin_knowledge_assets (
               id, title, asset_type, scenic_area, attraction_id, status,
-              chunk_count, source_filename, note, created_at, updated_at
+              chunk_count, content, source_filename, note,
+              published_chunk_ids_json, published_at, last_publish_message,
+              created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_id,
@@ -207,8 +248,12 @@ def insert_asset(
                 attraction_id,
                 status,
                 chunk_count,
+                content,
                 source_filename,
                 note,
+                _dump_json([]),
+                None,
+                None,
                 now,
                 now,
             ),
@@ -230,8 +275,12 @@ def update_asset(asset_id: str, updates: dict[str, Any]) -> dict[str, Any] | Non
         "attraction_id",
         "status",
         "chunk_count",
+        "content",
         "source_filename",
         "note",
+        "published_chunk_ids_json",
+        "published_at",
+        "last_publish_message",
     }
     clean = {key: value for key, value in updates.items() if key in allowed}
     if not clean:
@@ -260,6 +309,25 @@ def get_faq(faq_id: str) -> dict[str, Any] | None:
     with connect() as conn:
         ensure_admin_knowledge_schema(conn)
         row = conn.execute("SELECT * FROM admin_faqs WHERE id = ?", (faq_id,)).fetchone()
+    return _row_to_faq(row) if row else None
+
+
+def get_faq_by_source_gap_id(gap_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        ensure_admin_knowledge_schema(conn)
+        row = conn.execute(
+            """
+            SELECT *
+            FROM admin_faqs
+            WHERE source_gap_id = ?
+            ORDER BY
+              CASE status WHEN 'published' THEN 0 WHEN 'pending_review' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END,
+              updated_at DESC,
+              created_at DESC
+            LIMIT 1
+            """,
+            (gap_id,),
+        ).fetchone()
     return _row_to_faq(row) if row else None
 
 
@@ -326,51 +394,290 @@ def update_faq(faq_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
     return get_faq(faq_id)
 
 
+def _clean_chunk_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _chunk_content(text: str, *, target_size: int = 420) -> list[str]:
+    clean = text.strip()
+    if not clean:
+        return []
+    paragraphs = [part.strip() for part in re.split(r"\n{2,}|(?<=[。！？；])", clean) if part.strip()]
+    chunks: list[str] = []
+    current = ""
+    for paragraph in paragraphs:
+        if len(paragraph) > target_size:
+            if current:
+                chunks.append(_clean_chunk_text(current))
+                current = ""
+            for index in range(0, len(paragraph), target_size):
+                part = paragraph[index : index + target_size].strip()
+                if part:
+                    chunks.append(_clean_chunk_text(part))
+            continue
+        if current and len(current) + len(paragraph) > target_size:
+            chunks.append(_clean_chunk_text(current))
+            current = paragraph
+        else:
+            current = f"{current}{paragraph}" if current else paragraph
+    if current:
+        chunks.append(_clean_chunk_text(current))
+    return [chunk for chunk in chunks if chunk]
+
+
+def _normalize_attraction_id(conn: sqlite3.Connection, attraction_id: str | None) -> str | None:
+    if not attraction_id:
+        return None
+    row = conn.execute(
+        "SELECT id FROM attractions WHERE id = ? OR attraction_id = ?",
+        (attraction_id, attraction_id.upper()),
+    ).fetchone()
+    return str(row["id"]) if row else None
+
+
+def _insert_knowledge_chunk(
+    conn: sqlite3.Connection,
+    *,
+    chunk_id: str,
+    source_file: str,
+    source_section: str,
+    attraction_id: str | None,
+    title: str,
+    content: str,
+    tags: list[str],
+    chunk_type: str,
+    priority: int,
+    metadata: dict[str, Any],
+) -> None:
+    payload = {
+        "id": chunk_id,
+        "source_file": source_file,
+        "source_section": source_section,
+        "attraction_id": attraction_id,
+        "title": title,
+        "content": content,
+        "tags": tags,
+        "chunk_type": chunk_type,
+        "priority": priority,
+        "metadata": metadata,
+    }
+    conn.execute(
+        """
+        INSERT INTO knowledge_chunks (
+          id, source_file, source_section, attraction_id, title, content,
+          tags_json, chunk_type, priority, metadata_json, payload_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            chunk_id,
+            source_file,
+            source_section,
+            attraction_id,
+            title,
+            content,
+            _dump_json(tags),
+            chunk_type,
+            priority,
+            _dump_json(metadata),
+            _dump_json(payload),
+        ),
+    )
+
+
+def _publish_asset(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
+    asset = _row_to_asset(row)
+    asset_id = str(asset["id"])
+    prefix = f"admin-asset-{asset_id}"
+    conn.execute("DELETE FROM knowledge_chunks WHERE id LIKE ?", (f"{prefix}-%",))
+    chunks = _chunk_content(str(asset.get("content") or ""))
+    attraction_id = _normalize_attraction_id(conn, asset.get("attraction_id"))
+    if asset.get("attraction_id") and not attraction_id:
+        message = "发布失败：资产关联的景点 id 不存在，未写入 RAG。"
+        conn.execute(
+            """
+            UPDATE admin_knowledge_assets
+            SET last_publish_message = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (message, _now(), asset_id),
+        )
+        return {"id": asset_id, "chunk_ids": [], "message": message, "published": False}
+
+    chunk_ids: list[str] = []
+    source_file = f"admin:{asset.get('source_filename') or asset.get('title')}"
+    tags = [
+        "后台新增知识",
+        str(asset.get("asset_type") or "other"),
+        *( [str(asset["scenic_area"])] if asset.get("scenic_area") else [] ),
+    ]
+    for index, chunk_text in enumerate(chunks, start=1):
+        chunk_id = f"{prefix}-{index:03d}"
+        chunk_ids.append(chunk_id)
+        _insert_knowledge_chunk(
+            conn,
+            chunk_id=chunk_id,
+            source_file=source_file,
+            source_section=f"后台知识资产/{asset.get('title')}/第 {index} 段",
+            attraction_id=attraction_id,
+            title=str(asset.get("title") or "后台新增知识"),
+            content=chunk_text,
+            tags=tags,
+            chunk_type="admin_asset",
+            priority=92,
+            metadata={
+                "admin_source": "asset",
+                "asset_id": asset_id,
+                "source_filename": asset.get("source_filename"),
+                "scenic_area": asset.get("scenic_area"),
+                "published_by": "admin_knowledge_publish",
+            },
+        )
+
+    now = _now()
+    if chunk_ids:
+        message = f"已发布 {len(chunk_ids)} 个本地 RAG chunk。"
+        status = "published"
+    else:
+        message = "该资产没有可发布正文，未写入 RAG chunk。"
+        status = asset.get("status") or "draft"
+    conn.execute(
+        """
+        UPDATE admin_knowledge_assets
+        SET status = ?, chunk_count = ?, published_chunk_ids_json = ?,
+            published_at = ?, last_publish_message = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (status, len(chunk_ids), _dump_json(chunk_ids), now if chunk_ids else asset.get("published_at"), message, now, asset_id),
+    )
+    return {"id": asset_id, "chunk_ids": chunk_ids, "message": message, "published": bool(chunk_ids)}
+
+
+def _publish_faq(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
+    faq = _row_to_faq(row)
+    faq_id = str(faq["id"])
+    source_gap_id = str(faq.get("source_gap_id") or "") or None
+    chunk_id = f"admin-faq-{faq_id}-001"
+    conn.execute("DELETE FROM knowledge_chunks WHERE id = ?", (chunk_id,))
+    attraction_id = _normalize_attraction_id(conn, faq.get("attraction_id"))
+    if faq.get("attraction_id") and not attraction_id:
+        return {
+            "id": faq_id,
+            "chunk_ids": [],
+            "message": "FAQ 关联的景点 id 不存在，未写入 RAG。",
+            "published": False,
+        }
+    content = _clean_chunk_text(f"问题：{faq.get('question')}\n回答：{faq.get('answer')}")
+    if not content:
+        return {"id": faq_id, "chunk_ids": [], "message": "FAQ 内容为空。", "published": False}
+    tags = ["后台FAQ", *[str(tag) for tag in faq.get("tags", [])], *( [str(faq["scenic_area"])] if faq.get("scenic_area") else [] )]
+    _insert_knowledge_chunk(
+        conn,
+        chunk_id=chunk_id,
+        source_file=f"admin:faq:{faq_id}",
+        source_section=f"后台 FAQ/{faq.get('question')}",
+        attraction_id=attraction_id,
+        title=str(faq.get("question") or "后台 FAQ"),
+        content=content,
+        tags=tags,
+        chunk_type="admin_faq",
+        priority=94,
+        metadata={
+            "admin_source": "faq",
+            "source_type": "admin_faq",
+            "faq_id": faq_id,
+            "source_gap_id": source_gap_id,
+            "scenic_area": faq.get("scenic_area"),
+            "published_by": "admin_knowledge_publish",
+        },
+    )
+    now = _now()
+    conn.execute("UPDATE admin_faqs SET status = 'published', updated_at = ? WHERE id = ?", (now, faq_id))
+    gap_status_after_publish = None
+    if source_gap_id:
+        ensure_knowledge_gap_schema(conn)
+        resolution_note = "FAQ 已发布到本地知识库，知识缺口已自动标记为 resolved。"
+        cursor = conn.execute(
+            """
+            UPDATE knowledge_gaps
+            SET status = 'resolved',
+                linked_faq_id = ?,
+                resolved_at = ?,
+                resolution_note = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (faq_id, now, resolution_note, now, source_gap_id),
+        )
+        if cursor.rowcount:
+            gap_status_after_publish = "resolved"
+    return {
+        "id": faq_id,
+        "faq_id": faq_id,
+        "source_gap_id": source_gap_id,
+        "published_chunks": 1,
+        "gap_status_after_publish": gap_status_after_publish,
+        "chunk_ids": [chunk_id],
+        "message": "FAQ 已发布为 1 个本地 RAG chunk。",
+        "published": True,
+    }
+    return {"id": faq_id, "chunk_ids": [chunk_id], "message": "FAQ 已发布为 1 个本地 RAG chunk。", "published": True}
+
+
 def publish_admin_knowledge(
     *,
     asset_ids: list[str] | None = None,
     faq_ids: list[str] | None = None,
     publish_all_drafts: bool = False,
-) -> dict[str, int]:
-    now = _now()
+) -> dict[str, Any]:
+    asset_results: list[dict[str, Any]] = []
+    faq_results: list[dict[str, Any]] = []
     with connect() as conn:
         seed_admin_knowledge_if_empty(conn)
-        asset_count = 0
-        faq_count = 0
         if publish_all_drafts or not (asset_ids or faq_ids):
-            asset_cursor = conn.execute(
+            asset_rows = conn.execute(
                 """
-                UPDATE admin_knowledge_assets
-                SET status = 'published', updated_at = ?
+                SELECT *
+                FROM admin_knowledge_assets
                 WHERE status IN ('draft', 'pending_review')
+                   AND TRIM(COALESCE(content, '')) <> ''
+                ORDER BY updated_at DESC, created_at DESC
                 """,
-                (now,),
-            )
-            faq_cursor = conn.execute(
+            ).fetchall()
+            faq_rows = conn.execute(
                 """
-                UPDATE admin_faqs
-                SET status = 'published', updated_at = ?
+                SELECT *
+                FROM admin_faqs
                 WHERE status IN ('draft', 'pending_review')
+                ORDER BY updated_at DESC, created_at DESC
                 """,
-                (now,),
-            )
-            asset_count = int(asset_cursor.rowcount)
-            faq_count = int(faq_cursor.rowcount)
+            ).fetchall()
         else:
+            asset_rows = []
             for asset_id in asset_ids or []:
-                cursor = conn.execute(
-                    "UPDATE admin_knowledge_assets SET status = 'published', updated_at = ? WHERE id = ?",
-                    (now, asset_id),
-                )
-                asset_count += int(cursor.rowcount)
+                row = conn.execute("SELECT * FROM admin_knowledge_assets WHERE id = ?", (asset_id,)).fetchone()
+                if row:
+                    asset_rows.append(row)
+            faq_rows = []
             for faq_id in faq_ids or []:
-                cursor = conn.execute(
-                    "UPDATE admin_faqs SET status = 'published', updated_at = ? WHERE id = ?",
-                    (now, faq_id),
-                )
-                faq_count += int(cursor.rowcount)
+                row = conn.execute("SELECT * FROM admin_faqs WHERE id = ?", (faq_id,)).fetchone()
+                if row:
+                    faq_rows.append(row)
+        for row in asset_rows:
+            asset_results.append(_publish_asset(conn, row))
+        for row in faq_rows:
+            faq_results.append(_publish_faq(conn, row))
         conn.commit()
-    return {"published_assets": asset_count, "published_faqs": faq_count}
+    published_assets = sum(1 for item in asset_results if item.get("published"))
+    published_faqs = sum(1 for item in faq_results if item.get("published"))
+    published_chunks = sum(len(item.get("chunk_ids") or []) for item in [*asset_results, *faq_results])
+    return {
+        "published_assets": published_assets,
+        "published_faqs": published_faqs,
+        "published_chunks": published_chunks,
+        "asset_results": asset_results,
+        "faq_results": faq_results,
+    }
 
 
 def count_assets() -> int:

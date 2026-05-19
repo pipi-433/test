@@ -5593,6 +5593,17 @@
   line-height: 1.5;
 }
 
+.knowledge-gap-row__note {
+  color: var(--color-success-700) !important;
+}
+
+.admin-linked-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-ink-500);
+  font-size: var(--font-xs);
+}
+
 .knowledge-gap-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6534,6 +6545,7 @@
   color: #4a514d;
 }
 
+.admin-knowledge-asset-form,
 .admin-faq-editor,
 .admin-setting-form,
 .admin-slider-list {
@@ -6541,6 +6553,16 @@
   gap: 14px;
 }
 
+.admin-knowledge-asset-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.admin-knowledge-asset-form__content {
+  grid-column: 1 / -1;
+}
+
+.admin-knowledge-asset-form label,
 .admin-faq-editor label,
 .admin-setting-form label,
 .admin-slider-list label {
@@ -6550,6 +6572,9 @@
   font-weight: 850;
 }
 
+.admin-knowledge-asset-form input,
+.admin-knowledge-asset-form select,
+.admin-knowledge-asset-form textarea,
 .admin-faq-editor input,
 .admin-faq-editor textarea,
 .admin-setting-form input,
@@ -6566,10 +6591,29 @@
   font: inherit;
 }
 
+.admin-knowledge-asset-form textarea,
 .admin-faq-editor textarea,
 .admin-setting-form textarea {
   resize: vertical;
   line-height: 1.6;
+}
+
+.admin-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.admin-inline-actions span {
+  color: #52615c;
+  font-size: 12px;
+}
+
+@media (max-width: 860px) {
+  .admin-knowledge-asset-form {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-setting-form .admin-checkbox-row {

@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import status
 
 from app.core.errors import ApiError
+from app.repositories import admin_knowledge_repository
 from app.repositories import knowledge_gap_repository as repo
 
 
@@ -65,6 +66,47 @@ def _get_gap_or_error(gap_id: str) -> dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
         )
     return gap
+
+
+def _infer_attraction_id(sources: list[dict[str, Any]]) -> str | None:
+    for source in sources:
+        attraction_id = source.get("attraction_id")
+        if attraction_id:
+            return str(attraction_id)
+    return None
+
+
+def _build_faq_payload_from_gap(gap: dict[str, Any]) -> dict[str, Any]:
+    sources = gap.get("matched_sources") or []
+    if sources:
+        answer = (
+            "该知识缺口已有命中资料线索，请管理员核对来源后补充标准 FAQ。"
+            "发布前请确认表述、时效与适用场景，避免把低置信草稿直接作为事实。"
+        )
+        tags = ["知识缺口", "待核对", str(gap.get("trigger_type") or "manual")]
+    else:
+        answer = (
+            "当前没有可靠来源，需管理员补充资料后发布。"
+            "请先确认官方资料、开放时间、演出安排或服务规则，再加入本地知识库。"
+        )
+        tags = ["知识缺口", "待补充", str(gap.get("trigger_type") or "manual")]
+    return {
+        "question": str(gap.get("query") or "").strip(),
+        "answer": answer,
+        "scenic_area": None,
+        "attraction_id": _infer_attraction_id(sources),
+        "tags": tags,
+    }
+
+
+def _format_suggested_faq(payload: dict[str, Any], *, faq_id: str | None = None) -> str:
+    suffix = f"\n\nFAQ 草稿 ID：{faq_id}" if faq_id else ""
+    return (
+        f"### 问题\n{payload['question']}\n\n"
+        f"### FAQ 草稿回答\n{payload['answer']}\n\n"
+        "### 发布提醒\nFAQ 草稿需管理员确认后，才能发布进入本地 RAG knowledge_chunks。"
+        f"{suffix}"
+    )
 
 
 def list_knowledge_gaps(*, status_filter: str | None = None) -> list[dict[str, Any]]:
@@ -146,6 +188,51 @@ def safe_record_knowledge_gap(
 
 def generate_faq_draft(gap_id: str) -> dict[str, Any]:
     gap = _get_gap_or_error(gap_id)
+    payload = _build_faq_payload_from_gap(gap)
+    existing_faq = admin_knowledge_repository.get_faq_by_source_gap_id(gap_id)
+    if existing_faq:
+        faq = existing_faq
+    else:
+        faq = admin_knowledge_repository.insert_faq(
+            question=payload["question"],
+            answer=payload["answer"],
+            scenic_area=payload["scenic_area"],
+            attraction_id=payload["attraction_id"],
+            tags=payload["tags"],
+            status="draft",
+            source_gap_id=gap_id,
+        )
+    status_value = "resolved" if faq.get("status") == "published" else "drafted"
+    resolution_note = (
+        "FAQ 已发布到本地知识库。"
+        if faq.get("status") == "published"
+        else "FAQ 草稿已生成，待管理员确认并发布。"
+    )
+    updates = {
+        "suggested_faq": _format_suggested_faq(
+            {
+                "question": faq.get("question") or payload["question"],
+                "answer": faq.get("answer") or payload["answer"],
+            },
+            faq_id=faq["id"],
+        ),
+        "status": status_value,
+        "linked_faq_id": faq["id"],
+        "resolution_note": resolution_note,
+    }
+    if faq.get("status") == "published":
+        updates["resolved_at"] = gap.get("resolved_at") or gap.get("updated_at")
+    updated = repo.update_knowledge_gap(gap_id, updates)
+    if updated is None:
+        raise ApiError(
+            code="KNOWLEDGE_GAP_NOT_FOUND",
+            message="生成草稿时没有找到该知识缺口。",
+            cause=f"knowledge_gap id={gap_id} disappeared before draft update.",
+            fix="请刷新列表后重试。",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    updated["faq"] = faq
+    return updated
     sources = gap.get("matched_sources") or []
     if sources:
         source_lines = []

@@ -197,6 +197,7 @@ class AdminKnowledgeAssetCreateRequest(BaseModel):
     scenic_area: str | None = None
     attraction_id: str | None = None
     status: str = "draft"
+    content: str | None = None
     source_filename: str | None = None
     note: str | None = None
 
@@ -208,6 +209,7 @@ class AdminKnowledgeAssetUpdateRequest(BaseModel):
     attraction_id: str | None = None
     status: str | None = None
     chunk_count: int | None = None
+    content: str | None = None
     source_filename: str | None = None
     note: str | None = None
 
