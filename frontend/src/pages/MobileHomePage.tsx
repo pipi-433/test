@@ -10,8 +10,10 @@ import {
   recommendRoute,
   sendRouteConversation,
   speakAvatarText,
+  stopAvatarSpeech,
   submitFeedback,
   understandQuery,
+  warmupAvatar,
 } from "../api/client";
 import type {
   AvatarClipId,
@@ -40,6 +42,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { ImageIcon, type LingshanImageIconName } from "../components/icons/LingshanImageIcons";
 import { AvatarLivePanel } from "../components/visitor/AvatarLivePanel";
 import { RouteTopologySummary, StopTopologyMeta } from "../components/visitor/RouteTopologyCards";
+import { getAttractionCover, getAttractionMedia } from "../data/attractionMedia";
 import { useDigitalHumanState } from "../hooks/useDigitalHumanState";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis";
@@ -106,6 +109,10 @@ function shortText(value: string | undefined, limit = 88) {
   return value.length > limit ? `${value.slice(0, limit)}...` : value;
 }
 
+function attractionCoverAlt(attractionName: string | undefined, mediaAlt?: string) {
+  return mediaAlt || `${attractionName || "景点"}景点封面`;
+}
+
 function crowdLabel(level: CrowdLevel) {
   return level === "high" ? "拥挤" : level === "medium" ? "适中" : "舒适";
 }
@@ -152,6 +159,19 @@ function understandingTone(value: QueryUnderstandingResult | undefined) {
     return "neutral" as const;
   }
   return value.domain === "out_of_scope" || value.domain === "unclear" ? "warning" : "ok";
+}
+
+function groundingLabel(value: string | undefined) {
+  const labels: Record<string, string> = {
+    rag_sources_only: "基于本地资料库生成",
+    dashscope_search_gap_fill: "Qwen 联网补充背景",
+    local_structured_data: "本地结构化数据",
+    local_route_planner: "受约束路线规划",
+    local_guardrail: "本地安全边界",
+    no_sources: "暂无本地来源",
+    not_applicable: "本地规则响应",
+  };
+  return labels[value || ""] || "本地规则响应";
 }
 
 function constraintLabel(value: string | undefined) {
@@ -246,10 +266,21 @@ function avatarClipForAttractionName(name: string | undefined): { clipId: Avatar
 }
 
 const avatarClipLockMs: Record<AvatarClipId, number> = {
-  fan_gong_intro_45s: 10_000,
-  jiulong_guanyu_intro_30s: 10_000,
-  lingshan_buddha_intro_45s: 8_000,
+  fan_gong_intro_45s: 39_000,
+  jiulong_guanyu_intro_30s: 33_000,
+  lingshan_buddha_intro_45s: 36_000,
+  welcome_intro_5s: 6_000,
 };
+const welcomeIntroClipId: AvatarClipId = "welcome_intro_5s";
+const welcomeIntroDelayMs = 5000;
+const welcomeIntroFallbackDelayMs = 11000;
+const welcomeIntroFollowupLeadMs = 2500;
+const welcomeIntroReplayGraceMs = 8000;
+const welcomeIntroText = "您好，我是灵境导游小灵，正在为您准备讲解。";
+
+function remainingPlaybackDelay(startedAt: number, plannedDurationMs: number) {
+  return Math.max(0, plannedDurationMs - (Date.now() - startedAt));
+}
 
 function visionSpeechSummary(result: VisionResponse) {
   const topCandidate = result.candidates[0];
@@ -271,7 +302,7 @@ export function MobileHomePage() {
   const composingRef = useRef(false);
   const [attractions, setAttractions] = useState<Attraction[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [question, setQuestion] = useState("灵山大佛适合怎么游览？");
+  const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState("");
   const [qaResult, setQaResult] = useState<QAResponse | null>(null);
   const [visionResult, setVisionResult] = useState<VisionResponse | null>(null);
@@ -308,6 +339,8 @@ export function MobileHomePage() {
   const [avatarActionLoading, setAvatarActionLoading] = useState<"route" | "clip" | null>(null);
   const [avatarActionMessage, setAvatarActionMessage] = useState("");
   const [avatarStatus, setAvatarStatus] = useState<AvatarStatusResponse | null>(null);
+  const [avatarSessionId, setAvatarSessionId] = useState<string | null>(null);
+  const avatarWarmupSessionRef = useRef<string | null>(null);
   const [activeNav, setActiveNav] = useState<ScenicNavKey>("recommend");
   const [answerDetailOpen, setAnswerDetailOpen] = useState(false);
   const [error, setError] = useState("");
@@ -316,6 +349,9 @@ export function MobileHomePage() {
   const recognition = useSpeechRecognition();
   const visitorLocalTtsEnabled = false;
   const lastAvatarSpeakRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  const avatarFollowupTimerRef = useRef<number | null>(null);
+  const avatarFollowupTokenRef = useRef(0);
+  const avatarWelcomeDelayUntilRef = useRef(0);
   const [avatarPlaybackLockedUntil, setAvatarPlaybackLockedUntil] = useState(0);
   const [avatarPlaybackTick, setAvatarPlaybackTick] = useState(0);
 
@@ -332,6 +368,8 @@ export function MobileHomePage() {
     }, 500);
     return () => window.clearInterval(timer);
   }, [avatarPlaybackLockedUntil]);
+
+  useEffect(() => () => clearPendingAvatarFollowup(), []);
 
   useEffect(() => {
     let mounted = true;
@@ -357,6 +395,21 @@ export function MobileHomePage() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!avatarSessionId || avatarWarmupSessionRef.current === avatarSessionId) {
+      return;
+    }
+    avatarWarmupSessionRef.current = avatarSessionId;
+    void warmupAvatar({
+      interrupt: false,
+      session_id: avatarSessionId,
+      source: "system",
+      text: "您好。",
+    }).catch(() => {
+      // Warmup is best-effort; the page keeps mock fallback if the sidecar is not ready.
+    });
+  }, [avatarSessionId]);
 
   useEffect(() => {
     let mounted = true;
@@ -414,6 +467,10 @@ export function MobileHomePage() {
     () => avatarClipForAttractionName(confirmedVisionCandidate()?.attraction.name),
     [confirmedVisionId, visionResult],
   );
+  const confirmedVisionMedia = useMemo(
+    () => getAttractionMedia(confirmedVisionCandidate()?.attraction.id),
+    [confirmedVisionId, visionResult],
+  );
   const avatarPlaybackRemainingMs = Math.max(0, avatarPlaybackLockedUntil - Math.max(Date.now(), avatarPlaybackTick));
   const avatarPlaybackLocked = avatarPlaybackRemainingMs > 0;
   const avatarPlaybackRemainingSeconds = Math.ceil(avatarPlaybackRemainingMs / 1000);
@@ -429,6 +486,138 @@ export function MobileHomePage() {
       setAvatarPlaybackLockedUntil(0);
       setAvatarActionLoading(null);
       setAvatarPlaybackTick(Date.now());
+    }, delayMs);
+  }
+
+  function clearPendingAvatarFollowup({ preserveWelcome = false }: { preserveWelcome?: boolean } = {}) {
+    avatarFollowupTokenRef.current += 1;
+    if (!preserveWelcome) {
+      avatarWelcomeDelayUntilRef.current = 0;
+    }
+    if (avatarFollowupTimerRef.current !== null) {
+      window.clearTimeout(avatarFollowupTimerRef.current);
+      avatarFollowupTimerRef.current = null;
+    }
+  }
+
+  async function playWelcomeIntroOnly() {
+    clearPendingAvatarFollowup();
+    setAvatarActionMessage("数字人正在为您准备讲解。");
+    let delayMs = welcomeIntroDelayMs;
+    avatarWelcomeDelayUntilRef.current = Date.now() + delayMs;
+    const introStartedAt = Date.now();
+    try {
+      const intro = await playAvatarClip({
+        clip_id: welcomeIntroClipId,
+        source: "demo",
+        interrupt: true,
+        session_id: avatarSessionId,
+      });
+      delayMs = remainingPlaybackDelay(introStartedAt, welcomeIntroDelayMs);
+      if (!intro.accepted || intro.fallback_reason) {
+        const fallbackStartedAt = Date.now();
+        const fallback = await speakAvatarText({
+          text: welcomeIntroText,
+          emotion: "happy",
+          source: "system",
+          interrupt: true,
+          session_id: avatarSessionId,
+        });
+        delayMs = fallback.accepted ? remainingPlaybackDelay(fallbackStartedAt, welcomeIntroFallbackDelayMs) : 0;
+      }
+    } catch {
+      try {
+        const fallbackStartedAt = Date.now();
+        const fallback = await speakAvatarText({
+          text: welcomeIntroText,
+          emotion: "happy",
+          source: "system",
+          interrupt: true,
+          session_id: avatarSessionId,
+        });
+        delayMs = fallback.accepted ? remainingPlaybackDelay(fallbackStartedAt, welcomeIntroFallbackDelayMs) : 0;
+      } catch {
+        delayMs = 0;
+      }
+    }
+    avatarWelcomeDelayUntilRef.current = delayMs > 0 ? Date.now() + delayMs : 0;
+  }
+
+  async function playWelcomeThen(action: () => Promise<void> | void) {
+    clearPendingAvatarFollowup({ preserveWelcome: true });
+    const token = avatarFollowupTokenRef.current;
+    const remainingWelcomeMs = Math.max(0, avatarWelcomeDelayUntilRef.current - Date.now());
+    const welcomeCompletedMs = avatarWelcomeDelayUntilRef.current > 0 ? Date.now() - avatarWelcomeDelayUntilRef.current : Number.POSITIVE_INFINITY;
+    if (remainingWelcomeMs > welcomeIntroFollowupLeadMs) {
+      avatarFollowupTimerRef.current = window.setTimeout(() => {
+        avatarFollowupTimerRef.current = null;
+        if (token === avatarFollowupTokenRef.current) {
+          void action();
+        }
+      }, remainingWelcomeMs - welcomeIntroFollowupLeadMs);
+      return;
+    }
+    if (remainingWelcomeMs > 0 || welcomeCompletedMs <= welcomeIntroReplayGraceMs) {
+      await action();
+      return;
+    }
+    setAvatarActionMessage("数字人正在为您准备讲解。");
+    let delayMs = welcomeIntroDelayMs;
+    const introStartedAt = Date.now();
+    try {
+      const intro = await playAvatarClip({
+        clip_id: welcomeIntroClipId,
+        source: "demo",
+        interrupt: true,
+        session_id: avatarSessionId,
+      });
+      delayMs = remainingPlaybackDelay(introStartedAt, welcomeIntroDelayMs);
+      if (!intro.accepted || intro.fallback_reason) {
+        const fallbackStartedAt = Date.now();
+        const fallback = await speakAvatarText({
+          text: welcomeIntroText,
+          emotion: "happy",
+          source: "system",
+          interrupt: true,
+          session_id: avatarSessionId,
+        });
+        if (!fallback.accepted) {
+          delayMs = 0;
+        } else {
+          delayMs = remainingPlaybackDelay(fallbackStartedAt, welcomeIntroFallbackDelayMs);
+        }
+      }
+    } catch {
+      try {
+        const fallbackStartedAt = Date.now();
+        const fallback = await speakAvatarText({
+          text: welcomeIntroText,
+          emotion: "happy",
+          source: "system",
+          interrupt: true,
+          session_id: avatarSessionId,
+        });
+        if (!fallback.accepted) {
+          delayMs = 0;
+        } else {
+          delayMs = remainingPlaybackDelay(fallbackStartedAt, welcomeIntroFallbackDelayMs);
+        }
+      } catch {
+        delayMs = 0;
+      }
+    }
+    if (token !== avatarFollowupTokenRef.current) {
+      return;
+    }
+    if (delayMs <= 0) {
+      await action();
+      return;
+    }
+    avatarFollowupTimerRef.current = window.setTimeout(() => {
+      avatarFollowupTimerRef.current = null;
+      if (token === avatarFollowupTokenRef.current) {
+        void action();
+      }
     }, delayMs);
   }
 
@@ -494,23 +683,27 @@ export function MobileHomePage() {
       return;
     }
     lastAvatarSpeakRef.current = { text: cleanText, at: now };
-    try {
-      const result = await speakAvatarText({
-        text: cleanText,
-        emotion: "happy",
-        source: options.source || "qa",
-        interrupt: true,
-      });
-      if (result.accepted) {
-        setHumanState(options.endState || "happy", "已发送给数字人表现层播报。");
-      } else {
+    void playWelcomeThen(async () => {
+      setAvatarActionMessage("数字人正在生成语音，请稍候。");
+      try {
+        const result = await speakAvatarText({
+          text: cleanText,
+          emotion: "happy",
+          source: options.source || "qa",
+          interrupt: false,
+          session_id: avatarSessionId,
+        });
+        if (result.accepted) {
+          setHumanState(options.endState || "happy", "已发送给数字人表现层播报。");
+        } else {
+          setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
+          setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
+        }
+      } catch {
         setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
         setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
       }
-    } catch {
-      setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
-      setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
-    }
+    });
   }
 
   async function speakLatestAnswer() {
@@ -535,27 +728,32 @@ export function MobileHomePage() {
       return;
     }
     setAvatarActionMessage("");
-    lockAvatarPlayback("route", source === "route" ? 5_000 : 4_000);
-    try {
-      const result = await speakAvatarText({
-        text: speechExcerpt(text, 180),
-        emotion: "happy",
-        source,
-        interrupt: true,
-      });
-      if (result.accepted) {
-        setAvatarActionMessage(result.fallback_reason ? "已发送给数字人播报，当前表现层可自动降级。" : "已发送给数字人播报。");
-        setHumanState("happy", "已发送给数字人播报。");
-      } else {
+    lockAvatarPlayback("route", (source === "route" ? 5_000 : 4_000) + welcomeIntroDelayMs);
+    setHumanState("speaking", "数字人正在准备播报。");
+    void playWelcomeThen(async () => {
+      setAvatarActionMessage("数字人正在生成语音，请稍候。");
+      try {
+        const result = await speakAvatarText({
+          text: speechExcerpt(text, 140),
+          emotion: "happy",
+          source,
+          interrupt: false,
+          session_id: avatarSessionId,
+        });
+        if (result.accepted) {
+          setAvatarActionMessage(result.fallback_reason ? "已发送给数字人播报，当前表现层可自动降级。" : "已发送给数字人播报。");
+          setHumanState("happy", "已发送给数字人播报。");
+        } else {
+          setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
+          setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
+          unlockAvatarPlaybackSoon();
+        }
+      } catch {
         setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
         setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
         unlockAvatarPlaybackSoon();
       }
-    } catch {
-      setAvatarActionMessage("数字人暂不可用，请查看页面文本。");
-      setHumanState("comforting", "数字人暂不可用，页面文本仍可查看。");
-      unlockAvatarPlaybackSoon();
-    }
+    });
   }
 
   async function startLiveAvatarBroadcast() {
@@ -570,8 +768,14 @@ export function MobileHomePage() {
     setAvatarActionMessage("已发送给数字人播报。");
   }
 
-  function stopLiveAvatarBroadcast() {
+  async function stopLiveAvatarBroadcast() {
     speech.stop();
+    clearPendingAvatarFollowup();
+    try {
+      await stopAvatarSpeech({ session_id: avatarSessionId });
+    } catch {
+      // Page state still resets even if the presentation sidecar is already gone.
+    }
     setAvatarPlaybackLockedUntil(0);
     setAvatarActionLoading(null);
     setAvatarPlaybackTick(Date.now());
@@ -626,6 +830,9 @@ export function MobileHomePage() {
     setClarificationOptions([]);
     speech.stop();
     setHumanState("thinking", "我正在先理解问题边界，再决定是否检索资料或规划路线。");
+    if (!avatarPlaybackLocked) {
+      void playWelcomeIntroOnly();
+    }
     const matchedAttraction = attractions.find((item) => cleanQuestion.includes(item.name));
     const explicitAttractionId = matchedAttraction?.id || undefined;
     const routeContextAttractionId =
@@ -707,7 +914,8 @@ export function MobileHomePage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void submitQuestion();
+    const formQuestion = event.currentTarget.querySelector<HTMLInputElement>("input")?.value.trim();
+    void submitQuestion(formQuestion || question);
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -715,7 +923,7 @@ export function MobileHomePage() {
       return;
     }
     event.preventDefault();
-    void submitQuestion();
+    void submitQuestion(event.currentTarget.value);
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -791,27 +999,32 @@ export function MobileHomePage() {
     const text = routeAvatarSpeakSummary(routeResult);
     speech.stop();
     setAvatarActionMessage("");
-    lockAvatarPlayback("route", 5_000);
-    try {
-      const result = await speakAvatarText({
-        text,
-        emotion: "happy",
-        source: "route",
-        interrupt: true,
-      });
-      if (result.accepted) {
-        setAvatarActionMessage(result.fallback_reason ? "已发送给数字人播报，当前表现层可自动降级。" : "已发送给数字人播报。");
-        setHumanState("happy", "已发送给数字人播报。");
-      } else {
+    lockAvatarPlayback("route", 5_000 + welcomeIntroDelayMs);
+    setHumanState("speaking", "数字人正在准备播报路线摘要。");
+    void playWelcomeThen(async () => {
+      setAvatarActionMessage("数字人正在生成语音，请稍候。");
+      try {
+        const result = await speakAvatarText({
+          text,
+          emotion: "happy",
+          source: "route",
+          interrupt: false,
+          session_id: avatarSessionId,
+        });
+        if (result.accepted) {
+          setAvatarActionMessage(result.fallback_reason ? "已发送给数字人播报，当前表现层可自动降级。" : "已发送给数字人播报。");
+          setHumanState("happy", "已发送给数字人播报。");
+        } else {
+          setAvatarActionMessage("已切换为文本播报/稍后重试。");
+          setHumanState("comforting", "数字人暂不可用，路线摘要请查看页面文本。");
+          unlockAvatarPlaybackSoon();
+        }
+      } catch {
         setAvatarActionMessage("已切换为文本播报/稍后重试。");
         setHumanState("comforting", "数字人暂不可用，路线摘要请查看页面文本。");
         unlockAvatarPlaybackSoon();
       }
-    } catch {
-      setAvatarActionMessage("已切换为文本播报/稍后重试。");
-      setHumanState("comforting", "数字人暂不可用，路线摘要请查看页面文本。");
-      unlockAvatarPlaybackSoon();
-    }
+    });
   }
 
   async function playConfirmedAvatarClip() {
@@ -825,26 +1038,31 @@ export function MobileHomePage() {
     }
     speech.stop();
     setAvatarActionMessage("");
-    lockAvatarPlayback("clip", avatarClipLockMs[clip.clipId] || 10_000);
-    try {
-      const result = await playAvatarClip({
-        clip_id: clip.clipId,
-        source: "attraction",
-        interrupt: true,
-      });
-      if (result.accepted) {
-        setAvatarActionMessage(result.fallback_reason ? "已发送给数字人讲解，当前表现层可自动降级。" : "已发送给数字人讲解。");
-        setHumanState("happy", `已发送${clip.label}讲解给数字人。`);
-      } else {
+    lockAvatarPlayback("clip", (avatarClipLockMs[clip.clipId] || 10_000) + welcomeIntroDelayMs);
+    setHumanState("speaking", `数字人正在准备${clip.label}讲解。`);
+    void playWelcomeThen(async () => {
+      setAvatarActionMessage("数字人正在加载预存讲解，请稍候。");
+      try {
+        const result = await playAvatarClip({
+          clip_id: clip.clipId,
+          source: "attraction",
+          interrupt: false,
+          session_id: avatarSessionId,
+        });
+        if (result.accepted) {
+          setAvatarActionMessage(result.fallback_reason ? "已发送给数字人讲解，当前表现层可自动降级。" : "已发送给数字人讲解。");
+          setHumanState("happy", `已发送${clip.label}讲解给数字人。`);
+        } else {
+          setAvatarActionMessage("已切换为文本播报/稍后重试。");
+          setHumanState("comforting", `${clip.label}的预存数字人讲解暂不可用，你可以点击一键讲解查看本地知识库文本。`);
+          unlockAvatarPlaybackSoon();
+        }
+      } catch {
         setAvatarActionMessage("已切换为文本播报/稍后重试。");
         setHumanState("comforting", `${clip.label}的预存数字人讲解暂不可用，你可以点击一键讲解查看本地知识库文本。`);
         unlockAvatarPlaybackSoon();
       }
-    } catch {
-      setAvatarActionMessage("已切换为文本播报/稍后重试。");
-      setHumanState("comforting", `${clip.label}的预存数字人讲解暂不可用，你可以点击一键讲解查看本地知识库文本。`);
-      unlockAvatarPlaybackSoon();
-    }
+    });
   }
 
   function syncRouteStateFromConversation(result: RouteConversationResponse) {
@@ -1090,6 +1308,7 @@ export function MobileHomePage() {
         chrome={activeNav === "recommend" ? "preview" : "full"}
         onStartBroadcast={() => void startLiveAvatarBroadcast()}
         onStopBroadcast={stopLiveAvatarBroadcast}
+        onSessionChange={setAvatarSessionId}
         sidecarUrl={avatarStatus?.sidecar_url || undefined}
         state={humanState}
         status={avatarStatus}
@@ -1188,21 +1407,32 @@ export function MobileHomePage() {
             </div>
             {recommendedAttractions.length ? (
               <div className="recommend-spot-list">
-                {recommendedAttractions.map((item, index) => (
-                  <article className="recommend-spot-card" key={item.id}>
-                    <div className="recommend-spot-card__image scenic-image-placeholder" aria-hidden="true">
-                      <ImageIcon name={index === 1 ? "lotus" : index === 2 ? "brahma-palace" : "buddha"} size={34} />
-                    </div>
-                    <div className="recommend-spot-card__body">
-                      <div className="recommend-spot-card__title">
-                        <h3>{item.name}</h3>
-                        <span>{item.category || "核心地标"}</span>
+                {recommendedAttractions.map((item, index) => {
+                  const media = getAttractionMedia(item.id);
+                  const cover = getAttractionCover(item.id);
+                  return (
+                    <article className="recommend-spot-card" key={item.id}>
+                      <div
+                        className={cover ? "recommend-spot-card__image recommend-spot-card__image--photo" : "recommend-spot-card__image scenic-image-placeholder"}
+                        aria-hidden={cover ? undefined : true}
+                      >
+                        {cover ? (
+                          <img alt={attractionCoverAlt(item.name, media?.alt)} decoding="async" loading={index === 0 ? "eager" : "lazy"} src={cover} />
+                        ) : (
+                          <ImageIcon name={index === 1 ? "lotus" : index === 2 ? "brahma-palace" : "buddha"} size={34} />
+                        )}
                       </div>
-                      <p>{shortText(item.summary || item.description, 44)}</p>
-                      <small>客流：{index === 1 ? "中等" : "舒适"}　预计停留：{index === 1 ? "40" : index === 2 ? "30-40" : "15-20"} 分钟</small>
-                    </div>
-                  </article>
-                ))}
+                      <div className="recommend-spot-card__body">
+                        <div className="recommend-spot-card__title">
+                          <h3>{item.name}</h3>
+                          <span>{item.category || "核心地标"}</span>
+                        </div>
+                        <p>{shortText(item.summary || item.description, 44)}</p>
+                        <small>客流：{index === 1 ? "中等" : "舒适"}　预计停留：{index === 1 ? "40" : index === 2 ? "30-40" : "15-20"} 分钟</small>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             ) : (
               <p className="empty-state mobile-empty">正在等待景点数据，确认后端启动后会自动加载。</p>
@@ -1371,8 +1601,10 @@ export function MobileHomePage() {
                 </div>
               </div>
               <div className="guide-provider-row">
-                <span>{qaResult.grounding_mode === "rag_sources_only" ? "基于本地资料库生成" : "本地规则响应"}</span>
+                <span>{groundingLabel(qaResult.grounding_mode)}</span>
                 <span>Provider: {qaResult.provider || qaResult.mode}</span>
+                {qaResult.model ? <span>Model: {qaResult.model}</span> : null}
+                {qaResult.provider_latency_ms ? <span>LLM: {qaResult.provider_latency_ms} ms</span> : null}
                 {qaResult.fallback_reason ? <span>Fallback: {qaResult.fallback_reason}</span> : null}
               </div>
               <section className="guide-action-grid" aria-label="讲解操作">
@@ -1473,21 +1705,26 @@ export function MobileHomePage() {
             <StatusBadge tone="ok">{qaResult.recommendations.length} 个候选</StatusBadge>
           </div>
           <div className="recommendation-list">
-            {qaResult.recommendations.map((item) => (
-              <article className="recommendation-item" key={item.attraction_id}>
-                <div>
-                  <strong>{item.name}</strong>
-                  <span>
-                    {item.scenic_area} · 规则分 {item.score}
-                  </span>
-                  <p>{item.reason}</p>
-                  <small>{item.matched_interests.join(" / ") || "本地资料匹配"}</small>
-                </div>
-                <Button icon={<Send size={16} />} onClick={() => void submitQuestion(item.suggested_question)} type="button" variant="secondary">
-                  一键问
-                </Button>
-              </article>
-            ))}
+            {qaResult.recommendations.map((item) => {
+              const media = getAttractionMedia(item.attraction_id);
+              const cover = getAttractionCover(item.attraction_id);
+              return (
+                <article className={cover ? "recommendation-item recommendation-item--with-cover" : "recommendation-item"} key={item.attraction_id}>
+                  {cover ? <img className="recommendation-item__cover" alt={attractionCoverAlt(item.name, media?.alt)} decoding="async" loading="lazy" src={cover} /> : null}
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>
+                      {item.scenic_area} · 规则分 {item.score}
+                    </span>
+                    <p>{item.reason}</p>
+                    <small>{item.matched_interests.join(" / ") || "本地资料匹配"}</small>
+                  </div>
+                  <Button icon={<Send size={16} />} onClick={() => void submitQuestion(item.suggested_question)} type="button" variant="secondary">
+                    一键问
+                  </Button>
+                </article>
+              );
+            })}
           </div>
         </section>
       ) : null}
@@ -1687,17 +1924,21 @@ export function MobileHomePage() {
                 {visionResult.candidates.map((candidate, index) => {
                   const confirmed = confirmedVisionId === candidate.attraction.id;
                   const topCandidate = index === 0;
+                  const media = getAttractionMedia(candidate.attraction.id);
+                  const cover = getAttractionCover(candidate.attraction.id);
                   return (
                     <article
                       className={[
                         "vision-candidate",
                         topCandidate ? "vision-candidate--top" : "",
                         confirmed ? "vision-candidate--confirmed" : "",
+                        cover ? "vision-candidate--with-cover" : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
                       key={candidate.attraction.id}
                     >
+                      {cover ? <img className="vision-candidate__cover" alt={attractionCoverAlt(candidate.attraction.name, media?.alt)} decoding="async" loading="lazy" src={cover} /> : null}
                       <div className="vision-candidate__main">
                         <div className="vision-candidate__title">
                           <span className="vision-candidate__rank">Top{index + 1}</span>
@@ -1730,6 +1971,15 @@ export function MobileHomePage() {
             {confirmedVisionId ? (
               <div className="vision-confirmed-panel" aria-label="确认后讲解入口">
                 <strong>已确认：{confirmedVisionCandidate()?.attraction.name}</strong>
+                {confirmedVisionMedia?.cover ? (
+                  <img
+                    className="vision-confirmed-panel__cover"
+                    alt={attractionCoverAlt(confirmedVisionCandidate()?.attraction.name, confirmedVisionMedia.alt)}
+                    decoding="async"
+                    loading="lazy"
+                    src={confirmedVisionMedia.cover}
+                  />
+                ) : null}
                 <p>接下来会走本地知识库问答，不凭视觉候选编造讲解。</p>
                 {confirmedAvatarClip ? (
                   <div className="avatar-speak-row avatar-speak-row--vision">
@@ -1809,14 +2059,26 @@ export function MobileHomePage() {
             <div className="route-scenic-grid route-scenic-grid--all">
               {routeAttractionMatches.map((item) => {
                 const selected = mustVisitIds.includes(item.id);
+                const media = getAttractionMedia(item.id);
+                const cover = getAttractionCover(item.id);
                 return (
                   <button
-                    className={selected ? "route-scenic-choice route-scenic-choice--active" : "route-scenic-choice"}
+                    className={[
+                      "route-scenic-choice",
+                      selected ? "route-scenic-choice--active" : "",
+                      cover ? "route-scenic-choice--with-cover" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     key={item.id}
                     onClick={() => (selected ? removeRouteConstraint("must", item.id) : addRouteConstraint("must", item.id))}
                     type="button"
                   >
-                    <ImageIcon name={routeAttractionIconName(item.name)} size={28} />
+                    {cover ? (
+                      <img className="route-scenic-choice__cover" alt={attractionCoverAlt(item.name, media?.alt)} decoding="async" loading="lazy" src={cover} />
+                    ) : (
+                      <ImageIcon name={routeAttractionIconName(item.name)} size={28} />
+                    )}
                     {item.name}
                   </button>
                 );
@@ -1906,17 +2168,29 @@ export function MobileHomePage() {
               <div className="route-scenic-grid">
                 {routePreviewAttractions.map((item) => {
                   const selected = mustVisitIds.includes(item.id);
+                  const media = getAttractionMedia(item.id);
+                  const cover = getAttractionCover(item.id);
                   return (
                     <button
-                      className={selected ? "route-scenic-choice route-scenic-choice--active" : "route-scenic-choice"}
+                      className={[
+                        "route-scenic-choice",
+                        selected ? "route-scenic-choice--active" : "",
+                        cover ? "route-scenic-choice--with-cover" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                       key={item.id}
                       onClick={() => (selected ? removeRouteConstraint("must", item.id) : addRouteConstraint("must", item.id))}
                       type="button"
                     >
-                      <ImageIcon
-                        name={routeAttractionIconName(item.name)}
-                        size={28}
-                      />
+                      {cover ? (
+                        <img className="route-scenic-choice__cover" alt={attractionCoverAlt(item.name, media?.alt)} decoding="async" loading="lazy" src={cover} />
+                      ) : (
+                        <ImageIcon
+                          name={routeAttractionIconName(item.name)}
+                          size={28}
+                        />
+                      )}
                       {item.name}
                     </button>
                   );
@@ -2076,38 +2350,43 @@ export function MobileHomePage() {
               ))}
             </div>
             <div className="route-constraint-results" aria-label="景点搜索结果">
-              {routeAttractionMatches.map((item) => (
-                <div className="route-constraint-row" key={item.id}>
-                  <div>
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.scenic_area}
-                      {item.category ? ` · ${item.category}` : ""}
-                    </span>
+              {routeAttractionMatches.map((item) => {
+                const media = getAttractionMedia(item.id);
+                const cover = getAttractionCover(item.id);
+                return (
+                  <div className={cover ? "route-constraint-row route-constraint-row--with-cover" : "route-constraint-row"} key={item.id}>
+                    {cover ? <img className="route-constraint-row__cover" alt={attractionCoverAlt(item.name, media?.alt)} decoding="async" loading="lazy" src={cover} /> : null}
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>
+                        {item.scenic_area}
+                        {item.category ? ` · ${item.category}` : ""}
+                      </span>
+                    </div>
+                    <div className="route-constraint-actions">
+                      {[
+                        { kind: "must" as const, label: "必去" },
+                        { kind: "optional" as const, label: "可选" },
+                        { kind: "avoid" as const, label: "避开" },
+                      ].map((action) => (
+                        <button
+                          aria-pressed={isConstraintSelected(action.kind, item.id)}
+                          className={
+                            isConstraintSelected(action.kind, item.id)
+                              ? `constraint-action constraint-action--${action.kind} constraint-action--active`
+                              : `constraint-action constraint-action--${action.kind}`
+                          }
+                          key={`${item.id}-${action.kind}`}
+                          onClick={() => addRouteConstraint(action.kind, item.id)}
+                          type="button"
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="route-constraint-actions">
-                    {[
-                      { kind: "must" as const, label: "必去" },
-                      { kind: "optional" as const, label: "可选" },
-                      { kind: "avoid" as const, label: "避开" },
-                    ].map((action) => (
-                      <button
-                        aria-pressed={isConstraintSelected(action.kind, item.id)}
-                        className={
-                          isConstraintSelected(action.kind, item.id)
-                            ? `constraint-action constraint-action--${action.kind} constraint-action--active`
-                            : `constraint-action constraint-action--${action.kind}`
-                        }
-                        key={`${item.id}-${action.kind}`}
-                        onClick={() => addRouteConstraint(action.kind, item.id)}
-                        type="button"
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {routeAttractionMatches.length === 0 ? <p className="empty-state mobile-empty">没有匹配景点，请换一个关键词。</p> : null}
             </div>
           </div>
@@ -2123,49 +2402,60 @@ export function MobileHomePage() {
                 <span>共 {routeResult.stops.length} 站</span>
               </div>
               <div className="route-stop-list route-stop-list--timeline" aria-label="逐站路线">
-                {routeResult.stops.map((stop) => (
-                  <article className="route-stop route-stop--timeline" key={`${routeResult.id}-${stop.attraction_id}`}>
-                    <div className="route-stop__index">{stop.order}</div>
-                    <div className="route-stop__body">
-                      <div className="route-stop__glyph" aria-hidden="true">
-                        <ImageIcon
-                          name={
-                            stop.name.includes("梵宫")
-                              ? "brahma-palace"
-                              : stop.name.includes("桥")
-                                ? "bridge"
-                                : stop.name.includes("九龙")
-                                  ? "crowd-wave"
-                                  : "buddha"
-                          }
-                          size={52}
-                        />
-                      </div>
-                      <div className="route-stop__title-row">
-                        <div>
-                          <strong>{stop.name}</strong>
-                          <small>{stop.scenic_area}</small>
+                {routeResult.stops.map((stop) => {
+                  const media = getAttractionMedia(stop.attraction_id);
+                  const cover = getAttractionCover(stop.attraction_id);
+                  return (
+                    <article className="route-stop route-stop--timeline" key={`${routeResult.id}-${stop.attraction_id}`}>
+                      <div className="route-stop__index">{stop.order}</div>
+                      <div className="route-stop__body">
+                        <div
+                          className={cover ? "route-stop__cover" : "route-stop__cover route-stop__cover--fallback"}
+                          aria-hidden={cover ? undefined : true}
+                        >
+                          {cover ? (
+                            <img alt={attractionCoverAlt(stop.name, media?.alt)} decoding="async" loading="lazy" src={cover} />
+                          ) : (
+                            <ImageIcon
+                              name={
+                                stop.name.includes("梵宫")
+                                  ? "brahma-palace"
+                                  : stop.name.includes("桥")
+                                    ? "bridge"
+                                    : stop.name.includes("九龙")
+                                      ? "crowd-wave"
+                                      : "buddha"
+                              }
+                              size={52}
+                            />
+                          )}
                         </div>
-                        <span>
-                          客流 <em>{crowdLabel(stop.crowd_level).replace("拥挤", "高").replace("适中", "中").replace("舒适", "低")}</em>
-                          等待 {stop.wait_minutes}分钟
-                        </span>
+                        <div className="route-stop__title-row">
+                          <div>
+                            <strong>{stop.name}</strong>
+                            <small>{stop.scenic_area}</small>
+                          </div>
+                          <span>
+                            客流 <em>{crowdLabel(stop.crowd_level).replace("拥挤", "高").replace("适中", "中").replace("舒适", "低")}</em>
+                            等待 {stop.wait_minutes}分钟
+                          </span>
+                        </div>
+                        <div className="constraint-badge-row route-stop__badges">
+                          <StatusBadge tone={stop.constraint_type === "must_visit" ? "ok" : "neutral"}>
+                            {constraintLabel(stop.constraint_type)}
+                          </StatusBadge>
+                          <StatusBadge tone={stop.crowd_action === "delay" || stop.crowd_action === "keep_with_warning" ? "warning" : "neutral"}>
+                            {crowdActionLabel(stop.crowd_action)}
+                          </StatusBadge>
+                        </div>
+                        <StopTopologyMeta stop={stop} />
+                        <p>{stop.focus || stop.reason}</p>
+                        <span className="route-stop__duration">停留 {stop.stay_minutes} 分钟{stop.walk_minutes_from_previous ? ` · 步行 ${stop.walk_minutes_from_previous} 分钟` : ""}</span>
+                        {stop.operation_note ? <p className="operation-note">{stop.operation_note}</p> : null}
                       </div>
-                      <div className="constraint-badge-row route-stop__badges">
-                        <StatusBadge tone={stop.constraint_type === "must_visit" ? "ok" : "neutral"}>
-                          {constraintLabel(stop.constraint_type)}
-                        </StatusBadge>
-                        <StatusBadge tone={stop.crowd_action === "delay" || stop.crowd_action === "keep_with_warning" ? "warning" : "neutral"}>
-                          {crowdActionLabel(stop.crowd_action)}
-                        </StatusBadge>
-                      </div>
-                      <StopTopologyMeta stop={stop} />
-                      <p>{stop.focus || stop.reason}</p>
-                      <span className="route-stop__duration">停留 {stop.stay_minutes} 分钟{stop.walk_minutes_from_previous ? ` · 步行 ${stop.walk_minutes_from_previous} 分钟` : ""}</span>
-                      {stop.operation_note ? <p className="operation-note">{stop.operation_note}</p> : null}
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             </section>
 

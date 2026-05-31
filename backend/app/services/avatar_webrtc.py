@@ -7,21 +7,33 @@ from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 from app.core.config import get_settings
-from app.services.avatar_speaker import _check_sidecar_ready, _public_base_url, _resolve_avatar_sidecar
+from app.services.avatar_speaker import (
+    _avatar_engine,
+    _check_livetalking_ready,
+    _check_sidecar_ready,
+    _public_base_url,
+    _resolve_avatar_sidecar,
+    _resolve_livetalking_sidecar,
+)
 
 
 ALLOWED_WEBRTC_OFFER_TYPES = {"offer", "ice-candidate"}
 WEBRTC_SIGNALING_TIMEOUT_SECONDS = 30
 
 
-def _webrtc_offer_url(base_url: str) -> str:
-    return urljoin(base_url.rstrip("/") + "/", "webrtc/offer")
+def _webrtc_offer_url(base_url: str, path: str) -> str:
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
 
 
 def proxy_avatar_webrtc_offer(payload: dict[str, object]) -> dict[str, object]:
     started_at = perf_counter()
     settings = get_settings()
+    engine = _avatar_engine()
     requested_mode = (settings.avatar_speaker_mode or "mock").strip().lower()
+    if engine == "openavatarchat" and (settings.avatar_engine or "").strip():
+        requested_mode = "sidecar"
     effective_mode, base_url, auto_detected = _resolve_avatar_sidecar(
         requested_mode,
         settings.avatar_sidecar_base_url,
@@ -46,6 +58,102 @@ def proxy_avatar_webrtc_offer(payload: dict[str, object]) -> dict[str, object]:
             "fallback_reason": "missing_webrtc_id",
             "metadata": {},
         }
+    if engine == "livetalking":
+        lt_base_url = _resolve_livetalking_sidecar(settings.avatar_livetalking_base_url)
+        ready, reason = _check_livetalking_ready(lt_base_url, settings.avatar_speaker_timeout_seconds)
+        if not ready:
+            return {
+                "accepted": False,
+                "mode": "mock",
+                "engine": "livetalking",
+                "message": "LiveTalking sidecar is not ready",
+                "fallback_reason": reason or "livetalking_not_ready",
+                "metadata": {"webrtc_id": webrtc_id},
+            }
+        sidecar_payload = dict(payload)
+        body = json.dumps(sidecar_payload, ensure_ascii=False).encode("utf-8")
+        request = Request(
+            _webrtc_offer_url(lt_base_url, settings.avatar_livetalking_webrtc_path),
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            signaling_timeout = max(settings.avatar_speaker_timeout_seconds, WEBRTC_SIGNALING_TIMEOUT_SECONDS)
+            with urlopen(request, timeout=signaling_timeout) as response:
+                raw = response.read()
+                parsed: dict[str, object] = {}
+                if raw:
+                    loaded = json.loads(raw.decode("utf-8"))
+                    if isinstance(loaded, dict):
+                        parsed = loaded
+                if not parsed.get("sdp") or not parsed.get("type"):
+                    return {
+                        "accepted": False,
+                        "mode": "mock",
+                        "engine": "livetalking",
+                        "message": "LiveTalking WebRTC signaling returned incomplete payload",
+                        "fallback_reason": "livetalking_webrtc_incomplete_response",
+                        "metadata": {"webrtc_id": webrtc_id, "sidecar_response": parsed},
+                    }
+                parsed.update(
+                    {
+                        "accepted": True,
+                        "mode": "livetalking",
+                        "engine": "livetalking",
+                        "sidecar_url": _public_base_url(lt_base_url),
+                        "webrtc_id": webrtc_id,
+                        "latency_ms": round((perf_counter() - started_at) * 1000),
+                        "adapter": "livetalking_webrtc_proxy",
+                    }
+                )
+                return parsed
+        except HTTPError as exc:
+            return {
+                "accepted": False,
+                "mode": "mock",
+                "engine": "livetalking",
+                "message": "LiveTalking WebRTC signaling failed",
+                "fallback_reason": f"livetalking_webrtc_http_{exc.code}",
+                "metadata": {"webrtc_id": webrtc_id},
+            }
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            return {
+                "accepted": False,
+                "mode": "mock",
+                "engine": "livetalking",
+                "message": "LiveTalking WebRTC signaling returned invalid payload",
+                "fallback_reason": f"livetalking_webrtc_parse_error:{exc}",
+                "metadata": {"webrtc_id": webrtc_id},
+            }
+        except URLError as exc:
+            return {
+                "accepted": False,
+                "mode": "mock",
+                "engine": "livetalking",
+                "message": "LiveTalking sidecar is unreachable",
+                "fallback_reason": f"livetalking_webrtc_unreachable:{exc.reason}",
+                "metadata": {"webrtc_id": webrtc_id},
+            }
+        except TimeoutError:
+            return {
+                "accepted": False,
+                "mode": "mock",
+                "engine": "livetalking",
+                "message": "LiveTalking WebRTC signaling timed out",
+                "fallback_reason": "livetalking_webrtc_timeout",
+                "metadata": {"webrtc_id": webrtc_id},
+            }
+        except OSError as exc:
+            return {
+                "accepted": False,
+                "mode": "mock",
+                "engine": "livetalking",
+                "message": "LiveTalking WebRTC signaling failed",
+                "fallback_reason": f"livetalking_webrtc_error:{exc}",
+                "metadata": {"webrtc_id": webrtc_id},
+            }
+
     if effective_mode != "sidecar" or not base_url:
         return {
             "accepted": False,
@@ -70,7 +178,7 @@ def proxy_avatar_webrtc_offer(payload: dict[str, object]) -> dict[str, object]:
     sidecar_payload.pop("client_id", None)
     body = json.dumps(sidecar_payload, ensure_ascii=False).encode("utf-8")
     request = Request(
-        _webrtc_offer_url(base_url),
+        _webrtc_offer_url(base_url, "webrtc/offer"),
         data=body,
         method="POST",
         headers={"Content-Type": "application/json"},

@@ -26,8 +26,9 @@ export type QAResponse = {
   sources: Source[];
   mode: string;
   latency_ms: number;
-  grounding_mode?: "rag_sources_only" | "local_structured_data" | "general_knowledge" | "no_sources" | "not_applicable" | string;
-  provider?: "mock" | "dashscope" | "openai" | "fallback" | string;
+  grounding_mode?: "rag_sources_only" | "dashscope_search_gap_fill" | "local_structured_data" | "local_route_planner" | "local_guardrail" | "general_knowledge" | "no_sources" | "not_applicable" | string;
+  provider?: "mock" | "dashscope" | "fallback" | string;
+  model?: string | null;
   fallback_reason?: string | null;
   provider_latency_ms?: number | null;
   understanding?: QueryUnderstandingResult;
@@ -164,11 +165,20 @@ export type VisionResponse = {
   suggested_questions: string[];
   mode: string;
   latency_ms: number;
-  provider?: "mock" | "dashscope" | "openai" | "fallback" | string;
+  provider?: "mock" | "dashscope" | "fallback" | string;
   provider_latency_ms?: number | null;
   vlm_observations?: string | null;
+  vlm_candidate_ids?: string[];
   fallback_reason?: string | null;
   source_note?: string;
+  metadata?: {
+    vlm_candidate_ids?: string[];
+    provider_latency_ms?: number | null;
+    strategy?: string;
+    top1_attraction_id?: string | null;
+    needs_confirmation?: boolean;
+    [key: string]: unknown;
+  };
 };
 
 export type CrowdLevel = "low" | "medium" | "high";
@@ -739,21 +749,35 @@ export type FeedbackResponse = {
 };
 
 export type AvatarEmotion = "welcome" | "thinking" | "speaking" | "comforting" | "error" | "happy" | "neutral";
-export type AvatarSpeakSource = "qa" | "route" | "vision" | "clarification" | "feedback" | "kiosk" | "share" | "system";
+export type AvatarSpeakSource = "qa" | "route" | "vision" | "clarification" | "feedback" | "kiosk" | "share" | "system" | "manual";
 export type AvatarClipSource = "route" | "attraction" | "vision" | "kiosk" | "admin" | "demo";
-export type AvatarClipId = "lingshan_buddha_intro_45s" | "fan_gong_intro_45s" | "jiulong_guanyu_intro_30s";
+export type AvatarClipId = "welcome_intro_5s" | "lingshan_buddha_intro_45s" | "fan_gong_intro_45s" | "jiulong_guanyu_intro_30s";
 
 export type AvatarSpeakRequest = {
   text: string;
   emotion?: AvatarEmotion;
   source?: AvatarSpeakSource;
   interrupt?: boolean;
+  session_id?: string | null;
 };
 
 export type AvatarClipRequest = {
   clip_id: AvatarClipId;
   source?: AvatarClipSource;
   interrupt?: boolean;
+  session_id?: string | null;
+};
+
+export type AvatarStopRequest = {
+  session_id?: string | null;
+};
+
+export type AvatarWarmupRequest = {
+  session_id?: string | null;
+  text?: string;
+  source?: AvatarSpeakSource;
+  interrupt?: boolean;
+  silent?: boolean;
 };
 
 export type AvatarActionResponse = {
@@ -766,6 +790,8 @@ export type AvatarActionResponse = {
 
 export type AvatarStatusResponse = {
   mode: string;
+  engine?: string;
+  adapter?: string;
   sidecar_ready: boolean;
   sidecar_url: string;
   active_session_id: string | null;
@@ -792,6 +818,7 @@ export type AvatarWebrtcOfferResponse = {
   mode?: string;
   sdp?: string;
   type?: RTCSdpType;
+  sessionid?: string;
   sidecar_url?: string;
   webrtc_id?: string;
   message?: string;
@@ -1226,6 +1253,20 @@ export async function speakAvatarText(payload: AvatarSpeakRequest): Promise<Avat
 
 export async function playAvatarClip(payload: AvatarClipRequest): Promise<AvatarActionResponse> {
   return requestJson<AvatarActionResponse>("/api/avatar/play-clip", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function stopAvatarSpeech(payload: AvatarStopRequest): Promise<AvatarActionResponse> {
+  return requestJson<AvatarActionResponse>("/api/avatar/stop", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function warmupAvatar(payload: AvatarWarmupRequest): Promise<AvatarActionResponse> {
+  return requestJson<AvatarActionResponse>("/api/avatar/warmup", {
     body: JSON.stringify(payload),
     method: "POST",
   });

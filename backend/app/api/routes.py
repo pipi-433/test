@@ -35,7 +35,7 @@ from app.services.admin_system_service import (
     update_admin_system_settings,
 )
 from app.services.avatar_clip_player import play_avatar_clip
-from app.services.avatar_speaker import enqueue_avatar_speech, get_avatar_status
+from app.services.avatar_speaker import enqueue_avatar_speech, get_avatar_status, stop_avatar_speech, warmup_avatar_speech
 from app.services.avatar_webrtc import proxy_avatar_webrtc_offer
 from app.services.content_service import (
     get_attraction_or_error,
@@ -245,12 +245,26 @@ class AvatarSpeakRequest(BaseModel):
     emotion: str = "happy"
     source: str = "system"
     interrupt: bool = True
+    session_id: str | None = None
 
 
 class AvatarPlayClipRequest(BaseModel):
     clip_id: str
     source: str = "demo"
     interrupt: bool = True
+    session_id: str | None = None
+
+
+class AvatarStopRequest(BaseModel):
+    session_id: str | None = None
+
+
+class AvatarWarmupRequest(BaseModel):
+    session_id: str | None = None
+    text: str = "您好。"
+    source: str = "system"
+    interrupt: bool = False
+    silent: bool = False
 
 
 class AvatarWebrtcOfferRequest(BaseModel):
@@ -395,6 +409,7 @@ def avatar_speak(payload: AvatarSpeakRequest) -> dict[str, object]:
         emotion=payload.emotion,
         source=payload.source,
         interrupt=payload.interrupt,
+        session_id=payload.session_id,
     )
 
 
@@ -404,6 +419,23 @@ def avatar_play_clip(payload: AvatarPlayClipRequest) -> dict[str, object]:
         clip_id=payload.clip_id,
         source=payload.source,
         interrupt=payload.interrupt,
+        session_id=payload.session_id,
+    )
+
+
+@router.post("/avatar/stop")
+def avatar_stop(payload: AvatarStopRequest) -> dict[str, object]:
+    return stop_avatar_speech(session_id=payload.session_id)
+
+
+@router.post("/avatar/warmup")
+def avatar_warmup(payload: AvatarWarmupRequest) -> dict[str, object]:
+    return warmup_avatar_speech(
+        text=payload.text,
+        source=payload.source,
+        interrupt=payload.interrupt,
+        session_id=payload.session_id,
+        silent=payload.silent,
     )
 
 
@@ -495,6 +527,7 @@ def guide_query(payload: GuideQueryRequest) -> dict[str, object]:
         "latency_ms": result.get("latency_ms", 0),
         "grounding_mode": result.get("grounding_mode"),
         "provider": result.get("provider"),
+        "model": result.get("model"),
         "fallback_reason": result.get("fallback_reason"),
         "provider_latency_ms": result.get("provider_latency_ms"),
     }
@@ -536,6 +569,11 @@ def qa(payload: QARequest) -> dict[str, object]:
             "latency_ms": result.get("latency_ms"),
             "mode": result.get("mode"),
             "type": result_type,
+            "provider": result.get("provider"),
+            "model": result.get("model"),
+            "grounding_mode": result.get("grounding_mode"),
+            "fallback_reason": result.get("fallback_reason"),
+            "provider_latency_ms": result.get("provider_latency_ms"),
             "understanding": result.get("understanding"),
             "understanding_domain": (result.get("understanding") or {}).get("domain")
             if isinstance(result.get("understanding"), dict)

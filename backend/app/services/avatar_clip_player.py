@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 from app.core.config import PROJECT_ROOT, get_settings
-from app.services.avatar_speaker import _check_sidecar_ready, _resolve_avatar_sidecar
+from app.services.avatar_speaker import (
+    _avatar_engine,
+    _check_livetalking_ready,
+    _check_sidecar_ready,
+    _join_sidecar_url,
+    _livetalking_session_id,
+    _public_base_url,
+    _resolve_avatar_sidecar,
+    _resolve_livetalking_sidecar,
+)
 
 
 ALLOWED_CLIP_SOURCES = {"route", "attraction", "vision", "kiosk", "admin", "demo"}
@@ -29,6 +39,15 @@ class PresetAvatarClip:
 
 
 PRESET_CLIPS: dict[str, PresetAvatarClip] = {
+    "welcome_intro_5s": PresetAvatarClip(
+        clip_id="welcome_intro_5s",
+        title="灵境导游开场白",
+        attraction_name="灵境导游",
+        duration_seconds=5,
+        text_preview="您好，我是灵境导游小灵，正在为您准备讲解。",
+        audio_filename="welcome_intro_5s.wav",
+        source_note="演示用统一开场白 clip，目标音色 zh-CN-XiaoxiaoNeural，音频文件需放在 external/avatar-clips。",
+    ),
     "lingshan_buddha_intro_45s": PresetAvatarClip(
         clip_id="lingshan_buddha_intro_45s",
         title="灵山大佛介绍",
@@ -59,13 +78,6 @@ PRESET_CLIPS: dict[str, PresetAvatarClip] = {
 }
 
 
-def _public_base_url(base_url: str) -> str:
-    parsed = urlparse(base_url)
-    if not parsed.scheme or not parsed.netloc:
-        return base_url.rstrip("/")
-    return f"{parsed.scheme}://{parsed.netloc}"
-
-
 def _clip_base_dir() -> tuple[Path, str | None]:
     settings = get_settings()
     allowed_root = DEFAULT_CLIP_BASE_DIR.resolve()
@@ -94,6 +106,7 @@ def _clip_metadata(clip: PresetAvatarClip, audio_path: Path, *, audio_path_error
         "duration_seconds": clip.duration_seconds,
         "text_preview": clip.text_preview,
         "audio_path": str(audio_path),
+        "audio_path_configured": audio_path_error is None,
         "audio_exists": audio_path.is_file() if not audio_path_error else False,
         "source_note": clip.source_note,
         "policy": CLIP_POLICY,
@@ -118,6 +131,7 @@ def _post_sidecar_clip(
     audio_path: Path,
     source: str,
     interrupt: bool,
+    session_id: str | None = None,
 ) -> tuple[bool, str | None, dict[str, object]]:
     try:
         sidecar_url = _sidecar_clip_url(base_url, clip_path)
@@ -135,6 +149,8 @@ def _post_sidecar_clip(
         "policy": CLIP_POLICY,
         "llm_bypassed": True,
     }
+    if session_id:
+        payload["session_id"] = session_id
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = Request(
         sidecar_url,
@@ -169,11 +185,116 @@ def _post_sidecar_clip(
         return False, f"sidecar_clip_error: {exc}", {}
 
 
+def _multipart_body(fields: dict[str, str], file_path: Path) -> tuple[bytes, str]:
+    boundary = f"----lingjing-livetalking-{uuid4().hex}"
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+        chunks.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        chunks.append(str(value).encode("utf-8"))
+        chunks.append(b"\r\n")
+    chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+    chunks.append(
+        (
+            f'Content-Disposition: form-data; name="file"; filename="{file_path.name}"\r\n'
+            "Content-Type: audio/wav\r\n\r\n"
+        ).encode("utf-8")
+    )
+    chunks.append(file_path.read_bytes())
+    chunks.append(b"\r\n")
+    chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(chunks), boundary
+
+
+def _post_livetalking_interrupt(
+    *,
+    base_url: str,
+    timeout_seconds: float,
+    session_id: str,
+) -> str | None:
+    request = Request(
+        _join_sidecar_url(base_url, "/interrupt_talk"),
+        data=json.dumps({"sessionid": session_id}).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            raw = response.read()
+            if not raw:
+                return None
+            loaded = json.loads(raw.decode("utf-8"))
+            if isinstance(loaded, dict) and loaded.get("code") not in (None, 0):
+                return str(loaded.get("msg") or "livetalking_interrupt_rejected")
+            if 200 <= response.status < 300:
+                return None
+            return f"livetalking_interrupt_status_{response.status}"
+    except Exception as exc:
+        return f"livetalking_interrupt_failed:{exc}"
+
+
+def _post_livetalking_clip(
+    *,
+    base_url: str,
+    audio_path: Path,
+    audio_path_setting: str,
+    timeout_seconds: float,
+    interrupt: bool,
+    session_id: str | None = None,
+) -> tuple[bool, str | None, dict[str, object]]:
+    try:
+        sidecar_url = _join_sidecar_url(base_url, audio_path_setting)
+    except ValueError as exc:
+        return False, str(exc), {}
+
+    lt_session_id = _livetalking_session_id(session_id)
+    interrupt_reason = _post_livetalking_interrupt(
+        base_url=base_url,
+        timeout_seconds=timeout_seconds,
+        session_id=lt_session_id,
+    ) if interrupt else None
+
+    body, boundary = _multipart_body({"sessionid": lt_session_id}, audio_path)
+    request = Request(
+        sidecar_url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            raw = response.read()
+            parsed: dict[str, object] = {}
+            if raw:
+                try:
+                    loaded = json.loads(raw.decode("utf-8"))
+                    if isinstance(loaded, dict):
+                        parsed = loaded
+                except json.JSONDecodeError:
+                    parsed = {"raw_response": raw.decode("utf-8", errors="replace")[:200]}
+            if interrupt_reason:
+                parsed["interrupt_warning"] = interrupt_reason
+            if parsed.get("code") not in (None, 0):
+                return False, str(parsed.get("msg") or "livetalking_audio_rejected"), parsed
+            if 200 <= response.status < 300:
+                return True, None, parsed
+            return False, f"livetalking_audio_status_{response.status}", parsed
+    except HTTPError as exc:
+        return False, f"livetalking_audio_http_{exc.code}", {}
+    except URLError as exc:
+        return False, f"livetalking_audio_unreachable: {exc.reason}", {}
+    except TimeoutError:
+        return False, "livetalking_audio_timeout", {}
+    except OSError as exc:
+        return False, f"livetalking_audio_error: {exc}", {}
+
+
 def play_avatar_clip(
     *,
     clip_id: str,
     source: str = "demo",
     interrupt: bool = True,
+    session_id: str | None = None,
 ) -> dict[str, object]:
     normalized_clip_id = clip_id.strip()
     normalized_source = source.strip().lower()
@@ -216,13 +337,17 @@ def play_avatar_clip(
         {
             "requested_source": normalized_source,
             "interrupt": interrupt,
+            "session_id": session_id,
             "clip_sidecar_adapter_pending": False,
             "llm_bypassed": True,
         }
     )
 
     settings = get_settings()
+    engine = _avatar_engine()
     requested_mode = (settings.avatar_speaker_mode or "mock").strip().lower()
+    if engine == "openavatarchat" and (settings.avatar_engine or "").strip():
+        requested_mode = "sidecar"
     effective_mode, base_url, auto_detected = _resolve_avatar_sidecar(
         requested_mode,
         settings.avatar_sidecar_base_url,
@@ -230,13 +355,53 @@ def play_avatar_clip(
     )
     fallback_reason = None
     mode = "mock"
+    clip_file_fallback_reason = None
+    if path_error:
+        clip_file_fallback_reason = f"{path_error}; using mock preset clip queue."
+    elif not audio_path.is_file():
+        clip_file_fallback_reason = "preset clip audio file missing; using mock preset clip queue."
+    fallback_reason = clip_file_fallback_reason
 
-    if effective_mode == "sidecar":
+    if engine == "livetalking":
+        lt_base_url = _resolve_livetalking_sidecar(settings.avatar_livetalking_base_url)
+        audio_path_setting = settings.avatar_livetalking_audio_path.strip()
+        if clip_file_fallback_reason:
+            fallback_reason = clip_file_fallback_reason
+        elif not audio_path_setting:
+            fallback_reason = "AVATAR_LIVETALKING_AUDIO_PATH is empty; using mock preset clip queue."
+        else:
+            ready, reason = _check_livetalking_ready(lt_base_url, settings.avatar_speaker_timeout_seconds)
+            if ready:
+                ok, inject_reason, sidecar_response = _post_livetalking_clip(
+                    base_url=lt_base_url,
+                    audio_path=audio_path,
+                    audio_path_setting=audio_path_setting,
+                    timeout_seconds=settings.avatar_speaker_timeout_seconds,
+                    interrupt=interrupt,
+                    session_id=session_id,
+                )
+                metadata.update(
+                    {
+                        "adapter": "livetalking_http_audio",
+                        "engine": "livetalking",
+                        "sidecar_url": _public_base_url(lt_base_url),
+                        "session_id": _livetalking_session_id(session_id),
+                        "sidecar_response": sidecar_response,
+                        "llm_bypassed": True,
+                    }
+                )
+                if ok:
+                    mode = "livetalking"
+                    effective_mode = "sidecar"
+                    base_url = lt_base_url
+                else:
+                    fallback_reason = inject_reason or "livetalking_audio_injection_failed"
+            else:
+                fallback_reason = reason or "livetalking_not_ready"
+    elif effective_mode == "sidecar":
         clip_path = settings.avatar_sidecar_clip_path.strip()
-        if path_error:
-            fallback_reason = f"{path_error}; using mock preset clip queue."
-        elif not audio_path.is_file():
-            fallback_reason = "preset clip audio file missing; using mock preset clip queue."
+        if clip_file_fallback_reason:
+            fallback_reason = clip_file_fallback_reason
         elif not base_url:
             fallback_reason = "AVATAR_SIDECAR_BASE_URL is empty; using mock preset clip queue."
         elif not clip_path:
@@ -256,12 +421,14 @@ def play_avatar_clip(
                     audio_path=audio_path,
                     source=normalized_source,
                     interrupt=interrupt,
+                    session_id=session_id,
                 )
                 metadata.update(
                     {
                         "adapter": "http_json_clip",
                         "sidecar_url": _public_base_url(base_url),
                         "auto_detected": auto_detected,
+                        "session_id": session_id,
                         "sidecar_response": sidecar_response,
                     }
                 )
@@ -275,6 +442,7 @@ def play_avatar_clip(
     metadata.update(
         {
             "requested_mode": requested_mode,
+            "engine": engine,
             "effective_mode": effective_mode,
             "latency_ms": round((perf_counter() - started_at) * 1000),
         }

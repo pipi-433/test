@@ -1,8 +1,11 @@
 param(
     [string]$ProjectRoot = "D:\py\dota",
-    [int]$SidecarPort = 8282,
+    [int]$SidecarPort = 0,
     [int]$BackendPort = 8000,
     [int]$FrontendPort = 5174,
+    [ValidateSet("livetalking", "openavatarchat", "mock")]
+    [string]$Engine = "livetalking",
+    [string]$Voice = "zh-CN-XiaoxiaoNeural",
     [string]$SidecarConfigName = "",
     [double]$MinFreeGB = 8.0,
     [switch]$ForceLowMemory,
@@ -64,6 +67,27 @@ function Wait-JsonEndpoint {
     throw "Timed out waiting for $Url. Last error: $lastError"
 }
 
+function Wait-HttpEndpoint {
+    param(
+        [string]$Url,
+        [int]$TimeoutSeconds = 120
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastError = $null
+    while ((Get-Date) -lt $deadline) {
+        try {
+            return Invoke-WebRequest -Uri $Url -TimeoutSec 3 -UseBasicParsing
+        }
+        catch {
+            $lastError = $_.Exception.Message
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    throw "Timed out waiting for $Url. Last error: $lastError"
+}
+
 function Get-JsonEndpointOrNull {
     param(
         [string]$Url,
@@ -81,7 +105,8 @@ function Get-JsonEndpointOrNull {
 function Test-BackendSyncedToSidecar {
     param(
         [object]$Status,
-        [int]$ExpectedSidecarPort
+        [int]$ExpectedSidecarPort,
+        [string]$ExpectedEngine = "openavatarchat"
     )
 
     if (-not $Status) {
@@ -90,9 +115,17 @@ function Test-BackendSyncedToSidecar {
 
     $expectedUrl = "http://127.0.0.1:$ExpectedSidecarPort"
     $mode = [string]$Status.mode
+    $engine = [string]$Status.engine
     $sidecarUrl = [string]$Status.sidecar_url
+    if ($ExpectedEngine -eq "livetalking") {
+        return (
+            ($mode -eq "livetalking" -or $engine -eq "livetalking") -and
+            $Status.sidecar_ready -eq $true -and
+            $sidecarUrl.TrimEnd("/") -eq $expectedUrl
+        )
+    }
     return (
-        $mode -eq "sidecar" -and
+        ($mode -eq "sidecar" -or $engine -eq "openavatarchat") -and
         $Status.sidecar_ready -eq $true -and
         $sidecarUrl.TrimEnd("/") -eq $expectedUrl
     )
@@ -132,10 +165,35 @@ function Start-AvatarBackend {
         [string]$Project,
         [string]$LogDirectory,
         [int]$BackendPort,
-        [int]$SidecarPort
+        [int]$SidecarPort,
+        [string]$Engine
     )
 
-    $backendScript = @"
+    if ($Engine -eq "mock") {
+        $backendScript = @"
+`$env:AVATAR_ENGINE = 'mock'
+`$env:AVATAR_SPEAKER_MODE = 'mock'
+`$env:PYTHONUTF8 = '1'
+`$env:PYTHONIOENCODING = 'utf-8'
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $BackendPort
+"@
+    }
+    elseif ($Engine -eq "livetalking") {
+        $backendScript = @"
+`$env:AVATAR_ENGINE = 'livetalking'
+`$env:AVATAR_LIVETALKING_BASE_URL = 'http://127.0.0.1:$SidecarPort'
+`$env:AVATAR_LIVETALKING_SESSION_ID = '0'
+`$env:AVATAR_LIVETALKING_SPEAK_PATH = '/human'
+`$env:AVATAR_LIVETALKING_AUDIO_PATH = '/humanaudio'
+`$env:AVATAR_LIVETALKING_WEBRTC_PATH = '/offer'
+`$env:PYTHONUTF8 = '1'
+`$env:PYTHONIOENCODING = 'utf-8'
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $BackendPort
+"@
+    }
+    else {
+        $backendScript = @"
+`$env:AVATAR_ENGINE = 'openavatarchat'
 `$env:AVATAR_SPEAKER_MODE = 'sidecar'
 `$env:AVATAR_SIDECAR_ADAPTER = 'http_json'
 `$env:AVATAR_SIDECAR_BASE_URL = 'http://127.0.0.1:$SidecarPort'
@@ -145,12 +203,28 @@ function Start-AvatarBackend {
 `$env:PYTHONIOENCODING = 'utf-8'
 python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $BackendPort
 "@
+    }
     return Start-HiddenPowerShell -Name "avatar_backend" -WorkingDirectory $Project -ScriptBlockText $backendScript -LogDirectory $LogDirectory
 }
 
 $project = (Resolve-Path -LiteralPath $ProjectRoot).Path
+if ($SidecarPort -eq 0) {
+    if ($Engine -eq "openavatarchat") {
+        $SidecarPort = 8282
+    }
+    else {
+        $SidecarPort = 8011
+    }
+}
+elseif ($Engine -eq "livetalking" -and $SidecarPort -eq 8282) {
+    $SidecarPort = 8011
+}
 Stop-OrphanedSidecarWorkers -Root $project
 $openAvatarDir = Join-Path $project "external\OpenAvatarChat"
+$liveTalkingDir = Join-Path $project "external\LiveTalking"
+$liveTalkingPython = Join-Path $liveTalkingDir ".venv\Scripts\python.exe"
+$liveTalkingModel = Join-Path $liveTalkingDir "models\wav2lip.pth"
+$liveTalkingAvatar = Join-Path $liveTalkingDir "data\avatars\lingshan_guide_avatar1"
 $uvExe = Join-Path $project ".sidecar-tools\Scripts\uv.exe"
 $fastConfigName = "lingjing_trusted_liteavatar_fast.yaml"
 $stableConfigName = "lingjing_trusted_liteavatar_edge_tts.yaml"
@@ -168,14 +242,33 @@ $runtimeDll = Join-Path $openAvatarDir ".runtime-dll"
 $sidecarTools = Join-Path $project ".sidecar-tools\Scripts"
 $logDir = Join-Path $project "external\run_logs"
 
-if (-not (Test-Path -LiteralPath $openAvatarDir)) {
-    throw "Missing OpenAvatarChat sidecar workspace: $openAvatarDir"
+if ($Engine -eq "livetalking") {
+    if (-not (Test-Path -LiteralPath $liveTalkingDir)) {
+        throw "Missing LiveTalking sidecar workspace: $liveTalkingDir"
+    }
+    if (-not (Test-Path -LiteralPath $liveTalkingPython)) {
+        throw "Missing LiveTalking venv python: $liveTalkingPython"
+    }
+    if (-not (Test-Path -LiteralPath $liveTalkingModel)) {
+        throw "Missing LiveTalking Wav2Lip model: $liveTalkingModel"
+    }
+    if (-not (Test-Path -LiteralPath $liveTalkingAvatar)) {
+        throw "Missing LiveTalking avatar asset: $liveTalkingAvatar"
+    }
 }
-if (-not (Test-Path -LiteralPath $uvExe)) {
-    throw "Missing uv executable: $uvExe"
+elseif ($Engine -eq "mock") {
+    "Mock avatar engine selected; no sidecar workspace is required."
 }
-if (-not (Test-Path -LiteralPath $sidecarConfig)) {
-    throw "Missing LiteAvatar trusted config: $sidecarConfig"
+else {
+    if (-not (Test-Path -LiteralPath $openAvatarDir)) {
+        throw "Missing OpenAvatarChat sidecar workspace: $openAvatarDir"
+    }
+    if (-not (Test-Path -LiteralPath $uvExe)) {
+        throw "Missing uv executable: $uvExe"
+    }
+    if (-not (Test-Path -LiteralPath $sidecarConfig)) {
+        throw "Missing LiteAvatar trusted config: $sidecarConfig"
+    }
 }
 
 $freeBefore = Get-FreeMemoryGB
@@ -184,35 +277,67 @@ $backendListener = Get-Listener -Port $BackendPort
 
 "Avatar demo startup"
 "Project: $project"
-"Sidecar config: config/$SidecarConfigName"
+"Engine: $Engine"
+if ($Engine -eq "openavatarchat") {
+    "Legacy OpenAvatarChat config: config/$SidecarConfigName"
+}
+elseif ($Engine -eq "mock") {
+    "Mock avatar engine: backend fallback only"
+}
+else {
+    "LiveTalking avatar_id: lingshan_guide_avatar1"
+    "LiveTalking voice: $Voice"
+}
 "Backend API: http://127.0.0.1:$BackendPort"
 "Visitor UI: http://127.0.0.1:$FrontendPort/"
 "Free memory: $freeBefore GB"
 
-if (-not $sidecarListener -and -not $ForceLowMemory -and $freeBefore -lt $MinFreeGB) {
+if ($Engine -ne "mock" -and -not $sidecarListener -and -not $ForceLowMemory -and $freeBefore -lt $MinFreeGB) {
     throw "Free memory is $freeBefore GB, below MinFreeGB=$MinFreeGB. Close other apps or rerun with -ForceLowMemory."
 }
 
-if ($sidecarListener) {
+if ($Engine -eq "mock") {
+    "Skipping sidecar startup for mock engine."
+}
+elseif ($sidecarListener) {
     "Sidecar already listening on port $SidecarPort, PID=$($sidecarListener.OwningProcess)."
-    "If you need the Task 07.6G fast config, stop the old sidecar first with scripts\stop_avatar_demo.ps1 and rerun this script."
+    "If you need a different avatar engine/config, stop the old sidecar first with scripts\stop_avatar_demo.ps1 and rerun this script."
 }
 else {
-    $pathValue = "$runtimeDll;$sidecarTools;$env:PATH"
+    if ($Engine -eq "livetalking") {
+        $sidecarScript = @"
+`$env:PYTHONUTF8 = '1'
+`$env:PYTHONIOENCODING = 'utf-8'
+& '$liveTalkingPython' app.py --transport webrtc --model wav2lip --avatar_id lingshan_guide_avatar1 --tts edgetts --REF_FILE '$Voice' --listenport $SidecarPort --max_session 1
+"@
+        $sidecarStarted = Start-HiddenPowerShell -Name "livetalking_sidecar" -WorkingDirectory $liveTalkingDir -ScriptBlockText $sidecarScript -LogDirectory $logDir
+    }
+    else {
+        $pathValue = "$runtimeDll;$sidecarTools;$env:PATH"
 $sidecarScript = @"
 `$env:PATH = '$pathValue'
 `$env:PYTHONUTF8 = '1'
 `$env:PYTHONIOENCODING = 'utf-8'
 & '$uvExe' run --python 3.11 src/demo.py --host 127.0.0.1 --port $SidecarPort --config config/$SidecarConfigName
 "@
-    $sidecarStarted = Start-HiddenPowerShell -Name "avatar_sidecar" -WorkingDirectory $openAvatarDir -ScriptBlockText $sidecarScript -LogDirectory $logDir
+        $sidecarStarted = Start-HiddenPowerShell -Name "avatar_sidecar" -WorkingDirectory $openAvatarDir -ScriptBlockText $sidecarScript -LogDirectory $logDir
+    }
     "Started sidecar launcher PID=$($sidecarStarted.launcher_pid)"
     "  stdout: $($sidecarStarted.stdout)"
     "  stderr: $($sidecarStarted.stderr)"
 }
 
-$sidecarReady = Wait-JsonEndpoint -Url "http://127.0.0.1:$SidecarPort/readiness" -TimeoutSeconds 180
-"Sidecar readiness: $($sidecarReady.status)"
+if ($Engine -eq "mock") {
+    "Sidecar readiness: skipped for mock engine"
+}
+elseif ($Engine -eq "livetalking") {
+    $sidecarReady = Wait-HttpEndpoint -Url "http://127.0.0.1:$SidecarPort/webrtcapi.html" -TimeoutSeconds 180
+    "Sidecar readiness: HTTP $($sidecarReady.StatusCode)"
+}
+else {
+    $sidecarReady = Wait-JsonEndpoint -Url "http://127.0.0.1:$SidecarPort/readiness" -TimeoutSeconds 180
+    "Sidecar readiness: $($sidecarReady.status)"
+}
 
 if (-not $SkipBackend) {
     $backendListener = Get-Listener -Port $BackendPort
@@ -220,21 +345,24 @@ if (-not $SkipBackend) {
         $backendBaseUrl = "http://127.0.0.1:$BackendPort"
         $backendHealth = Get-JsonEndpointOrNull -Url "$backendBaseUrl/api/health" -TimeoutSeconds 5
         $avatarStatus = Get-JsonEndpointOrNull -Url "$backendBaseUrl/api/avatar/status" -TimeoutSeconds 5
-        if (Test-BackendSyncedToSidecar -Status $avatarStatus -ExpectedSidecarPort $SidecarPort) {
+        if ($Engine -eq "mock" -and [string]$avatarStatus.engine -eq "mock") {
+            "Backend already listening on port $BackendPort, PID=$($backendListener.OwningProcess), synced to mock avatar engine."
+        }
+        elseif (Test-BackendSyncedToSidecar -Status $avatarStatus -ExpectedSidecarPort $SidecarPort -ExpectedEngine $Engine) {
             "Backend already listening on port $BackendPort, PID=$($backendListener.OwningProcess), synced to sidecar."
         }
         elseif ($backendHealth -and [string]$backendHealth.service -eq "lingjing-guide") {
             "Backend already listening on port $BackendPort, PID=$($backendListener.OwningProcess), but avatar mode is not synced."
             "  current mode: $([string]$avatarStatus.mode)"
             "  current sidecar_ready: $($avatarStatus.sidecar_ready)"
-            "Restarting backend with AVATAR_SPEAKER_MODE=sidecar and AVATAR_SIDECAR_BASE_URL=http://127.0.0.1:$SidecarPort"
+            "Restarting backend with AVATAR_ENGINE=$Engine and sidecar base URL http://127.0.0.1:$SidecarPort"
             Stop-Process -Id $backendListener.OwningProcess -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 2
             $remainingBackend = Get-Listener -Port $BackendPort
             if ($remainingBackend) {
                 throw "Backend port $BackendPort is still occupied by PID=$($remainingBackend.OwningProcess); cannot start synced avatar backend."
             }
-            $backendStarted = Start-AvatarBackend -Project $project -LogDirectory $logDir -BackendPort $BackendPort -SidecarPort $SidecarPort
+            $backendStarted = Start-AvatarBackend -Project $project -LogDirectory $logDir -BackendPort $BackendPort -SidecarPort $SidecarPort -Engine $Engine
             "Started backend launcher PID=$($backendStarted.launcher_pid)"
             "  stdout: $($backendStarted.stdout)"
             "  stderr: $($backendStarted.stderr)"
@@ -244,7 +372,7 @@ if (-not $SkipBackend) {
         }
     }
     else {
-        $backendStarted = Start-AvatarBackend -Project $project -LogDirectory $logDir -BackendPort $BackendPort -SidecarPort $SidecarPort
+        $backendStarted = Start-AvatarBackend -Project $project -LogDirectory $logDir -BackendPort $BackendPort -SidecarPort $SidecarPort -Engine $Engine
         "Started backend launcher PID=$($backendStarted.launcher_pid)"
         "  stdout: $($backendStarted.stdout)"
         "  stderr: $($backendStarted.stderr)"
@@ -253,10 +381,37 @@ if (-not $SkipBackend) {
     $backendReady = Wait-JsonEndpoint -Url "http://127.0.0.1:$BackendPort/api/health" -TimeoutSeconds 60
     "Backend health: $($backendReady.status)"
     $backendAvatarStatus = Wait-JsonEndpoint -Url "http://127.0.0.1:$BackendPort/api/avatar/status" -TimeoutSeconds 30
-    if (-not (Test-BackendSyncedToSidecar -Status $backendAvatarStatus -ExpectedSidecarPort $SidecarPort)) {
+    if ($Engine -eq "mock") {
+        if ([string]$backendAvatarStatus.engine -ne "mock") {
+            throw "Backend started but avatar engine is not mock. engine=$($backendAvatarStatus.engine), mode=$($backendAvatarStatus.mode)"
+        }
+    }
+    elseif (-not (Test-BackendSyncedToSidecar -Status $backendAvatarStatus -ExpectedSidecarPort $SidecarPort -ExpectedEngine $Engine)) {
         throw "Backend started but avatar sidecar mode is not ready. mode=$($backendAvatarStatus.mode), sidecar_ready=$($backendAvatarStatus.sidecar_ready), sidecar_url=$($backendAvatarStatus.sidecar_url)"
     }
     "Backend avatar mode: $($backendAvatarStatus.mode), sidecar_ready=$($backendAvatarStatus.sidecar_ready), sidecar_url=$($backendAvatarStatus.sidecar_url)"
+    if ($Engine -eq "livetalking") {
+        $sessionStatus = [string]$backendAvatarStatus.session_status
+        $activeSession = [string]$backendAvatarStatus.active_session_id
+        if ($activeSession -and -not $sessionStatus.Contains("session not found")) {
+            try {
+                $warmupPayload = [ordered]@{}
+                $warmupPayload["session_id"] = $activeSession
+                $warmupPayload["source"] = "system"
+                $warmupPayload["interrupt"] = $false
+                $warmupPayload["silent"] = $false
+                $warmupBody = $warmupPayload | ConvertTo-Json -Compress
+                $warmupResult = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$BackendPort/api/avatar/warmup" -ContentType 'application/json' -Body $warmupBody -TimeoutSec 5
+                "LiveTalking warmup: mode=$($warmupResult.mode), accepted=$($warmupResult.accepted), fallback=$($warmupResult.fallback_reason)"
+            }
+            catch {
+                "LiveTalking warmup skipped after non-fatal error: $($_.Exception.Message)"
+            }
+        }
+        else {
+            "LiveTalking warmup deferred: open the visitor page to create a WebRTC session; the page will warm up automatically."
+        }
+    }
 }
 
 if (-not $SkipFrontend) {
@@ -278,7 +433,7 @@ npm --prefix .\frontend run dev -- --host 127.0.0.1 --port $FrontendPort
 }
 
 $healthcheck = Join-Path $project "scripts\avatar_sidecar_healthcheck.ps1"
-if (Test-Path -LiteralPath $healthcheck) {
+if ($Engine -eq "openavatarchat" -and (Test-Path -LiteralPath $healthcheck)) {
     $healthcheckArgs = @(
         "-ExecutionPolicy", "Bypass",
         "-File", $healthcheck,
@@ -290,16 +445,32 @@ if (Test-Path -LiteralPath $healthcheck) {
     powershell @healthcheckArgs
 }
 
-$sessions = Invoke-RestMethod -Uri "http://127.0.0.1:$SidecarPort/lingjing/avatar/sessions" -TimeoutSec 5
 $freeAfter = Get-FreeMemoryGB
 "Free memory after startup: $freeAfter GB"
-"Active session: $($sessions.active_session_id)"
-if (-not $sessions.active_session_id) {
-    "Open WebUI and create an RTC session before sending speech: http://127.0.0.1:$SidecarPort"
+if ($Engine -eq "mock") {
+    "Mock avatar engine is active; WebRTC sidecar session is skipped."
+}
+elseif ($Engine -eq "openavatarchat") {
+    $sessions = Invoke-RestMethod -Uri "http://127.0.0.1:$SidecarPort/lingjing/avatar/sessions" -TimeoutSec 5
+    "Active session: $($sessions.active_session_id)"
+    if (-not $sessions.active_session_id) {
+        "Open WebUI and create an RTC session before sending speech: http://127.0.0.1:$SidecarPort"
+    }
+}
+else {
+    "Open the visitor page or LiveTalking WebRTC page to create a session before sending speech: http://127.0.0.1:$SidecarPort/webrtcapi.html"
 }
 
-if ($OpenWebUI) {
-    Start-Process "http://127.0.0.1:$SidecarPort"
+if ($OpenWebUI -and $Engine -ne "mock") {
+    if ($Engine -eq "livetalking") {
+        Start-Process "http://127.0.0.1:$SidecarPort/webrtcapi.html"
+    }
+    else {
+        Start-Process "http://127.0.0.1:$SidecarPort"
+    }
+}
+elseif ($OpenWebUI -and $Engine -eq "mock") {
+    "OpenWebUI ignored for mock engine."
 }
 
 if ($OpenVisitor) {

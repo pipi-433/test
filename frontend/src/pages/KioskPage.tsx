@@ -1,8 +1,8 @@
 import { AlertTriangle, Camera, MapPinned, Mic, QrCode, Route, Sparkles, Volume2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
-import { getAvatarStatus, getCrowdSnapshot, getOperationEvents, playAvatarClip, recommendRoute, speakAvatarText } from "../api/client";
+import { getAvatarStatus, getCrowdSnapshot, getOperationEvents, playAvatarClip, recommendRoute, speakAvatarText, stopAvatarSpeech, warmupAvatar } from "../api/client";
 import type { AvatarClipId, AvatarStatusResponse, CrowdSnapshotItem, OperationEvent, RouteRecommendation } from "../api/client";
 import { Button } from "../components/Button";
 import type { DigitalHumanState } from "../components/DigitalHumanMock";
@@ -14,16 +14,30 @@ import { AvatarLivePanel } from "../components/visitor/AvatarLivePanel";
 import { quickQuestions, routeSteps } from "../data/mock";
 
 const kioskAvatarClips: Array<{ clipId: AvatarClipId; label: string }> = [
-  { clipId: "lingshan_buddha_intro_45s", label: "灵山大佛" },
-  { clipId: "fan_gong_intro_45s", label: "灵山梵宫" },
-  { clipId: "jiulong_guanyu_intro_30s", label: "九龙灌浴" },
+  {
+    clipId: "lingshan_buddha_intro_45s",
+    label: "灵山大佛",
+  },
+  {
+    clipId: "fan_gong_intro_45s",
+    label: "灵山梵宫",
+  },
+  {
+    clipId: "jiulong_guanyu_intro_30s",
+    label: "九龙灌浴",
+  },
 ];
 
 const kioskAvatarClipLockMs: Record<AvatarClipId, number> = {
-  fan_gong_intro_45s: 10_000,
-  jiulong_guanyu_intro_30s: 10_000,
-  lingshan_buddha_intro_45s: 8_000,
+  fan_gong_intro_45s: 39_000,
+  jiulong_guanyu_intro_30s: 33_000,
+  lingshan_buddha_intro_45s: 36_000,
+  welcome_intro_5s: 6_000,
 };
+const welcomeIntroClipId: AvatarClipId = "welcome_intro_5s";
+const welcomeIntroDelayMs = 5000;
+const welcomeIntroFallbackDelayMs = 11000;
+const welcomeIntroText = "您好，我是灵境导游小灵，正在为您准备讲解。";
 
 function kioskRouteSpeakSummary(route: RouteRecommendation) {
   const firstStop = route.stops[0]?.name ? `首站是${route.stops[0].name}。` : "";
@@ -41,6 +55,10 @@ export function KioskPage() {
   const [avatarActionLoading, setAvatarActionLoading] = useState<"route" | AvatarClipId | null>(null);
   const [avatarActionMessage, setAvatarActionMessage] = useState("");
   const [avatarStatus, setAvatarStatus] = useState<AvatarStatusResponse | null>(null);
+  const [avatarSessionId, setAvatarSessionId] = useState<string | null>(null);
+  const avatarWarmupSessionRef = useRef<string | null>(null);
+  const avatarFollowupTimerRef = useRef<number | null>(null);
+  const avatarFollowupTokenRef = useRef(0);
   const [avatarPlaybackLockedUntil, setAvatarPlaybackLockedUntil] = useState(0);
   const [avatarPlaybackTick, setAvatarPlaybackTick] = useState(0);
 
@@ -57,6 +75,8 @@ export function KioskPage() {
     }, 500);
     return () => window.clearInterval(timer);
   }, [avatarPlaybackLockedUntil]);
+
+  useEffect(() => () => clearPendingAvatarFollowup(), []);
 
   useEffect(() => {
     getCrowdSnapshot()
@@ -78,6 +98,21 @@ export function KioskPage() {
         }),
       );
   }, []);
+
+  useEffect(() => {
+    if (!avatarSessionId || avatarWarmupSessionRef.current === avatarSessionId) {
+      return;
+    }
+    avatarWarmupSessionRef.current = avatarSessionId;
+    void warmupAvatar({
+      interrupt: false,
+      session_id: avatarSessionId,
+      source: "system",
+      text: "您好。",
+    }).catch(() => {
+      // Warmup is best-effort and must not block kiosk operation.
+    });
+  }, [avatarSessionId]);
 
   const shareUrl = routeResult ? `${window.location.origin}${routeResult.share.share_url}` : "";
   const avatarPlaybackRemainingMs = Math.max(0, avatarPlaybackLockedUntil - Math.max(Date.now(), avatarPlaybackTick));
@@ -105,6 +140,73 @@ export function KioskPage() {
       setAvatarPlaybackLockedUntil(0);
       setAvatarActionLoading(null);
       setAvatarPlaybackTick(Date.now());
+    }, delayMs);
+  }
+
+  function clearPendingAvatarFollowup() {
+    avatarFollowupTokenRef.current += 1;
+    if (avatarFollowupTimerRef.current !== null) {
+      window.clearTimeout(avatarFollowupTimerRef.current);
+      avatarFollowupTimerRef.current = null;
+    }
+  }
+
+  async function playWelcomeThen(action: () => Promise<void> | void) {
+    clearPendingAvatarFollowup();
+    const token = avatarFollowupTokenRef.current;
+    setAvatarActionMessage("数字人正在为您准备讲解。");
+    let delayMs = welcomeIntroDelayMs;
+    try {
+      const intro = await playAvatarClip({
+        clip_id: welcomeIntroClipId,
+        source: "demo",
+        interrupt: true,
+        session_id: avatarSessionId,
+      });
+      if (!intro.accepted || intro.fallback_reason) {
+        const fallback = await speakAvatarText({
+          text: welcomeIntroText,
+          emotion: "happy",
+          source: "system",
+          interrupt: true,
+          session_id: avatarSessionId,
+        });
+        if (!fallback.accepted) {
+          delayMs = 0;
+        } else {
+          delayMs = welcomeIntroFallbackDelayMs;
+        }
+      }
+    } catch {
+      try {
+        const fallback = await speakAvatarText({
+          text: welcomeIntroText,
+          emotion: "happy",
+          source: "system",
+          interrupt: true,
+          session_id: avatarSessionId,
+        });
+        if (!fallback.accepted) {
+          delayMs = 0;
+        } else {
+          delayMs = welcomeIntroFallbackDelayMs;
+        }
+      } catch {
+        delayMs = 0;
+      }
+    }
+    if (token !== avatarFollowupTokenRef.current) {
+      return;
+    }
+    if (delayMs <= 0) {
+      await action();
+      return;
+    }
+    avatarFollowupTimerRef.current = window.setTimeout(() => {
+      avatarFollowupTimerRef.current = null;
+      if (token === avatarFollowupTokenRef.current) {
+        void action();
+      }
     }, delayMs);
   }
 
@@ -141,23 +243,26 @@ export function KioskPage() {
       setAvatarActionMessage(`数字人正在讲解，请 ${avatarPlaybackRemainingSeconds} 秒后再试。`);
       return;
     }
-    lockAvatarPlayback("route", 5_000);
-    setAvatarActionMessage("");
-    try {
-      const result = await speakAvatarText({
-        text: kioskRouteSpeakSummary(routeResult),
-        emotion: "happy",
-        source: "route",
-        interrupt: true,
-      });
-      setAvatarActionMessage(result.accepted ? "已发送给数字人播报。" : "已切换为文本播报/稍后重试。");
-      if (!result.accepted) {
+    lockAvatarPlayback("route", 5_000 + welcomeIntroDelayMs);
+    void playWelcomeThen(async () => {
+      setAvatarActionMessage("数字人正在生成语音，请稍候。");
+      try {
+        const result = await speakAvatarText({
+          text: kioskRouteSpeakSummary(routeResult),
+          emotion: "happy",
+          source: "route",
+          interrupt: true,
+          session_id: avatarSessionId,
+        });
+        setAvatarActionMessage(result.accepted ? "已发送给数字人播报。" : "已切换为文本播报/稍后重试。");
+        if (!result.accepted) {
+          unlockAvatarPlaybackSoon();
+        }
+      } catch {
+        setAvatarActionMessage("已切换为文本播报/稍后重试。");
         unlockAvatarPlaybackSoon();
       }
-    } catch {
-      setAvatarActionMessage("已切换为文本播报/稍后重试。");
-      unlockAvatarPlaybackSoon();
-    }
+    });
   }
 
   async function playKioskClip(clipId: AvatarClipId, label: string) {
@@ -165,25 +270,34 @@ export function KioskPage() {
       setAvatarActionMessage(`数字人正在讲解，请 ${avatarPlaybackRemainingSeconds} 秒后再试。`);
       return;
     }
-    lockAvatarPlayback(clipId, kioskAvatarClipLockMs[clipId] || 10_000);
-    setAvatarActionMessage("");
-    try {
-      const result = await playAvatarClip({
-        clip_id: clipId,
-        source: "attraction",
-        interrupt: true,
-      });
-      setAvatarActionMessage(result.accepted ? `已发送${label}数字人讲解。` : "已切换为文本播报/稍后重试。");
-      if (!result.accepted) {
+    lockAvatarPlayback(clipId, (kioskAvatarClipLockMs[clipId] || 10_000) + welcomeIntroDelayMs);
+    void playWelcomeThen(async () => {
+      setAvatarActionMessage("数字人正在加载预存讲解，请稍候。");
+      try {
+        const result = await playAvatarClip({
+          clip_id: clipId,
+          source: "kiosk",
+          interrupt: true,
+          session_id: avatarSessionId,
+        });
+        setAvatarActionMessage(result.fallback_reason ? `${label}预存讲解暂不可用，已自动降级。` : `已发送${label}低延迟讲解。`);
+        if (!result.accepted) {
+          unlockAvatarPlaybackSoon();
+        }
+      } catch {
+        setAvatarActionMessage("已切换为文本播报/稍后重试。");
         unlockAvatarPlaybackSoon();
       }
-    } catch {
-      setAvatarActionMessage("已切换为文本播报/稍后重试。");
-      unlockAvatarPlaybackSoon();
-    }
+    });
   }
 
-  function stopKioskAvatarBroadcast() {
+  async function stopKioskAvatarBroadcast() {
+    clearPendingAvatarFollowup();
+    try {
+      await stopAvatarSpeech({ session_id: avatarSessionId });
+    } catch {
+      // Page state still resets even if the presentation sidecar is already gone.
+    }
     setAvatarPlaybackLockedUntil(0);
     setAvatarActionLoading(null);
     setAvatarPlaybackTick(Date.now());
@@ -208,6 +322,7 @@ export function KioskPage() {
             caption={kioskHumanCaption}
             onStartBroadcast={() => (routeResult ? void speakKioskRoute() : void playKioskClip("lingshan_buddha_intro_45s", "灵山大佛"))}
             onStopBroadcast={stopKioskAvatarBroadcast}
+            onSessionChange={setAvatarSessionId}
             sidecarUrl={avatarStatus?.sidecar_url || undefined}
             state={kioskHumanState}
             status={avatarStatus}
@@ -267,7 +382,7 @@ export function KioskPage() {
                   type="button"
                 >
                   <Volume2 aria-hidden="true" size={24} />
-                  {avatarActionLoading === clip.clipId ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : `${clip.label}讲解`}
+                  {avatarActionLoading === clip.clipId ? `讲解中 ${avatarPlaybackRemainingSeconds}s` : `${clip.label}低延迟讲解`}
                 </button>
               ))}
             </div>

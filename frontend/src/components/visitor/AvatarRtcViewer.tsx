@@ -13,6 +13,7 @@ type AvatarRtcViewerProps = {
   chrome?: "full" | "preview";
   disabled?: boolean;
   onFallback?: (reason: string) => void;
+  onSessionChange?: (sessionId: string | null) => void;
   onStartBroadcast?: () => Promise<void> | void;
   onStopBroadcast?: () => Promise<void> | void;
   variant?: "mobile" | "kiosk";
@@ -53,6 +54,7 @@ export function AvatarRtcViewer({
   chrome = "full",
   disabled = false,
   onFallback,
+  onSessionChange,
   onStartBroadcast,
   onStopBroadcast,
   variant = "mobile",
@@ -91,6 +93,7 @@ export function AvatarRtcViewer({
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    onSessionChange?.(null);
     if (resetState) {
       startedRef.current = false;
       setRtcState("idle");
@@ -150,6 +153,13 @@ export function AvatarRtcViewer({
     return true;
   }
 
+  function restartViewer() {
+    cleanupPeer(true);
+    window.setTimeout(() => {
+      void startViewer();
+    }, 0);
+  }
+
   async function startViewer() {
     if (peerRef.current || rtcState === "connecting") {
       return;
@@ -157,7 +167,7 @@ export function AvatarRtcViewer({
     startedRef.current = true;
     if (disabled) {
       setRtcState("failed");
-      setMessage("数字人 sidecar 暂不可用，页面已保留降级展示。");
+      setMessage("数字人表现层暂不可用，页面已保留 mock fallback。");
       onFallback?.("sidecar_unavailable");
       return;
     }
@@ -257,6 +267,7 @@ export function AvatarRtcViewer({
         throw new Error(answer.fallback_reason || answer.message || "sidecar_webrtc_rejected");
       }
       await peerConnection.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
+      onSessionChange?.(answer.sessionid || webrtcId);
       void playVideo(false);
     } catch (cause) {
       const reason = cause instanceof Error ? cause.message : "webrtc_failed";
@@ -275,7 +286,7 @@ export function AvatarRtcViewer({
       cleanupPeer(false);
       startedRef.current = false;
       setRtcState("failed");
-      setMessage("数字人 sidecar 暂不可用，页面已保留降级展示。");
+      setMessage("数字人表现层暂不可用，页面已保留 mock fallback。");
       setSoundEnabled(false);
     }
   }, [disabled]);
@@ -339,7 +350,7 @@ export function AvatarRtcViewer({
           </button>
         ) : null}
         {showRetry ? (
-          <button onClick={() => void startViewer()} type="button">
+          <button onClick={restartViewer} type="button">
             <RotateCcw aria-hidden="true" size={18} />
             重试连接
           </button>

@@ -5,6 +5,11 @@ from pydantic import BaseModel
 from app.core.config import get_settings
 
 
+DEFAULT_PROVIDER_MODELS = {
+    "dashscope": "qwen-plus",
+}
+
+
 class ProviderStatus(BaseModel):
     provider: str
     status: str
@@ -19,17 +24,16 @@ def _provider_configured(provider: str) -> bool:
         return True
     if provider == "dashscope":
         return bool(os.getenv("DASHSCOPE_API_KEY", "").strip())
-    if provider == "openai":
-        return bool(os.getenv("OPENAI_API_KEY", "").strip())
     return False
 
 
 def _status(provider: str, *, model: str | None = None) -> ProviderStatus:
     configured = _provider_configured(provider)
+    display_model = model or DEFAULT_PROVIDER_MODELS.get(provider.lower())
     return ProviderStatus(
         provider=provider,
         status="ok" if configured else "missing_key",
-        model=model or None,
+        model=display_model or None,
         configured=configured,
         mode="mock" if provider == "mock" else ("real" if configured else "fallback"),
     )

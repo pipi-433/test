@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = "D:\py\dota",
-    [int[]]$Ports = @(8282, 8000, 8015, 5174),
+    [int[]]$Ports = @(8282, 8011, 8000, 8015, 5174),
     [switch]$ForceAll,
     [switch]$Preview
 )
@@ -37,23 +37,28 @@ function Test-ProjectDemoProcess {
         return $true
     }
 
-    $looksLikeDemo = (
-        $cmd.Contains("OpenAvatarChat") -or
-        $cmd.Contains("src/demo.py") -or
+        $looksLikeDemo = (
+            $cmd.Contains("OpenAvatarChat") -or
+            $cmd.Contains("LiveTalking") -or
+            $cmd.Contains("app.py --transport webrtc") -or
+            $cmd.Contains("src/demo.py") -or
         $cmd.Contains("lingjing_trusted_liteavatar_edge_tts.yaml") -or
         $cmd.Contains("lingjing_trusted_liteavatar_fast.yaml") -or
         $cmd.Contains("uvicorn app.main:app") -or
         $cmd.Contains("npm --prefix .\frontend run dev") -or
-        $cmd.Contains("AVATAR_SIDECAR_BASE_URL") -or
-        $cmd.Contains("avatar_backend") -or
-        $cmd.Contains("avatar_sidecar") -or
-        $cmd.Contains("avatar_frontend") -or
+            $cmd.Contains("AVATAR_SIDECAR_BASE_URL") -or
+            $cmd.Contains("AVATAR_LIVETALKING_BASE_URL") -or
+            $cmd.Contains("avatar_backend") -or
+            $cmd.Contains("avatar_sidecar") -or
+            $cmd.Contains("livetalking_sidecar") -or
+            $cmd.Contains("avatar_frontend") -or
         ($cmd.Contains(".sidecar-python") -and $cmd.Contains("multiprocessing.spawn"))
     )
     $belongsToProject = (
         $cmd.Contains($Root) -or
         $exe.Contains($Root) -or
         $cmd.Contains("uvicorn app.main:app") -or
+        $cmd.Contains("app.py --transport webrtc") -or
         $cmd.Contains("lingjing_trusted_liteavatar_edge_tts.yaml") -or
         $cmd.Contains("lingjing_trusted_liteavatar_fast.yaml")
     )

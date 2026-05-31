@@ -194,6 +194,31 @@ def _is_generic_attraction_question(question: str) -> bool:
     return compact in bare_generic_questions
 
 
+def _is_time_sensitive_status_question(question: str) -> bool:
+    compact = re.sub(r"[\s，。！？；、,.!?;:：]+", "", question.lower())
+    time_sensitive_terms = (
+        "今天",
+        "现在",
+        "实时",
+        "当前",
+        "开放到几点",
+        "几点关门",
+        "几点闭园",
+        "闭园时间",
+        "营业时间",
+        "开放时间",
+        "票价",
+        "门票",
+        "优惠",
+        "排队多久",
+        "人多吗",
+        "客流",
+        "停车",
+        "天气",
+    )
+    return any(term in compact for term in time_sensitive_terms)
+
+
 def _selected_attraction_context_chunks(chunks: list[dict[str, Any]], top_k: int) -> list[ScoredChunk]:
     scored = [
         ScoredChunk(
@@ -309,6 +334,7 @@ def build_mock_answer(
 def _qa_provider_meta(
     *,
     provider: str = "mock",
+    model: str | None = None,
     grounding_mode: str = "not_applicable",
     fallback_reason: str | None = None,
     provider_latency_ms: int | None = None,
@@ -316,9 +342,60 @@ def _qa_provider_meta(
     return {
         "grounding_mode": grounding_mode,
         "provider": provider,
+        "model": model,
         "fallback_reason": fallback_reason,
         "provider_latency_ms": provider_latency_ms,
     }
+
+
+SAFE_GAP_BACKGROUND_TERMS = (
+    "灵山",
+    "无锡",
+    "佛教",
+    "禅",
+    "文化",
+    "历史",
+    "故事",
+    "典故",
+    "背景",
+    "寓意",
+    "由来",
+    "莲花",
+    "释迦",
+)
+BLOCKED_GAP_BACKGROUND_TERMS = (
+    "今天",
+    "现在",
+    "当前",
+    "实时",
+    "开放",
+    "闭园",
+    "营业",
+    "几点",
+    "票价",
+    "门票",
+    "人多",
+    "客流",
+    "拥挤",
+    "排队",
+    "路线",
+    "导航",
+    "gps",
+    "定位",
+    "地图",
+    "硬件",
+    "设备",
+    "表演",
+    "演出",
+    "场次",
+)
+
+
+def _is_safe_gap_background_question(question: str) -> bool:
+    compact = re.sub(r"\s+", "", question.lower())
+    if any(term in compact for term in BLOCKED_GAP_BACKGROUND_TERMS):
+        return False
+    return any(term in compact for term in SAFE_GAP_BACKGROUND_TERMS)
 
 
 def _source_payloads(sources: list[ScoredChunk]) -> list[dict[str, Any]]:
@@ -458,6 +535,7 @@ def answer_question(
             "mode": "mock",
             "latency_ms": latency_ms,
             "understanding": understanding,
+            **_qa_provider_meta(grounding_mode="local_route_planner", fallback_reason="route_planner_guardrail"),
         }
     if handler in {"scenic_area_intro", "interest_recommendation", "comparison", "crowd_status"}:
         if handler == "scenic_area_intro":
@@ -480,9 +558,58 @@ def answer_question(
             "mode": "mock",
             "latency_ms": latency_ms,
             "understanding": understanding,
+            **_qa_provider_meta(grounding_mode="local_structured_data"),
+        }
+
+    if _is_time_sensitive_status_question(question):
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return {
+            "answer": (
+                "这个问题涉及今天的开放状态、票价、排队或现场服务信息，我不能用模型自由推测。"
+                "请以景区现场公告、官方渠道或工作人员说明为准；我可以继续基于本地资料介绍景点看点和游览建议。"
+            ),
+            "type": "out_of_scope",
+            "sources": [],
+            "mode": "mock",
+            "latency_ms": latency_ms,
+            "understanding": {
+                **understanding,
+                "should_retrieve": False,
+                "reasons": [*(understanding.get("reasons") or []), "time_sensitive_status_guardrail"],
+            },
+            **_qa_provider_meta(grounding_mode="local_guardrail", fallback_reason="time_sensitive_status_guardrail"),
         }
 
     if not understanding.get("should_retrieve"):
+        if _is_safe_gap_background_question(question):
+            fallback_answer = (
+                "本地资料暂未收录这个背景问题。若已启用安全的 gap-only search，我会只补充非时效景区背景；"
+                "否则建议以景区官方资料或现场工作人员说明为准。"
+            )
+            llm_result = generate_grounded_answer(
+                question=question,
+                sources=[],
+                fallback_answer=fallback_answer,
+            )
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            return {
+                "answer": llm_result.answer,
+                "type": "out_of_scope",
+                "sources": [],
+                "mode": "mock" if llm_result.provider in {"mock", "fallback"} else "real",
+                "latency_ms": latency_ms,
+                "understanding": {
+                    **understanding,
+                    "reasons": [*(understanding.get("reasons") or []), "safe_gap_background_candidate"],
+                },
+                **_qa_provider_meta(
+                    provider=llm_result.provider,
+                    model=llm_result.model,
+                    grounding_mode=llm_result.grounding_mode,
+                    fallback_reason=llm_result.fallback_reason,
+                    provider_latency_ms=llm_result.provider_latency_ms,
+                ),
+            }
         latency_ms = int((time.perf_counter() - start) * 1000)
         response_type = "clarification" if understanding.get("needs_clarification") else "out_of_scope"
         return {
@@ -492,6 +619,10 @@ def answer_question(
             "mode": "mock",
             "latency_ms": latency_ms,
             "understanding": understanding,
+            **_qa_provider_meta(
+                grounding_mode="no_sources",
+                fallback_reason="clarification_or_out_of_scope_guardrail",
+            ),
         }
 
     retrieval_attraction_id = attraction_id
@@ -537,6 +668,7 @@ def answer_question(
         "understanding": understanding,
         **_qa_provider_meta(
             provider=llm_result.provider,
+            model=llm_result.model,
             grounding_mode=llm_result.grounding_mode,
             fallback_reason=llm_result.fallback_reason,
             provider_latency_ms=llm_result.provider_latency_ms,
