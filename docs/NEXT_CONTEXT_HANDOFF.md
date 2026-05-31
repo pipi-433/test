@@ -16,12 +16,14 @@
 
 ## 当前工作区状态
 
-本次 Round 3 是文档同步任务，不提交、不 push。
+当前执行区正在做 Task 07.8 系列：把数字人主演示路线切换到 LiveTalking + Wav2Lip，并围绕首包延迟做欢迎开场白、预存 wav 和统一音色策略。本轮不提交、不 push。
 
 开始/执行过程中观察到工作区存在未提交项：
 
-- 本轮文档改动：`docs/DEMO_SCRIPT.md`、`docs/TECHNICAL_STORY.md`、`docs/NEXT_CONTEXT_HANDOFF.md`、新增 `docs/SOFTBEI_REQUIREMENT_MATRIX.md`。
-- 既有数字人 sidecar 相关后端改动：`backend/app/services/avatar_clip_player.py`、`backend/app/services/avatar_speaker.py`、`backend/app/services/avatar_webrtc.py`。这些不属于 Round 3 文档任务，本轮没有修改、没有提交，下一轮接手前需要先确认来源。
+- 本轮数字人主线切换相关改动：avatar backend adapter、LiveTalking 启动脚本、游客端/Kiosk 数字人组件文案、`docs/DEMO_SCRIPT.md`、`docs/TECHNICAL_STORY.md`、`docs/NEXT_CONTEXT_HANDOFF.md`、`docs/LIVETALKING_SIDECAR_RESEARCH.md`。
+- 07.8E 后续体验修复：欢迎开场白 `welcome_intro_5s`、约 5 秒延迟后接真实播报、停止时取消后续 delayed action、游灵山提问时先播 welcome 缓冲。
+- 07.8E 之后的 QA 小修：游客端问题输入默认值已清空；提交时直接读取当前 form input 值，避免 stale state 导致一直发送旧的“灵山大佛适合怎么游览？”。
+- 旁路已有未提交项：Vision/eval 相关文件、部分前端页面文件也处于 dirty 状态。继续开发前需要先确认来源，不要盲目覆盖或混入同一提交。
 
 如果继续开发，请先运行：
 
@@ -31,7 +33,7 @@ git status --short
 git diff --stat
 ```
 
-不要盲目 `git add .`，不要把文档同步和既有 sidecar 代码改动混成一个提交。
+不要盲目 `git add .`，不要把 LiveTalking 主线切换、Vision/eval 旁路改动和 legacy sidecar 研究文件混成一个提交。
 
 ## 已完成能力
 
@@ -66,9 +68,13 @@ git diff --stat
 ### 数字人表现层
 
 - 前端保留 React/SVG/CSS 数字人 fallback 状态机。
-- OpenAvatarChat + LiteAvatar 已作为 sidecar/live viewer demo 接入。
+- 当前主演示路线已切换为 LiveTalking + Wav2Lip，使用本地 ignored 资产 `external/LiveTalking/data/avatars/lingshan_guide_avatar1`。
+- 当前演示音色选定为 EdgeTTS `zh-CN-XiaoxiaoNeural`，启动脚本支持 `-Voice zh-CN-XiaoxiaoNeural`。
+- 当前交互缓冲采用白名单 clip `welcome_intro_5s`，文案为“您好，我是灵境导游小灵，正在为您准备讲解。”。游客端/Kiosk 播报前先播放该 clip，约 5 秒后再接真实回答、路线摘要或景点讲解。
+- 固定景点讲解应优先走预存 wav：`lingshan_buddha_intro_45s`、`fan_gong_intro_45s`、`jiulong_guanyu_intro_30s`。动态问答和路线摘要继续走即时 `/api/avatar/speak`。
 - 前端只调用灵境后端 API，如 `/api/avatar/speak`、`/api/avatar/play-clip`、`/api/avatar/webrtc/offer`。
-- sidecar 只播报灵境后端给出的可信短文本或预存片段，不生成事实、不规划路线、不接管 RAG/识景/路线/运营分析。
+- LiveTalking 只播报灵境后端给出的可信短文本或白名单预存片段，不生成事实、不规划路线、不接管 RAG/识景/路线/运营分析。
+- OpenAvatarChat + LiteAvatar 保留为历史预研 / legacy fallback，不再是默认演示主线。
 
 ## 关键边界
 
@@ -79,7 +85,8 @@ git diff --stat
 - 拥挤度和运营事件是 `mock_simulation` / `manual_admin` 演示数据，不代表真实客流、真实硬件、闸机、摄像头或 Wi-Fi 探针。
 - scenic_graph 是基于导览图人工抽象的半真实游线拓扑，用于顺路解释、步行估算、回头路风险和观光车建议；不是 GPS 导航、不是地图导航服务、不是实时定位。
 - Route Planner 是受约束规则评分器，LLM 后续只能增强结构化意图解析和表达润色，不能自由决定路线点位。
-- OpenAvatarChat + LiteAvatar 是数字人表现层 sidecar，不是业务大脑。
+- LiveTalking + Wav2Lip 是当前数字人表现层主线，不是业务大脑。
+- LiveTalking `/human` 只能使用 `type="echo"` 播报后端可信文本，禁止使用 `type="chat"` 作为灵境业务入口。
 
 ## 启动命令
 
@@ -97,14 +104,21 @@ cd D:\py\dota
 npm --prefix .\frontend run dev -- --host 127.0.0.1 --port 5174
 ```
 
-数字人 sidecar 演示：
+数字人 LiveTalking 主演示：
 
 ```powershell
 cd D:\py\dota
-& .\scripts\start_avatar_demo.ps1 -OpenWebUI -OpenVisitor
+& .\scripts\start_avatar_demo.ps1 -OpenVisitor -ForceLowMemory -Voice zh-CN-XiaoxiaoNeural
 ```
 
-停止 sidecar：
+OpenAvatarChat legacy fallback 如需单独回归：
+
+```powershell
+cd D:\py\dota
+& .\scripts\start_avatar_demo.ps1 -Engine openavatarchat -OpenWebUI
+```
+
+停止数字人演示进程：
 
 ```powershell
 cd D:\py\dota
@@ -116,7 +130,15 @@ cd D:\py\dota
 - 游客端：http://127.0.0.1:5174/
 - Kiosk：http://127.0.0.1:5174/kiosk
 - Admin：http://127.0.0.1:5174/admin
-- OpenAvatarChat WebUI：http://127.0.0.1:8282/ui/index.html
+- LiveTalking WebRTC 页面：http://127.0.0.1:8011/webrtcapi.html
+- 后端数字人状态：http://127.0.0.1:8000/api/avatar/status
+
+数字人 clip 检查：
+
+```powershell
+cd D:\py\dota
+powershell -ExecutionPolicy Bypass -File .\scripts\avatar_clip_inventory.ps1
+```
 
 ## 验收命令
 
@@ -164,7 +186,48 @@ npm --prefix .\frontend run build
 
 ## 下一步建议
 
-1. **Task QA-UI**：完整走游客端 `/`、Kiosk、Admin、分享页 7 分钟演示流程，记录演示风险、按钮可用性、移动端溢出、console error。
-2. 单独确认既有未提交数字人 sidecar 后端改动来源，决定是否单独提交或继续调试。
-3. 如答辩需要，可制作 PPT 或答辩讲稿，基于 `docs/DEMO_SCRIPT.md`、`docs/TECHNICAL_STORY.md`、`docs/SOFTBEI_REQUIREMENT_MATRIX.md`。
-4. 只做局部 UI/文案修复，不再在答辩前新增大功能。
+1. **Task 07.8F：统一预存 wav 音色**。用 `zh-CN-XiaoxiaoNeural` 重新生成/补齐 `welcome_intro_5s.wav`、`lingshan_buddha_intro_45s.wav`、`fan_gong_intro_45s.wav`、`jiulong_guanyu_intro_30s.wav`，都放在 ignored `external/avatar-clips/`，不进 git。
+2. **Task QA-Avatar-Live**：只开一个 WebRTC 页面，完整验收游客端和 Kiosk 的 welcome -> 真实播报、stop、刷新重连、固定讲解延迟和音色一致性。
+3. **Task QA-UI**：完整走游客端 `/`、Kiosk、Admin、分享页 7 分钟演示流程，记录演示风险、按钮可用性、移动端溢出、console error。
+4. 单独确认既有未提交数字人 sidecar 后端改动来源，决定是否分批提交；不要把 Vision/eval 旁路改动混入数字人提交。
+5. 如答辩需要，可制作 PPT 或答辩讲稿，基于 `docs/DEMO_SCRIPT.md`、`docs/TECHNICAL_STORY.md`、`docs/SOFTBEI_REQUIREMENT_MATRIX.md`。
+
+## Task 07.8 LiveTalking mainline handoff
+
+LiveTalking + Wav2Lip is now the main digital-human demo route. It remains a presentation sidecar only and does not replace RAG, Route Planner, Vision, Analytics, or factual QA. OpenAvatarChat + LiteAvatar remains available only as legacy fallback / historical research.
+
+Start command:
+
+```powershell
+cd D:\py\dota
+.\scripts\start_avatar_demo.ps1 -OpenVisitor
+```
+
+Backend mapping:
+
+- `POST /api/avatar/speak` -> LiveTalking `POST /human` with `type="echo"` only. `type="chat"` is forbidden for Lingjing trusted content.
+- `POST /api/avatar/play-clip` -> LiveTalking `POST /humanaudio`, after backend whitelist resolution of `clip_id`.
+- `POST /api/avatar/webrtc/offer` -> LiveTalking `POST /offer`, proxied by Lingjing backend so frontend does not call the sidecar business API directly.
+- `POST /api/avatar/stop` -> LiveTalking `POST /interrupt_talk`, scoped to the current session id when available.
+- `POST /api/avatar/warmup` -> short LiveTalking `POST /human type="echo"` warmup, usually `text="您好。"` and `interrupt=false`; failure falls back and never blocks the page.
+
+Keep `external/LiveTalking`, model weights, avatar assets, venvs, caches, and logs ignored.
+
+Current local demo constraint: LiveTalking is started with `--max_session 1` on this 6 GB 3060 Laptop setup. For the safest demo, keep only one active visitor/Kiosk WebRTC view at a time; refresh/reconnect if the session is taken by another page.
+
+Task 07.8B latency note: visitor and Kiosk pages now warm up once after a WebRTC `sessionid` is received, then give immediate "正在生成语音" feedback before `/api/avatar/speak` returns. Its short-text Kiosk approach was superseded by 07.8C because LiveTalking EdgeTTS still generates full audio before playback.
+
+Task 07.8C low-latency note: fixed scenic explanations are back on preset wav playback through `/api/avatar/play-clip`. Kiosk's three scenic buttons and visitor vision-confirmed "数字人讲解" should use whitelist `clip_id` -> `external/avatar-clips/*.wav` -> LiveTalking `/humanaudio`. Dynamic QA and route summaries still use `/api/avatar/speak` and may wait for full EdgeTTS generation. Required local ignored wav files:
+
+```text
+external/avatar-clips/welcome_intro_5s.wav
+external/avatar-clips/lingshan_buddha_intro_45s.wav
+external/avatar-clips/fan_gong_intro_45s.wav
+external/avatar-clips/jiulong_guanyu_intro_30s.wav
+```
+
+Use `scripts/avatar_clip_inventory.ps1` to check presence before demo. Missing files must fallback cleanly, not 500.
+
+Task 07.8E welcome buffer note: visitor and Kiosk playback actions now first trigger whitelist clip `welcome_intro_5s`, then wait about 5 seconds before sending the original speak/play-clip request. The clip text is `您好，我是灵境导游小灵，正在为您准备讲解。`, generated for the demo with target voice `zh-CN-XiaoxiaoNeural`. The local wav is about 4.6 seconds, so this leaves a small buffer while keeping the follow-up responsive. This is an interaction buffer to reduce perceived waiting; it does not mean the model answer, route summary, or scenic explanation has already finished. The stop control clears the delayed follow-up so a stopped welcome clip does not continue into the original broadcast.
+
+Follow-up fix: mobile "游灵山" question submit now starts `welcome_intro_5s` immediately while the backend is understanding/retrieving/planning. When the answer returns, the page reuses the in-flight welcome buffer instead of starting a duplicate intro. If the clip is unavailable, it falls back to the same short line through `/api/avatar/speak` and waits longer before the real answer.

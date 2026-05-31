@@ -27,6 +27,24 @@
 
 默认不需要任何 API Key。`.env.example` 中所有 provider 都是 `mock`，真实模型接入会在后续任务通过后端 provider 抽象完成。前端不会直接调用模型厂商 API。
 
+### Qwen / DashScope LLM provider
+
+Qwen configuration is read only by the backend. The frontend must continue to call Lingjing backend APIs only. Never write a real API key into `.env.example`, README, frontend code, or git.
+
+```powershell
+$env:LLM_PROVIDER="dashscope"
+$env:LLM_MODEL="qwen-plus"
+$env:LLM_FALLBACK_MODEL="qwen-max"
+$env:LLM_MAX_OUTPUT_TOKENS="300"
+$env:LLM_ENABLE_SEARCH="false"
+$env:LLM_SEARCH_POLICY="gap_only"
+$env:LLM_THINKING_MODE="off"
+$env:LLM_THINKING_BUDGET=""
+Set-Item Env:DASHSCOPE_API_KEY "<set locally, never commit>"
+```
+
+Default strategy: local-first + Qwen rewrite + optional gap-only search + low/no thinking. If `DASHSCOPE_API_KEY` is missing, the backend falls back to the local mock/RAG answer path instead of crashing. Fact QA remains constrained to backend-retrieved local `sources`, and route planning remains owned by the constrained Route Planner. `LLM_ENABLE_SEARCH=true` only allows gap-only search for safe, non-realtime scenic background questions; do not use the model for realtime crowds, route decisions, GPS/navigation, ticket prices, operations events, opening status, or show schedules.
+
 ## 安装前端依赖
 
 ```powershell

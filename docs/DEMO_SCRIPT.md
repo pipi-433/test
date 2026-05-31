@@ -37,12 +37,12 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 npm --prefix .\frontend run dev -- --host 127.0.0.1 --port 5174
 ```
 
-如需演示 LiteAvatar 表现层：
+如需演示 LiveTalking + Wav2Lip 数字人表现层：
 
 ```powershell
 cd D:\py\dota
 & .\scripts\stop_avatar_demo.ps1
-& .\scripts\start_avatar_demo.ps1 -OpenVisitor
+& .\scripts\start_avatar_demo.ps1 -OpenVisitor -ForceLowMemory -Voice zh-CN-XiaoxiaoNeural
 ```
 
 演示入口：
@@ -50,9 +50,10 @@ cd D:\py\dota
 - 游客端：http://127.0.0.1:5174/
 - Kiosk：http://127.0.0.1:5174/kiosk
 - 管理后台：http://127.0.0.1:5174/admin
-- 数字人 sidecar readiness：http://127.0.0.1:8282/readiness
+- 数字人状态：http://127.0.0.1:8000/api/avatar/status
+- LiveTalking WebRTC 页面：http://127.0.0.1:8011/webrtcapi.html
 
-关键边界开场就要记住：拥挤度是 `mock_simulation`，运营事件是 `manual_admin` 或 `mock_simulation`，路线拓扑是导览图人工抽象，不是 GPS 导航；OpenAvatarChat + LiteAvatar 只是数字人表现层，不接管业务大脑。
+关键边界开场就要记住：拥挤度是 `mock_simulation`，运营事件是 `manual_admin` 或 `mock_simulation`，路线拓扑是导览图人工抽象，不是 GPS 导航；LiveTalking + Wav2Lip 只是数字人表现层，不接管业务大脑。
 
 ## 0:00-0:40 开场：定位和国一卖点
 
@@ -78,7 +79,7 @@ cd D:\py\dota
 预期现象：
 
 - 用户问题立即出现在问答区。
-- 数字人状态从 thinking 到 speaking；sidecar 在线时可发声和口型，离线时保留前端 fallback。
+- 数字人状态从 thinking 到 speaking；LiveTalking 在线时可发声和口型，离线时保留前端 fallback。
 - 回答区展示 RAG 回答和 sources。
 
 继续输入：
@@ -204,7 +205,7 @@ Round 1 的知识库管理是后台本地闭环，不直接写入现有 RAG `kno
 
 说明：
 
-数字人配置保存在本地 SQLite。OpenAvatarChat + LiteAvatar 只接收灵境后端的可信短文本或白名单预存 clip，负责发声和口型表现，不接管 RAG、路线、识景、运营分析。
+数字人配置保存在本地 SQLite。LiveTalking + Wav2Lip 只接收灵境后端的可信短文本或白名单预存 clip，负责发声和口型表现，不接管 RAG、路线、识景、运营分析。可信文本入口强制使用 `/human type=echo`，禁止走 LiveTalking 的 chat/LLM 路径。
 
 运营事件：
 
@@ -259,7 +260,7 @@ Round 1 的知识库管理是后台本地闭环，不直接写入现有 RAG `kno
 - 前端只调用后端 API。
 - scenic_graph 是导览图人工抽象拓扑，不是 GPS 导航。
 - 拥挤度与运营事件是 mock/local 演示，不代表真实客流或硬件。
-- OpenAvatarChat + LiteAvatar 是数字人表现层，不是业务大脑。
+- LiveTalking + Wav2Lip 是数字人表现层，不是业务大脑。
 
 ## 常见异常与兜底
 
@@ -270,5 +271,24 @@ Round 1 的知识库管理是后台本地闭环，不直接写入现有 RAG `kno
 | 识景没有候选 | 使用 `evals/vision_samples` 样例，或展示 `eval_vision.py` 报告 |
 | 分享页 code 无效 | 重新在 Kiosk 生成路线；share_code 是当前进程内 30 分钟 mock 机制 |
 | Admin 计数为空 | 先在游客端完成几次 QA、路线、反馈，或说明当前为本地演示日志 |
-| sidecar 无法连接 | 运行 `scripts/avatar_sidecar_healthcheck.ps1`；主流程仍可用前端 fallback 和 mock accepted |
-| 数字人没声音 | 说明 sidecar / WebRTC 受本机环境影响，QA、路线、识景和后台主流程不受影响 |
+| 数字人表现层无法连接 | 运行 `scripts/stop_avatar_demo.ps1` 后重新 `scripts/start_avatar_demo.ps1 -OpenVisitor -ForceLowMemory -Voice zh-CN-XiaoxiaoNeural`；主流程仍可用前端 fallback 和 mock accepted |
+| 数字人没声音 | 确认浏览器未静音、LiveTalking 页面已有 session；如仍异常，说明表现层 / WebRTC 受本机环境影响，QA、路线、识景和后台主流程不受影响 |
+
+## 2026-05-22 数字人演示补充
+
+当前主演示数字人路线是 LiveTalking + Wav2Lip，默认音色统一为 `zh-CN-XiaoxiaoNeural`。OpenAvatarChat + LiteAvatar 只作为 legacy fallback，不再是默认演示路线。
+
+游客端和 Kiosk 的数字人播报分两段：
+
+1. 先播放固定开场白 clip：`welcome_intro_5s`，文本为“您好，我是灵境导游小灵，正在为您准备讲解。”
+2. 约 5 秒后继续原本的真实动作：动态问答/路线走 `POST /api/avatar/speak`，固定景点讲解走 `POST /api/avatar/play-clip`。
+
+这个开场白只是降低体感等待，不代表最终业务回答已经生成。点击停止播报应同时中断当前播报并取消延迟中的后续动作。
+
+演示前建议检查 clip 资产：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\avatar_clip_inventory.ps1
+```
+
+下一步若要统一音色，需要重新生成或补齐 `external/avatar-clips/` 下的 `welcome_intro_5s.wav`、`lingshan_buddha_intro_45s.wav`、`fan_gong_intro_45s.wav`、`jiulong_guanyu_intro_30s.wav`，并保持前端只传 `clip_id`、后端白名单解析路径。

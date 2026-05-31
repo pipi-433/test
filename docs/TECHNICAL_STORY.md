@@ -181,7 +181,7 @@ Route Planner 返回字段：
 
 这些只能作为可替换 provider 接入，且必须继续保留人工运营事件、用户必去/避开约束和“非真实客流”的边界提示。
 
-## OpenAvatarChat + LiteAvatar sidecar
+## LiveTalking + Wav2Lip sidecar
 
 数字人策略分三层：
 
@@ -189,14 +189,16 @@ Route Planner 返回字段：
 2. trusted text：`POST /api/avatar/speak` 接收灵境后端生成的可信短文本，转交 sidecar 播报。
 3. preset clip：`POST /api/avatar/play-clip` 只接收白名单 clip_id，播放预存景点讲解 wav。
 
-当前游客端和 Kiosk 的直播画面通过 `POST /api/avatar/webrtc/offer` 走灵境后端 signaling 代理。前端不直连 OpenAvatarChat API，不调用模型厂商，也不让 sidecar 生成景区事实或路线。
+当前主演示路线是 LiveTalking + Wav2Lip。游客端和 Kiosk 的直播画面通过 `POST /api/avatar/webrtc/offer` 走灵境后端 signaling 代理；可信短文本通过 LiveTalking `/human` 且强制 `type="echo"`；预存音频通过 `/humanaudio`。前端不直连 LiveTalking 业务播报接口，不调用模型厂商，也不让 sidecar 生成景区事实或路线。
 
 关键边界：
 
-- OpenAvatarChat + LiteAvatar 只是表现层。
+- LiveTalking + Wav2Lip 只是表现层，负责 voice/avatar/lip-sync。
 - 业务大脑仍是 FastAPI 中的 Query Understanding、RAG、Route Planner、Vision、Analytics。
+- `type="chat"` 禁止作为灵境可信内容入口；路线点位仍由受约束 Route Planner 决定。
 - sidecar 失败时返回 mock accepted 或前端 fallback，不影响主流程。
 - 不提交 external 源码、模型、日志、音频缓存或真实 Key。
+- OpenAvatarChat + LiteAvatar 保留为历史预研 / legacy fallback，不再是默认演示主线。
 
 ## Admin Round 1 / Round 2
 
@@ -282,3 +284,34 @@ python .\scripts\eval_eval_reports.py
 ```
 
 这套报告证明系统不是“看起来像 AI”，而是把事实来源、资料外兜底、路线约束、拥挤分流、知识缺口和评测结果都变成可重复验证的工程闭环。
+
+## 2026-05-22 LiveTalking 主线状态
+
+数字人主演示路线已切到 LiveTalking + Wav2Lip，当前本地资产为 `external/LiveTalking`、`external/LiveTalking/data/avatars/lingshan_guide_avatar1`、`external/LiveTalking/models/wav2lip.pth` 与 `external/LiveTalking/s3fd.pth`。这些都在 ignored sidecar/asset 范围内，不进入 git。
+
+当前默认演示命令：
+
+```powershell
+cd D:\py\dota
+.\scripts\start_avatar_demo.ps1 -OpenVisitor -ForceLowMemory -Voice zh-CN-XiaoxiaoNeural
+```
+
+数字人链路仍然坚持“表现层”边界：
+
+- 前端只调用灵境后端 API。
+- WebRTC offer 通过 `POST /api/avatar/webrtc/offer` 代理到 LiveTalking。
+- 可信动态文本通过 `POST /api/avatar/speak` 转为 LiveTalking `/human type="echo"`，禁止使用 `/human type="chat"`。
+- 固定景点讲解和开场白通过 `POST /api/avatar/play-clip`，前端只传 `clip_id`，后端白名单解析 ignored wav。
+- 停止播报通过 `POST /api/avatar/stop`，同时前端需要取消等待中的延迟 follow-up。
+- OpenAvatarChat + LiteAvatar 保留为 legacy fallback，不再作为默认主线。
+
+动态 `/api/avatar/speak` 的延迟主要来自 LiveTalking EdgeTTS 先生成完整音频再推送给 Wav2Lip，因此 Task 07.8E 采用固定开场白 clip 缓冲体感等待：先播 `welcome_intro_5s`（“您好，我是灵境导游小灵，正在为您准备讲解。”），约 5 秒后再播放真实问答、路线或景点讲解。这个开场白不代表最终业务答案已生成。
+
+下一步应先统一音色和 clip 资产，目标音色为 `zh-CN-XiaoxiaoNeural`，检查并补齐：
+
+```text
+external/avatar-clips/welcome_intro_5s.wav
+external/avatar-clips/lingshan_buddha_intro_45s.wav
+external/avatar-clips/fan_gong_intro_45s.wav
+external/avatar-clips/jiulong_guanyu_intro_30s.wav
+```
