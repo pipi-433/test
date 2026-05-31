@@ -10,5 +10,6 @@ __pycache__/
 *.pyc
 *.tsbuildinfo
 logs/
+.tmp_*.log
 data/app.db
 .gstack/
